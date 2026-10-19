@@ -1,4 +1,4 @@
-import { ArrowRight, Minus, Plus, Upload } from 'lucide-react'
+import { Upload } from 'lucide-react'
 import { useEditor } from '../EditorContext'
 import { objectName } from '../model/objectName'
 
@@ -8,7 +8,7 @@ type EditorWorkspaceProps = {
 }
 
 export function EditorWorkspace({ setCanvasElement, setStageElement }: EditorWorkspaceProps) {
-  const { canvas, project, tools, draggingFile, handleDrop } = useEditor()
+  const { canvas, tools, draggingFile, handleDrop } = useEditor()
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     tools.setDraggingFile(true)

@@ -35,7 +35,6 @@ function App() {
   const cropObjectRef = useRef<Rect | null>(null)
   const imageObjectRef = useRef<FabricImage | null>(null)
   const imageSourceRef = useRef('')
-  const [deleteimage, setDeleteImage] = useState(false)
 
   const setCanvasElement = useCallback((element: HTMLCanvasElement | null) => {
     canvasElementRef.current = element
