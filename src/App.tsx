@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Canvas,
@@ -6,19 +7,31 @@ import {
   PencilBrush,
   type FabricObject,
 } from 'fabric'
+
 import { EditorContext } from './features/editor/EditorContext'
-import { EditorNotice, PreviewDialog } from './features/editor/components/EditorDialogs'
+import {
+  EditorNotice,
+  PreviewDialog,
+} from './features/editor/components/EditorDialogs'
 import { EditorHeader } from './features/editor/components/EditorHeader'
 import { ToolPanel } from './features/editor/components/ToolPanel'
 import { ToolRail } from './features/editor/components/ToolRail'
 import { EditorWorkspace } from './features/editor/components/EditorWorkspace'
-import { BACKGROUND_IMAGE_NAME, IMAGE_SOURCE_TOKEN, resolveImageSourceToken, serializeCanvas } from './features/editor/model/constants'
+import { BACKGROUND_IMAGE_NAME,
+  IMAGE_SOURCE_TOKEN, resolveImageSourceToken,
+  serializeCanvas,
+} from './features/editor/model/constants'
 import { applyImageAdjustments } from './features/editor/operations/imageAdjustments'
 import { applyCanvasCrop, createCropFrame, updateCropRatio } from './features/editor/operations/cropCanvas'
 import { loadLocalImage } from './features/editor/operations/loadLocalImage'
-import type { DrawingMode, EditorContextValue, EditorTool, FilterId } from './features/editor/model/types'
+import type { DrawingMode,
+  EditorContextValue,
+  EditorTool, FilterId,
+  VideoPreviewData,
+} from './features/editor/model/types'
 import { hasTransparentPixels, removeImageBackground } from './features/editor/operations/removeImageBackground'
 import { editImagePixels, type EditPoint } from './features/editor/operations/editImagePixels'
+
 import './App.css'
 
 type EditorSnapshot = {
@@ -37,6 +50,7 @@ function App() {
   const canvasElementRef = useRef<HTMLCanvasElement>(null)
   const stageElementRef = useRef<HTMLDivElement>(null)
   const uploadInputRef = useRef<HTMLInputElement>(null)
+
   const canvasRef = useRef<Canvas | null>(null)
   const historyRef = useRef<string[]>([])
   const historyIndexRef = useRef(-1)
@@ -63,16 +77,32 @@ function App() {
   const magicCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const magicContextRef = useRef<CanvasRenderingContext2D | null>(null)
   const magicImageRef = useRef<FabricImage | null>(null)
+  
+  
 
-  const setCanvasElement = useCallback((element: HTMLCanvasElement | null) => {
-    canvasElementRef.current = element
-  }, [])
-  const setStageElement = useCallback((element: HTMLDivElement | null) => {
-    stageElementRef.current = element
-  }, [])
-  const setUploadInputElement = useCallback((element: HTMLInputElement | null) => {
-    uploadInputRef.current = element
-  }, [])
+  // Actual Fabric.js canvas exposed through EditorContext.
+  const [fabricCanvas, setFabricCanvas] = useState<Canvas | null>(null)
+
+  const setCanvasElement = useCallback(
+    (element: HTMLCanvasElement | null) => {
+      canvasElementRef.current = element
+    },
+    [],
+  )
+
+  const setStageElement = useCallback(
+    (element: HTMLDivElement | null) => {
+      stageElementRef.current = element
+    },
+    [],
+  )
+
+  const setUploadInputElement = useCallback(
+    (element: HTMLInputElement | null) => {
+      uploadInputRef.current = element
+    },
+    [],
+  )
 
   const [activeTool, setActiveTool] = useState<EditorTool>('upload')
   const [projectName, setProjectName] = useState('Untitled design')
@@ -98,7 +128,12 @@ function App() {
   const [saturation, setSaturation] = useState(0)
   const [previewUrl, setPreviewUrl] = useState('')
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [dimensions, setDimensions] = useState({ width: 1200, height: 800 })
+  const [previewMode, setPreviewMode] = useState<'image' | 'video'>('image')
+  const [videoPreview, setVideoPreview] = useState<VideoPreviewData | null>(null)
+  const [dimensions, setDimensions] = useState({
+    width: 1200,
+    height: 800,
+  })
   const [selectedFilter, setSelectedFilter] = useState<FilterId>('original')
   const [filterIntensity, setFilterIntensity] = useState(100)
   const [backgroundRemoved, setBackgroundRemoved] = useState(false)
@@ -113,12 +148,18 @@ function App() {
   const syncObjects = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
+
     const canvasObjects = canvas.getObjects()
     const image = canvasObjects.find((item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME)
+
     imageObjectRef.current = image instanceof FabricImage ? image : null
     setCropRotation(image instanceof FabricImage ? Math.round(image.angle || 0) : 0)
+
     setHasImage(Boolean(image))
-    setObjects(canvasObjects.filter((item) => item !== cropObjectRef.current))
+    setObjects(
+      canvasObjects.filter((item) => item !== cropObjectRef.current),
+    )
+
     const active = canvas.getActiveObject() ?? null
     setSelectedObject(active)
     setSelectedIsImage(active === imageObjectRef.current)
@@ -143,25 +184,46 @@ function App() {
     setCanRedo(historyIndexRef.current < historyRef.current.length - 1)
   }, [])
 
-  const recordHistory = useCallback((immediate = false) => {
-    const canvas = canvasRef.current
-    if (!canvas || suppressHistoryRef.current) return
-    if (historyTimerRef.current) clearTimeout(historyTimerRef.current)
-    const saveSnapshot = () => {
-      const current = serializeEditorSnapshot(canvas)
-      const history = historyRef.current.slice(0, historyIndexRef.current + 1)
-      if (history.at(-1) === current) return
-      history.push(current)
-      if (history.length > 60) history.shift()
-      historyRef.current = history
-      historyIndexRef.current = history.length - 1
-      syncHistoryControls()
-      setHistoryVersion((value) => value + 1)
-      syncObjects()
-    }
-    if (immediate) saveSnapshot()
-    else historyTimerRef.current = setTimeout(saveSnapshot, 220)
-  }, [syncHistoryControls, syncObjects])
+  const recordHistory = useCallback(
+    (immediate = false) => {
+      const canvas = canvasRef.current
+      if (!canvas || suppressHistoryRef.current) return
+
+      if (historyTimerRef.current) {
+        clearTimeout(historyTimerRef.current)
+      }
+
+      const saveSnapshot = () => {
+        const current = serializeEditorSnapshot(canvas)
+        const history = historyRef.current.slice(
+          0,
+          historyIndexRef.current + 1,
+        )
+
+        if (history.at(-1) === current) return
+
+        history.push(current)
+
+        if (history.length > 60) {
+          history.shift()
+        }
+
+        historyRef.current = history
+        historyIndexRef.current = history.length - 1
+
+        syncHistoryControls()
+        setHistoryVersion((value) => value + 1)
+        syncObjects()
+      }
+
+      if (immediate) {
+        saveSnapshot()
+      } else {
+        historyTimerRef.current = setTimeout(saveSnapshot, 220)
+      }
+    },
+    [syncHistoryControls, syncObjects],
+  )
 
   useEffect(() => {
     activeToolRef.current = activeTool
@@ -199,6 +261,7 @@ function App() {
   useEffect(() => {
     const element = canvasElementRef.current
     if (!element) return
+
     const canvas = new Canvas(element, {
       width: 1200,
       height: 800,
@@ -206,7 +269,10 @@ function App() {
       selection: true,
       backgroundColor: 'rgba(0,0,0,0)',
     })
+
     canvasRef.current = canvas
+    setFabricCanvas(canvas)
+
     historyRef.current = [serializeEditorSnapshot(canvas)]
     historyIndexRef.current = 0
     syncHistoryControls()
@@ -215,6 +281,7 @@ function App() {
       syncObjects()
       recordHistory()
     }
+
     canvas.on('selection:created', syncObjects)
     canvas.on('selection:updated', syncObjects)
     canvas.on('selection:cleared', syncObjects)
@@ -234,19 +301,38 @@ function App() {
     const fitCanvas = () => {
       const stage = stageElementRef.current
       if (!stage) return
+
       const bounds = stage.getBoundingClientRect()
-      const scale = Math.min((bounds.width - 96) / canvas.getWidth(), (bounds.height - 96) / canvas.getHeight(), 1.5)
+      const scale = Math.min(
+        (bounds.width - 96) / canvas.getWidth(),
+        (bounds.height - 96) / canvas.getHeight(),
+        1.5,
+      )
+
       setFitScale(Math.max(0.08, scale))
     }
+
     const resizeObserver = new ResizeObserver(fitCanvas)
+
     fitCanvas()
-    if (stageElementRef.current) resizeObserver.observe(stageElementRef.current)
+
+    if (stageElementRef.current) {
+      resizeObserver.observe(stageElementRef.current)
+    }
 
     return () => {
       resizeObserver.disconnect()
-      if (historyTimerRef.current) clearTimeout(historyTimerRef.current)
+
+      if (historyTimerRef.current) {
+        clearTimeout(historyTimerRef.current)
+      }
+
       void canvas.dispose()
-      canvasRef.current = null
+
+      if (canvasRef.current === canvas) {
+        canvasRef.current = null
+        setFabricCanvas(null)
+      }
     }
   }, [recordHistory, syncHistoryControls, syncObjects])
 
@@ -258,9 +344,19 @@ function App() {
   const resizeDisplay = useCallback(() => {
     const canvas = canvasRef.current
     const stage = stageElementRef.current
+
     if (!canvas || !stage) return
+
     const bounds = stage.getBoundingClientRect()
-    const scale = Math.max(0.08, Math.min((bounds.width - 96) / canvas.getWidth(), (bounds.height - 96) / canvas.getHeight(), 1.5))
+    const scale = Math.max(
+      0.08,
+      Math.min(
+        (bounds.width - 96) / canvas.getWidth(),
+        (bounds.height - 96) / canvas.getHeight(),
+        1.5,
+      ),
+    )
+
     setFitScale(scale)
   }, [])
 
@@ -271,38 +367,61 @@ function App() {
 
   const restoreScene = (snapshot: EditorSnapshot) => {
     const scene = snapshot.scene as { objects?: Array<{ src?: string }> }
+
     scene.objects?.forEach((object) => {
-      if (object.src === IMAGE_SOURCE_TOKEN) object.src = imageSourceRef.current
+      if (object.src === IMAGE_SOURCE_TOKEN) {
+        object.src = imageSourceRef.current
+      }
       else if (typeof object.src === 'string') { object.src = resolveImageSourceToken(object.src) ?? object.src }
     })
+
     return scene
   }
 
   const deleteImage = () => {
     const canvas = canvasRef.current
     if (!canvas) return
+
     const image = imageObjectRef.current
     if (!image) return
+
     canvas.remove(image)
     canvas.discardActiveObject()
     canvas.requestRenderAll()
+
     imageObjectRef.current = null
     setHasImage(false)
+
     recordHistory(true)
-  } 
+  }
 
   const undo = useCallback(async () => {
     if (historyIndexRef.current <= 0) return
+
     historyIndexRef.current -= 1
+
     const canvas = canvasRef.current
     if (!canvas) return
+
     suppressHistoryRef.current = true
-    const snapshot = JSON.parse(historyRef.current[historyIndexRef.current]) as EditorSnapshot
-    canvas.setDimensions({ width: snapshot.width, height: snapshot.height })
-    await canvas.loadFromJSON(restoreScene(snapshot))
-    canvas.requestRenderAll()
-    suppressHistoryRef.current = false
-    setDimensions({ width: snapshot.width, height: snapshot.height })
+
+    try {
+      const snapshot = JSON.parse(
+        historyRef.current[historyIndexRef.current],
+      ) as EditorSnapshot
+
+      canvas.setDimensions({
+        width: snapshot.width,
+        height: snapshot.height,
+      })
+
+      await canvas.loadFromJSON(restoreScene(snapshot))
+      canvas.requestRenderAll()
+
+      setDimensions({
+        width: snapshot.width,
+        height: snapshot.height,
+      })
     const restoredBackgroundRemoved = snapshot.editor?.backgroundRemoved ?? false
     const restoredBackgroundColor = snapshot.editor?.backgroundColor ?? '#ffffff'
     backgroundRemovedRef.current = restoredBackgroundRemoved
@@ -315,24 +434,43 @@ function App() {
     filterIntensityRef.current = restoredIntensity
     setSelectedFilter(restoredFilter)
     setFilterIntensity(restoredIntensity)
-    resizeDisplay()
-    syncObjects()
-    syncHistoryControls()
-    setHistoryVersion((value) => value + 1)
+
+      resizeDisplay()
+      syncObjects()
+      syncHistoryControls()
+      setHistoryVersion((value) => value + 1)
+    } finally {
+      suppressHistoryRef.current = false
+    }
   }, [resizeDisplay, syncHistoryControls, syncObjects])
 
   const redo = useCallback(async () => {
     if (historyIndexRef.current >= historyRef.current.length - 1) return
+
     historyIndexRef.current += 1
+
     const canvas = canvasRef.current
     if (!canvas) return
+
     suppressHistoryRef.current = true
-    const snapshot = JSON.parse(historyRef.current[historyIndexRef.current]) as EditorSnapshot
-    canvas.setDimensions({ width: snapshot.width, height: snapshot.height })
-    await canvas.loadFromJSON(restoreScene(snapshot))
-    canvas.requestRenderAll()
-    suppressHistoryRef.current = false
-    setDimensions({ width: snapshot.width, height: snapshot.height })
+
+    try {
+      const snapshot = JSON.parse(
+        historyRef.current[historyIndexRef.current],
+      ) as EditorSnapshot
+
+      canvas.setDimensions({
+        width: snapshot.width,
+        height: snapshot.height,
+      })
+
+      await canvas.loadFromJSON(restoreScene(snapshot))
+      canvas.requestRenderAll()
+
+      setDimensions({
+        width: snapshot.width,
+        height: snapshot.height,
+      })
     const restoredBackgroundRemoved = snapshot.editor?.backgroundRemoved ?? false
     const restoredBackgroundColor = snapshot.editor?.backgroundColor ?? '#ffffff'
     backgroundRemovedRef.current = restoredBackgroundRemoved
@@ -345,24 +483,37 @@ function App() {
     filterIntensityRef.current = restoredIntensity
     setSelectedFilter(restoredFilter)
     setFilterIntensity(restoredIntensity)
-    resizeDisplay()
-    syncObjects()
-    syncHistoryControls()
-    setHistoryVersion((value) => value + 1)
+
+      resizeDisplay()
+      syncObjects()
+      syncHistoryControls()
+      setHistoryVersion((value) => value + 1)
+    } finally {
+      suppressHistoryRef.current = false
+    }
   }, [resizeDisplay, syncHistoryControls, syncObjects])
 
   const uploadFile = async (file?: File) => {
     if (!file) return
+
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       setNotice('Choose a PNG, JPG, or WebP image.')
       return
     }
+
     if (file.size > 30 * 1024 * 1024) {
       setNotice('Images must be smaller than 30 MB.')
       return
     }
+
     try {
-      const { image, source, dimensions: imageDimensions, thumbnail } = await loadLocalImage(file)
+      const {
+        image,
+        source,
+        dimensions: imageDimensions,
+        thumbnail,
+      } = await loadLocalImage(file)
+
       const alreadyTransparent = await hasTransparentPixels(source)
       backgroundRemovedRef.current = alreadyTransparent
       backgroundColorRef.current = '#ffffff'
@@ -372,19 +523,36 @@ function App() {
       setBackgroundProgress('')
       const { width, height } = imageDimensions
       const canvas = canvasRef.current
+
       if (!canvas) return
+
       imageSourceRef.current = source
       suppressHistoryRef.current = true
+
       canvas.clear()
       cropObjectRef.current = null
       imageObjectRef.current = image
       drawingLayerCanvasRef.current = null
       drawingLayerImageRef.current = null
       lassoPreviewObjectsRef.current = []
+
       canvas.setDimensions({ width, height })
       canvas.backgroundColor = 'rgba(0,0,0,0)'
-      image.set({ left: 0, top: 0, originX: 'left', originY: 'top', selectable: true, evented: true })
-      image.set('name', file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Image')
+
+      image.set({
+        left: 0,
+        top: 0,
+        originX: 'left',
+        originY: 'top',
+        selectable: true,
+        evented: true,
+      })
+
+      image.set(
+        'name',
+        file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Image',
+      )
+
       canvas.add(image)
       canvas.sendObjectToBack(image)
       canvas.setActiveObject(image)
@@ -393,6 +561,7 @@ function App() {
       filterIntensityRef.current = 100
       setSelectedFilter('original')
       setFilterIntensity(100)
+
       setDimensions({ width, height })
       setHasDocument(true)
       setImageThumbnail(thumbnail)
@@ -400,16 +569,25 @@ function App() {
       setContrast(0)
       setSaturation(0)
       setZoom(1)
+
       resizeDisplay()
+
       suppressHistoryRef.current = false
+
       historyRef.current = [serializeEditorSnapshot(canvas)]
       historyIndexRef.current = 0
+
       syncHistoryControls()
       setHistoryVersion((value) => value + 1)
       syncObjects()
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'The image could not be opened. Try another file.')
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : 'The image could not be opened. Try another file.',
+      )
     } finally {
+      suppressHistoryRef.current = false
       setDraggingFile(false)
     }
   }
@@ -509,8 +687,11 @@ function App() {
     }
     setActiveTool(tool)
   }, [activeTool, cancelCrop])
-
-  const applyAdjustments = (nextBrightness = brightness, nextContrast = contrast, nextSaturation = saturation) => {
+  const applyAdjustments = (
+    nextBrightness = brightness,
+    nextContrast = contrast,
+    nextSaturation = saturation,
+  ) => {
     const image = imageObjectRef.current
     if (!image) return
     applyImageAdjustments(image, nextBrightness, nextContrast, nextSaturation, selectedFilterRef.current, filterIntensityRef.current,)
@@ -736,14 +917,19 @@ const clearBackground = () => {
   const deleteSelected = useCallback(() => {
     const canvas = canvasRef.current
     const active = canvas?.getActiveObject()
+
     if (!canvas || !active) return
-    if (active === imageObjectRef.current) imageObjectRef.current = null
+
+    if (active === imageObjectRef.current) {
+      imageObjectRef.current = null
+    }
+
     canvas.remove(active)
     canvas.discardActiveObject()
     canvas.requestRenderAll()
+
     recordHistory(true)
   }, [recordHistory])
-
 
   const resetAdjustments = () => {
     setBrightness(0)
@@ -755,12 +941,24 @@ const clearBackground = () => {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
-      if (target.matches('input, textarea, select') || target.isContentEditable) return
+
+      if (
+        target.matches('input, textarea, select') ||
+        target.isContentEditable
+      ) {
+        return
+      }
+
       const command = event.metaKey || event.ctrlKey
+
       if (command && event.key.toLowerCase() === 'z') {
         event.preventDefault()
-        if (event.shiftKey) void redo()
-        else void undo()
+
+        if (event.shiftKey) {
+          void redo()
+        } else {
+          void undo()
+        }
       } else if (command && event.key.toLowerCase() === 'y') {
         event.preventDefault()
         void redo()
@@ -769,6 +967,7 @@ const clearBackground = () => {
         deleteSelected()
       }
     }
+
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [undo, redo, deleteSelected])
@@ -776,6 +975,7 @@ const clearBackground = () => {
   const openPreview = () => {
     const canvas = canvasRef.current
     if (!canvas) return
+
 
     const lassoPreviews = canvas.getObjects().filter(
       (object) => object.get('name') === '__pixel_studio_lasso_preview__',
@@ -798,18 +998,21 @@ const clearBackground = () => {
     })()
 
     setPreviewUrl(previewUrl)
+    setPreviewMode(activeTool === 'music' ? 'video' : 'image')
     setPreviewOpen(true)
   }
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.stopPropagation()
+
     setDraggingFile(false)
     void uploadFile(event.dataTransfer.files[0])
   }
 
-
-  const openFilePicker = () => uploadInputRef.current?.click()
+  const openFilePicker = () => {
+    uploadInputRef.current?.click()
+  }
 
   const createVisibleImageCanvas = (image: FabricImage) => {
     const source = image.getElement()
@@ -1178,6 +1381,8 @@ const deleteSelection = async () => {
 }, [activeTool, drawOnDrawingLayer, finishMagicRemoval, hasDocument, paintMagicRemoval, recordHistory, startMagicRemoval])
 
   const contextValue: EditorContextValue = {
+    fabricCanvas,
+
     canvas: {
       dimensions,
       hasDocument,
@@ -1191,9 +1396,31 @@ const deleteSelection = async () => {
       fitScale,
       fitToScreen,
     },
-    history: { canUndo, canRedo, undo: () => void undo(), redo: () => void redo() },
-    project: { name: projectName, setName: setProjectName, isRenaming, setIsRenaming },
-    tools: { active: activeTool, setActive: setActiveEditorTool, openFilePicker, uploadFile, beginCrop, setDraggingFile, notice, setNotice,deleteImage },
+
+    history: {
+      canUndo,
+      canRedo,
+      undo: () => void undo(),
+      redo: () => void redo(),
+    },
+
+    project: {
+      name: projectName,
+      setName: setProjectName,
+      isRenaming,
+      setIsRenaming,
+    },
+
+    tools: {
+      active: activeTool,
+      setActive: setActiveEditorTool,
+      openFilePicker,
+      uploadFile, beginCrop,
+      setDraggingFile,
+      notice,
+      setNotice,
+      deleteImage,
+    },
     crop: {
       active: cropActive,
       ratio: cropRatio,
@@ -1206,8 +1433,28 @@ const deleteSelection = async () => {
       apply: applyCrop,
       cancel: cancelCrop,
     },
-    adjustments: { brightness, setBrightness, contrast, setContrast, saturation, setSaturation, apply: applyAdjustments, reset: resetAdjustments },
-    preview: { open: previewOpen, imageUrl: previewUrl, show: openPreview, close: () => setPreviewOpen(false) },
+
+    adjustments: {
+      brightness,
+      setBrightness,
+      contrast,
+      setContrast,
+      saturation,
+      setSaturation,
+      apply: applyAdjustments,
+      reset: resetAdjustments,
+    },
+
+    preview: {
+      open: previewOpen,
+      imageUrl: previewUrl,
+      mode: previewMode,
+      video: videoPreview,
+      setVideo: setVideoPreview,
+      show: openPreview,
+      close: () => setPreviewOpen(false),
+    },
+
     draggingFile,
     handleDrop,
     filters: {
@@ -1241,13 +1488,47 @@ const deleteSelection = async () => {
 
   return (
     <EditorContext.Provider value={contextValue}>
-      <main className="editor-app" onDragOver={(event) => { event.preventDefault(); setDraggingFile(true) }} onDragLeave={(event) => { if (event.currentTarget === event.target) setDraggingFile(false) }} onDrop={handleDrop}>
+      <main
+        className="editor-app"
+        onDragOver={(event) => {
+          event.preventDefault()
+          setDraggingFile(true)
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget === event.target) {
+            setDraggingFile(false)
+          }
+        }}
+        onDrop={handleDrop}
+      >
         <EditorHeader />
-        <input ref={setUploadInputElement} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => { void uploadFile(event.target.files?.[0]); event.currentTarget.value = '' }} />
-        <section className="editor-body"><ToolRail /><ToolPanel /><EditorWorkspace setCanvasElement={setCanvasElement} setStageElement={setStageElement} /></section>
+
+        <input
+          ref={setUploadInputElement}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          hidden
+          onChange={(event) => {
+            void uploadFile(event.target.files?.[0])
+            event.currentTarget.value = ''
+          }}
+        />
+
+        <section className="editor-body">
+          <ToolRail />
+          <ToolPanel />
+          <EditorWorkspace
+            setCanvasElement={setCanvasElement}
+            setStageElement={setStageElement}
+          />
+        </section>
+
         <EditorNotice />
         <PreviewDialog />
-        <span className="visually-hidden" aria-live="polite">{historyVersion > 0 ? 'Document updated' : ''}</span>
+
+        <span className="visually-hidden" aria-live="polite">
+          {historyVersion > 0 ? 'Document updated' : ''}
+        </span>
       </main>
     </EditorContext.Provider>
   )

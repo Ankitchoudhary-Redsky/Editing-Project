@@ -1,4 +1,5 @@
 import {
+  Music2,
   Crop,
   Eraser,
   MousePointer2,
@@ -17,6 +18,7 @@ export const editorTools: { id: EditorTool; label: string; icon: typeof Upload }
   { id: 'select', label: 'Select', icon: MousePointer2 },
   { id: 'crop', label: 'Crop', icon: Crop },
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal },
+  { id: 'music', label: 'Add music', icon: Music2 },
   { id: 'filters', label: 'Filters', icon: WandSparkles },
   { id: 'background', label: 'Background', icon: Eraser },
   { id: 'draw-remove', label: 'Draw & Remove', icon: Pencil },

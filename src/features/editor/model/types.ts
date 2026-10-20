@@ -1,16 +1,53 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Canvas, FabricObject } from 'fabric'
 
-export type EditorTool = 'upload' | 'select' | 'crop' | 'adjust' | 'filters' | 'background' | 'draw-remove'
+export type EditorTool = 'upload' | 'select' | 'crop' | 'adjust' | 'music'
+ | 'filters' | 'background' | 'draw-remove'
 export type DrawingMode = 'pencil' | 'eraser' | 'magic-remover' | 'lasso'
 export type ShapeKind = 'rect' | 'circle' | 'line' | 'arrow' | 'triangle'
+
 export type ExportFormat = 'png' | 'jpeg'
-export type Dimensions = { width: number; height: number }
-export type TextProperty = 'text' | 'fontFamily' | 'fontSize' | 'fill' | 'backgroundColor' | 'opacity' | 'fontWeight' | 'fontStyle' | 'textAlign'
+
+export type Dimensions = {
+  width: number
+  height: number
+}
+
+export type VideoPreviewData = {
+  imageUrl: string
+
+  // Background music
+  audioUrl: string
+  audioTrackLabel?: 'Music' | 'Voice-over'
+  startTime: number
+  endTime: number
+  volume: number
+
+  // Optional voice-over support
+  voiceOverUrl?: string
+  voiceOverVolume?: number
+  voiceOverStartTime?: number
+}
+
+export type TextProperty =
+  | 'text'
+  | 'fontFamily'
+  | 'fontSize'
+  | 'fill'
+  | 'backgroundColor'
+  | 'opacity'
+  | 'fontWeight'
+  | 'fontStyle'
+  | 'textAlign'
+
+export type EditorCanvas = Canvas
 export type FilterId = 'original' | 'grayscale' | 'blackWhite' | 'sepia' | 'vintage' |'retro' | 'warm' | 'cool' | 'vivid' | 'cinematic' | 'dramatic' | 'fade' | 'pastel' | 'noir' | 'dreamy'
 export type FilterSettings = { id: FilterId; intensity: number }
 
 export interface EditorContextValue {
+  /** Actual Fabric.js Canvas instance used for image editing. */
+  fabricCanvas: EditorCanvas | null
+
   canvas: {
     dimensions: Dimensions
     hasDocument: boolean
@@ -24,18 +61,21 @@ export interface EditorContextValue {
     fitScale: number
     fitToScreen: () => void
   }
+
   history: {
     canUndo: boolean
     canRedo: boolean
     undo: () => void
     redo: () => void
   }
+
   project: {
     name: string
     setName: Dispatch<SetStateAction<string>>
     isRenaming: boolean
     setIsRenaming: Dispatch<SetStateAction<boolean>>
   }
+
   tools: {
     active: EditorTool
     setActive: (tool: EditorTool) => void
@@ -59,6 +99,7 @@ export interface EditorContextValue {
     apply: () => void
     cancel: () => void
   }
+
   adjustments: {
     brightness: number
     setBrightness: Dispatch<SetStateAction<number>>
@@ -66,12 +107,20 @@ export interface EditorContextValue {
     setContrast: Dispatch<SetStateAction<number>>
     saturation: number
     setSaturation: Dispatch<SetStateAction<number>>
-    apply: (brightness?: number, contrast?: number, saturation?: number) => void
+    apply: (
+      brightness?: number,
+      contrast?: number,
+      saturation?: number,
+    ) => void
     reset: () => void
   }
+
   preview: {
     open: boolean
     imageUrl: string
+    mode: 'image' | 'video'
+    video: VideoPreviewData | null
+    setVideo: Dispatch<SetStateAction<VideoPreviewData | null>>
     show: () => void
     close: () => void
   }
@@ -102,8 +151,8 @@ export interface EditorContextValue {
     clearSelection: () => void
     deleteSelection: () => void
   }
+
   draggingFile: boolean
+
   handleDrop: (event: React.DragEvent<HTMLDivElement>) => void
 }
-
-export type EditorCanvas = Canvas
