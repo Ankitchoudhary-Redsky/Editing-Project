@@ -64,12 +64,9 @@ function App() {
   const [fitScale, setFitScale] = useState(1)
   const [draggingFile, setDraggingFile] = useState(false)
   const [notice, setNotice] = useState('')
-  const [scaleArtwork, setScaleArtwork] = useState(false)
   const [cropActive, setCropActive] = useState(false)
   const [cropRatio, setCropRatio] = useState('Free')
   const [cropRotation, setCropRotation] = useState(0)
-  const [resizeWidth, setResizeWidth] = useState(1200)
-  const [resizeHeight, setResizeHeight] = useState(800)
   const [brightness, setBrightness] = useState(0)
   const [contrast, setContrast] = useState(0)
   const [saturation, setSaturation] = useState(0)
@@ -348,8 +345,6 @@ function App() {
     cropObjectRef.current = null
     setCropActive(false)
     setDimensions(cropDimensions)
-    setResizeWidth(cropDimensions.width)
-    setResizeHeight(cropDimensions.height)
     setActiveTool('select')
     suppressHistoryRef.current = false
     cropTransformChangedRef.current = false
@@ -373,28 +368,6 @@ function App() {
     if (cropTransformChangedRef.current) recordHistory(true)
     cropTransformChangedRef.current = false
   }, [recordHistory])
-
-  // const applyResize = () => {
-  //   const canvas = canvasRef.current
-  //   if (!canvas) return
-  //   const width = Math.min(12000, Math.max(1, Math.round(resizeWidth)))
-  //   const height = Math.min(12000, Math.max(1, Math.round(resizeHeight)))
-  //   const scaleX = width / canvas.getWidth()
-  //   const scaleY = height / canvas.getHeight()
-  //   if (scaleArtwork) {
-  //     canvas.getObjects().forEach((object) => {
-  //       object.set({ left: (object.left ?? 0) * scaleX, top: (object.top ?? 0) * scaleY, scaleX: (object.scaleX ?? 1) * scaleX, scaleY: (object.scaleY ?? 1) * scaleY })
-  //       object.setCoords()
-  //     })
-  //   }
-  //   canvas.setDimensions({ width, height })
-  //   canvas.requestRenderAll()
-  //   setDimensions({ width, height })
-  //   setResizeWidth(width)
-  //   setResizeHeight(height)
-  //   recordHistory(true)
-  //   resizeDisplay()
-  // }
 
   const applyAdjustments = (nextBrightness = brightness, nextContrast = contrast, nextSaturation = saturation) => {
     const image = imageObjectRef.current
