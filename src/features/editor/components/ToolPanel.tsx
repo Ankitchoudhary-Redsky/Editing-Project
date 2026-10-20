@@ -3,12 +3,18 @@ import { useEditor } from '../EditorContext'
 import { AdjustmentsPanel } from './panels/AdjustmentsPanel'
 import { UploadPanel } from './panels/UploadPanel'
 import { CropPanel } from './panels/CropPanel'
+import { FiltersPanel } from './panels/FiltersPanel'
+import { BackgroundPanel } from './panels/BackgroundPanel'
+import { DrawingPanel } from './panels/DrawingPanel'
 
 const panelTitles = {
   upload: 'Upload',
   select: 'Select',
   crop: 'Crop',
   adjust: 'Adjustments',
+  filters: 'Filters',
+  background: 'Background',
+  'draw-remove': 'Draw & Remove',
 }
 
 export function ToolPanel() {
@@ -21,6 +27,9 @@ export function ToolPanel() {
       {tools.active === 'upload' && <UploadPanel />}
       {tools.active === 'crop' && <CropPanel />}
       {tools.active === 'adjust' && <AdjustmentsPanel />}
+      {tools.active === 'filters' && <FiltersPanel />}
+      {tools.active === 'background' && <BackgroundPanel />}
+      {tools.active === 'draw-remove' && <DrawingPanel />}
     </aside>
   )
 }
