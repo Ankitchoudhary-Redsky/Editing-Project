@@ -173,7 +173,7 @@ function App() {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const isDrawingMode = activeTool === 'draw-remove' && activeDrawingMode === 'lasso'
+    const isDrawingMode = activeTool === 'draw-remove' && hasImage && activeDrawingMode === 'lasso'
     if (activeTool === 'draw-remove') {
       canvas.discardActiveObject()
       canvas.requestRenderAll()
@@ -194,7 +194,7 @@ function App() {
       canvas.selection = true
       canvas.skipTargetFind = false
     }
-  }, [activeTool, activeDrawingMode, drawingColor, brushSize, hasDocument])
+  }, [activeTool, activeDrawingMode, drawingColor, brushSize, hasDocument, hasImage])
 
   useEffect(() => {
     const element = canvasElementRef.current
@@ -1085,6 +1085,10 @@ const deleteSelection = async () => {
     const point = event.scenePoint
     if (!point) return
     if (activeToolRef.current !== 'draw-remove') return
+    if (!imageObjectRef.current) {
+      setNotice('Upload an image before using drawing tools.')
+      return
+    }
 
     const mode = activeDrawingModeRef.current
 

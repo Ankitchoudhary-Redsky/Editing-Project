@@ -465,3 +465,12 @@
   background: #edf5ef;
   font-weight: 600;
 }
+
+.drawing-mode-button:disabled,
+.drawing-mode-button.active:disabled {
+  border-color: #e6e9e6;
+  background: #f6f7f6;
+  color: #929a95;
+  cursor: not-allowed;
+  font-weight: 400;
+}

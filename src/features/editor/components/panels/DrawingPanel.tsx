@@ -13,7 +13,8 @@ const toolDescriptions: Record<
 }
 
 export function DrawingPanel() {
-  const { drawing } = useEditor()
+  const { canvas, drawing } = useEditor()
+  const isDisabled = !canvas.hasImage
   const modes = [
     { id: 'pencil', label: 'Pencil', icon: Pencil },
     { id: 'eraser', label: 'Eraser', icon: Eraser },
@@ -34,6 +35,7 @@ export function DrawingPanel() {
               type="button"
               className={isActive ? 'drawing-mode-button active' : 'drawing-mode-button'}
               aria-pressed={isActive}
+              disabled={isDisabled}
               onClick={() => drawing.setActiveMode(mode.id as DrawingMode)}
             >
               <Icon size={16} />
@@ -42,7 +44,9 @@ export function DrawingPanel() {
           )
         })}
       </div>
-      <p className="panel-note">{toolDescriptions[drawing.activeMode]}</p>
+      <p className="panel-note">
+        {isDisabled ? 'Upload an image to enable drawing tools.' : toolDescriptions[drawing.activeMode]}
+      </p>
       {drawing.activeMode !== 'lasso' && (
         <>
           {drawing.activeMode === 'pencil' && (
@@ -51,6 +55,7 @@ export function DrawingPanel() {
               <input
                 type="color"
                 value={drawing.color}
+                disabled={isDisabled}
                 onChange={(event) => drawing.setColor(event.target.value)}
               />
             </label>
@@ -62,6 +67,7 @@ export function DrawingPanel() {
               min="2"
               max="80"
               value={drawing.brushSize}
+              disabled={isDisabled}
               onChange={(event) => drawing.setBrushSize(Number(event.target.value))}
             />
           </label>
@@ -69,10 +75,10 @@ export function DrawingPanel() {
       )}
       {drawing.activeMode === 'lasso' && (
         <div className="drawing-selection-actions">
-          <button type="button" className="secondary-button" onClick={drawing.clearSelection}>
+          <button type="button" className="secondary-button" disabled={isDisabled} onClick={drawing.clearSelection}>
             Clear selection
           </button>
-          <button type="button" className="primary-button" onClick={() => void drawing.deleteSelection()}>
+          <button type="button" className="primary-button" disabled={isDisabled} onClick={() => void drawing.deleteSelection()}>
             Delete selection
           </button>
         </div>
