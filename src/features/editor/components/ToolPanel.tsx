@@ -11,7 +11,7 @@ const panelTitles = {
 
 export function ToolPanel() {
   const { tools } = useEditor()
-  if (tools.active === 'select') return null
+  if (tools.active === 'select' || tools.active === 'music') return null
 
   return (
     <aside className="tool-panel">

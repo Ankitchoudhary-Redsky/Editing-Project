@@ -1,4 +1,5 @@
 import {
+  Music2,
   MousePointer2,
   SlidersHorizontal,
   Upload,
@@ -10,6 +11,7 @@ export const editorTools: { id: EditorTool; label: string; icon: typeof Upload }
   { id: 'upload', label: 'Upload', icon: Upload },
   { id: 'select', label: 'Select', icon: MousePointer2 },
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal },
+  { id: 'music', label: 'Add music', icon: Music2 },
 ]
 
 

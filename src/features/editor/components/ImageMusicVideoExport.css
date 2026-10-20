@@ -1,0 +1,1233 @@
+
+/* =========================================================
+   Image + Music + Voice-over to MP4 Export
+   File: ImageMusicVideoExport.css
+   Theme: Existing green and white theme preserved
+   Responsive: Desktop, tablet and mobile
+   ========================================================= */
+
+.music-export {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  color: #27332f;
+  font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
+  box-sizing: border-box;
+}
+
+.music-export *,
+.music-export *::before,
+.music-export *::after {
+  box-sizing: border-box;
+}
+
+.music-export button,
+.music-export input {
+  font: inherit;
+}
+
+.music-export button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.music-export button:focus-visible,
+.music-export input:focus-visible {
+  outline: 2px solid #438060;
+  outline-offset: 3px;
+}
+
+.music-export button:disabled,
+.music-export input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   Preview panel
+   ========================================================= */
+
+.music-preview-panel {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 28px;
+  background: #edf2ed;
+}
+
+.music-back-button {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  justify-content: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid #d7e1d8;
+  border-radius: 5px;
+  color: #53645a;
+  background: rgba(255, 255, 255, 0.86);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.music-back-button:hover {
+  border-color: #a8c2af;
+  background: #fff;
+}
+
+.music-back-button:active {
+  transform: translateY(1px);
+}
+
+/* =========================================================
+   Image preview frame
+   ========================================================= */
+
+.music-preview-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 680px);
+  min-width: 0;
+  min-height: 280px;
+  flex: 1 1 auto;
+  overflow: hidden;
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #eef0ee 25%, transparent 25%),
+    linear-gradient(-45deg, #eef0ee 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #eef0ee 75%),
+    linear-gradient(-45deg, transparent 75%, #eef0ee 75%);
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  background-size: 16px 16px;
+  box-shadow:
+    0 14px 36px rgba(42, 55, 47, 0.13),
+    0 2px 5px rgba(42, 55, 47, 0.08);
+}
+
+.music-preview-frame > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: min(66vh, 720px);
+  object-fit: contain;
+}
+
+.music-preview-empty {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  border-radius: 50%;
+  color: #6c9279;
+  background: #e7f0e9;
+}
+
+/* =========================================================
+   Empty state
+   ========================================================= */
+
+.music-preview-frame .empty-prompt {
+  display: flex;
+  width: 100%;
+  min-height: 240px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 20px;
+  text-align: center;
+}
+
+.music-preview-frame .empty-art {
+  position: relative;
+  width: 118px;
+  height: 82px;
+  overflow: hidden;
+  border: 1px solid #dbe7dd;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fbf8 0%, #e6f0e8 100%);
+}
+
+.music-preview-frame .empty-sun {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #d6e9a6;
+}
+
+.music-preview-frame .empty-mountain {
+  position: absolute;
+  bottom: -13px;
+  width: 76px;
+  height: 60px;
+  transform: rotate(45deg);
+  border-radius: 7px;
+  background: #a6c9ae;
+}
+
+.music-preview-frame .empty-mountain.one {
+  left: -3px;
+}
+
+.music-preview-frame .empty-mountain.two {
+  right: -19px;
+  bottom: -24px;
+  background: #6f9b7e;
+}
+
+.music-preview-frame .empty-sparkle {
+  position: absolute;
+  top: 7px;
+  left: 14px;
+  color: #6f9b7e;
+  font-size: 17px;
+}
+
+.music-preview-frame .empty-prompt h1 {
+  margin: 17px 0 8px;
+  color: #293b31;
+  font-family: Georgia, serif;
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.music-preview-frame .empty-prompt p {
+  max-width: 300px;
+  margin: 0 0 17px;
+  color: #7c8980;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* =========================================================
+   Upload image button
+   ========================================================= */
+
+.music-preview-frame .primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 39px;
+  padding: 10px 15px;
+  border: 1px solid #32745d;
+  border-radius: 5px;
+  color: #fff;
+  background: #32745d;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.music-preview-frame .primary-button:hover {
+  background: #255843;
+}
+
+.music-preview-frame .primary-button:active {
+  transform: translateY(1px);
+}
+
+.music-preview-frame .empty-format {
+  margin-top: 12px;
+  color: #9aa49c;
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+
+/* =========================================================
+   Image information
+   ========================================================= */
+
+.music-preview-caption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 680px);
+  min-width: 0;
+}
+
+.music-preview-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border: 1px solid #dce5dc;
+  border-radius: 5px;
+  color: #52745d;
+  background: #fff;
+}
+
+.music-preview-caption > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.music-preview-caption strong {
+  overflow: hidden;
+  color: #435248;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-preview-caption small {
+  color: #859087;
+  font-size: 10px;
+}
+
+/* =========================================================
+   Export controls
+   ========================================================= */
+
+.music-export-controls {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 18px;
+  padding: clamp(24px, 4vw, 54px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.music-export-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 4px;
+}
+
+.music-export-heading h2 {
+  margin: 0 0 7px;
+  color: #293b31;
+  font-family: Georgia, serif;
+  font-size: 27px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.music-export-heading p {
+  max-width: 360px;
+  margin: 0;
+  color: #7c8980;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.music-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: #668574;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.mp4-badge {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid #dce8de;
+  border-radius: 7px;
+  color: #457055;
+  background: #eff6f0;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   Form fields
+   ========================================================= */
+
+.music-export-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.music-export-field label {
+  color: #536158;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.music-export-field input[type="file"],
+.music-export-field input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid #dfe5e0;
+  border-radius: 5px;
+  color: #526057;
+  background: #fff;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.music-export-field input[type="file"] {
+  padding: 7px;
+}
+
+.music-export-field input[type="file"]::file-selector-button {
+  margin-right: 10px;
+  padding: 6px 9px;
+  border: 1px solid #dce5de;
+  border-radius: 4px;
+  color: #45614e;
+  background: #f6f9f6;
+  font: inherit;
+  cursor: pointer;
+}
+
+.music-export-field input[type="number"]:focus,
+.music-export-field input[type="file"]:focus {
+  border-color: #77a98d;
+  outline: 2px solid #e6f1ea;
+  outline-offset: 1px;
+}
+
+.music-export-field input[type="range"] {
+  width: 100%;
+  accent-color: #438060;
+  cursor: pointer;
+}
+
+.music-audio {
+  display: none;
+  width: 100%;
+  margin: 0;
+}
+
+.music-file-name {
+  margin: 0;
+  color: #32745d;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.field-hint {
+  margin: 0;
+  color: #87938a;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* =========================================================
+   Audio segment and trim controls
+   ========================================================= */
+
+.music-segment-section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 13px;
+  padding: 14px;
+  border: 1px solid #e2e9e3;
+  border-radius: 6px;
+  background: #f8faf8;
+}
+
+.music-segment-heading,
+.music-time-field > span,
+.music-segment-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.music-segment-heading strong {
+  color: #435248;
+  font-size: 11px;
+}
+
+.music-segment-heading span,
+.music-segment-summary span {
+  color: #87938a;
+  font-size: 10px;
+}
+
+.music-trim-control {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.music-trim-readout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: 12px;
+}
+
+.music-trim-readout > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.music-trim-readout > div:nth-child(2) {
+  align-items: center;
+}
+
+.music-trim-readout > div:last-child {
+  align-items: flex-end;
+}
+
+.music-trim-readout span {
+  color: #87938a;
+  font-size: 9px;
+}
+
+.music-trim-readout strong {
+  color: #3e5948;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.music-trim-readout > div:nth-child(2) strong {
+  color: #32745d;
+}
+
+/* =========================================================
+   Audio waveform
+   ========================================================= */
+
+.music-waveform {
+  position: relative;
+  height: 84px;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #32483b;
+  border-radius: 5px;
+  background: #1e2b24;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.music-waveform.is-dragging {
+  cursor: grabbing;
+}
+
+.music-waveform.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.music-waveform-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 10px 7px;
+  pointer-events: none;
+}
+
+.music-waveform-bars span {
+  width: 2px;
+  min-width: 1px;
+  flex: 1 1 0;
+  border-radius: 2px;
+  background: #9fb4a4;
+  opacity: 0.9;
+}
+
+.music-waveform-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  color: #a3b0a7;
+  font-size: 10px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.music-waveform-dim {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  background: rgba(8, 14, 10, 0.67);
+  pointer-events: none;
+}
+
+.music-waveform-dim.is-before {
+  left: 0;
+}
+
+.music-waveform-dim.is-after {
+  right: 0;
+}
+
+.music-trim-selection {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  border-right: 2px solid #c7eb8b;
+  border-left: 2px solid #c7eb8b;
+  background: rgba(126, 172, 125, 0.12);
+  pointer-events: none;
+}
+
+.music-trim-window {
+  position: absolute;
+  inset: 0 7px;
+  cursor: grab;
+  pointer-events: auto;
+}
+
+.music-waveform.is-dragging .music-trim-window {
+  cursor: grabbing;
+}
+
+.music-trim-handle {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  display: grid;
+  width: 16px;
+  height: 42px;
+  place-items: center;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 1px solid #d9f6aa;
+  border-radius: 5px;
+  background: #b7df79;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.36);
+  cursor: ew-resize;
+  touch-action: none;
+  pointer-events: auto;
+}
+
+.music-trim-handle.is-end {
+  transform: translate(50%, -50%);
+}
+
+.music-trim-handle span {
+  width: 2px;
+  height: 16px;
+  border-right: 1px solid #54713e;
+  border-left: 1px solid #54713e;
+}
+
+.music-trim-handle:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.music-trim-handle:disabled {
+  cursor: not-allowed;
+}
+
+.music-waveform-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #89968d;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================================
+   Preview and playback actions
+   ========================================================= */
+
+.music-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.music-preview-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  flex: 1 1 130px;
+  padding: 7px 10px;
+  border: 1px solid #dce5de;
+  border-radius: 5px;
+  color: #45614e;
+  background: #fff;
+  font-size: 10px;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.music-preview-actions button:hover:not(:disabled) {
+  border-color: #9ab8a2;
+  background: #f4f8f4;
+}
+
+.music-preview-actions button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   Voice-over section — existing green/white theme
+   ========================================================= */
+
+.voice-over-section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #e2e9e3;
+  border-radius: 6px;
+  background: #f8faf8;
+}
+
+.voice-over-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.voice-over-heading > svg {
+  flex: 0 0 auto;
+  color: #52745d;
+}
+
+.voice-over-heading h3 {
+  margin: 0;
+  color: #293b31;
+  font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.voice-over-description {
+  margin: -6px 0 0;
+  color: #7c8980;
+  font-size: 11px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+/* Voice-over upload field */
+
+.voice-over-file {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.voice-over-file label {
+  color: #536158;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.voice-over-file input[type="file"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 7px;
+  border: 1px solid #dfe5e0;
+  border-radius: 5px;
+  color: #526057;
+  background: #fff;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.voice-over-file input[type="file"]::file-selector-button {
+  max-width: 100%;
+  margin-right: 10px;
+  padding: 6px 9px;
+  border: 1px solid #dce5de;
+  border-radius: 4px;
+  color: #45614e;
+  background: #f6f9f6;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.voice-over-file input[type="file"]::file-selector-button:hover {
+  border-color: #a8c2af;
+  background: #edf4ee;
+}
+
+.voice-over-file input[type="file"]:focus-visible {
+  outline: 2px solid #438060;
+  outline-offset: 2px;
+}
+
+.voice-over-file-name {
+  margin: 0;
+  color: #32745d;
+  font-size: 10px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* Voice-over action buttons */
+
+.voice-over-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.voice-over-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 36px;
+  flex: 1 1 130px;
+  padding: 8px 11px;
+  border: 1px solid #dce5de;
+  border-radius: 5px;
+  color: #45614e;
+  background: #fff;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease,
+    opacity 160ms ease;
+}
+
+.voice-over-button svg {
+  flex: 0 0 auto;
+}
+
+.voice-over-button:hover:not(:disabled) {
+  border-color: #9ab8a2;
+  background: #f0f6f1;
+}
+
+.voice-over-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.voice-over-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-over-button--record {
+  border-color: #32745d;
+  color: #fff;
+  background: #32745d;
+}
+
+.voice-over-button--record:hover:not(:disabled) {
+  border-color: #255843;
+  background: #255843;
+}
+
+.voice-over-button--recording {
+  border-color: #b94a48;
+  color: #fff;
+  background: #b94a48;
+}
+
+.voice-over-button--recording:hover:not(:disabled) {
+  border-color: #9f3836;
+  background: #9f3836;
+}
+
+/* Voice-over status message */
+
+.voice-over-status {
+  margin: 0;
+  color: #668574;
+  font-size: 10px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+/* Keep uploaded audio available to the component without displaying
+   a second audio player. */
+
+.voice-over-audio {
+  display: none;
+  width: 100%;
+  margin: 0;
+}
+
+/* Voice-over volume */
+
+.voice-over-volume {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.voice-over-volume-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.voice-over-volume-label label {
+  min-width: 0;
+  color: #536158;
+  font-size: 11px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.voice-over-volume-label strong {
+  flex: 0 0 auto;
+  color: #32745d;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.voice-over-volume input[type="range"] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: #438060;
+  cursor: pointer;
+}
+
+/* =========================================================
+   MP4 export button
+   ========================================================= */
+
+.export-mp4-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 43px;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 5px;
+  color: #fff;
+  background: #32745d;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.export-mp4-button:hover:not(:disabled) {
+  background: #255843;
+}
+
+.export-mp4-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.export-mp4-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   Export status and error messages
+   ========================================================= */
+
+.export-status,
+.export-success,
+.export-error,
+.export-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.export-status {
+  color: #52745d;
+}
+
+.export-success {
+  padding: 9px 11px;
+  border: 1px solid #dce8de;
+  border-radius: 5px;
+  color: #32745d;
+  background: #f0f6f1;
+}
+
+.export-error {
+  padding: 10px 12px;
+  border: 1px solid #f1d6d4;
+  border-radius: 6px;
+  color: #b91c1c;
+  background: #fef5f4;
+}
+
+.export-note {
+  color: #929b94;
+  font-size: 10px;
+}
+
+/* =========================================================
+   Tablet and smaller desktop
+   ========================================================= */
+
+@media (max-width: 1000px) {
+  .music-export {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.95fr);
+  }
+
+  .music-preview-panel {
+    padding: 22px;
+  }
+
+  .music-export-controls {
+    padding: 28px 24px;
+  }
+}
+
+/* =========================================================
+   Mobile layout
+   ========================================================= */
+
+@media (max-width: 760px) {
+  .music-export {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    overflow: visible;
+  }
+
+  .music-preview-panel {
+    min-height: 300px;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .music-preview-frame {
+    width: 100%;
+    min-height: 190px;
+    flex: 0 0 auto;
+  }
+
+  .music-preview-frame > img {
+    width: 100%;
+    height: auto;
+    max-height: 38vh;
+  }
+
+  .music-preview-frame .empty-prompt {
+    min-height: 190px;
+    padding: 22px 14px;
+  }
+
+  .music-preview-caption {
+    width: 100%;
+  }
+
+  .music-export-controls {
+    min-height: 0;
+    padding: 24px 20px 30px;
+    overflow: visible;
+  }
+
+  .voice-over-section {
+    gap: 12px;
+  }
+}
+
+/* =========================================================
+   Small phones
+   ========================================================= */
+
+@media (max-width: 480px) {
+  .music-preview-panel {
+    min-height: 260px;
+    padding: 13px;
+  }
+
+  .music-preview-frame {
+    min-height: 165px;
+  }
+
+  .music-preview-frame > img {
+    max-height: 32vh;
+  }
+
+  .music-preview-frame .empty-prompt h1 {
+    font-size: 19px;
+  }
+
+  .music-export-controls {
+    gap: 15px;
+    padding: 20px 15px 25px;
+  }
+
+  .music-export-heading {
+    gap: 10px;
+  }
+
+  .music-export-heading h2 {
+    font-size: 23px;
+  }
+
+  .mp4-badge {
+    padding: 5px 7px;
+    font-size: 10px;
+  }
+
+  .music-segment-section {
+    padding: 11px;
+  }
+
+  .music-trim-readout {
+    gap: 7px;
+  }
+
+  .music-trim-readout strong {
+    font-size: 10px;
+  }
+
+  .music-preview-actions button {
+    flex-basis: 100%;
+  }
+
+  .voice-over-section {
+    padding: 11px;
+  }
+
+  .voice-over-actions {
+    flex-direction: column;
+  }
+
+  .voice-over-button {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .voice-over-file input[type="file"] {
+    font-size: 10px;
+  }
+
+  .export-mp4-button {
+    padding: 11px 12px;
+    font-size: 11px;
+  }
+}
+
+/* =========================================================
+   Very narrow screens
+   ========================================================= */
+
+@media (max-width: 360px) {
+  .music-export-heading {
+    flex-direction: column;
+  }
+
+  .music-waveform {
+    height: 72px;
+  }
+
+  .music-trim-readout {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .voice-over-heading h3 {
+    font-size: 11px;
+  }
+
+  .voice-over-description,
+  .voice-over-status {
+    font-size: 10px;
+  }
+}
+
+/* =========================================================
+   Reduced motion accessibility
+   ========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .music-export *,
+  .music-export *::before,
+  .music-export *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
