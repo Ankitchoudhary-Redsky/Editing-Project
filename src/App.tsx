@@ -353,10 +353,13 @@ function App() {
     resizeDisplay()
   }
 
-  const cancelCrop = useCallback(() => {
+const cancelCrop = useCallback((nextTool: EditorTool = 'select') => {
     const canvas = canvasRef.current
     const cropFrame = cropObjectRef.current
-    if (!canvas || !cropFrame) return
+    if (!canvas || !cropFrame) {
+      setActiveTool(nextTool)
+      return
+    }
     suppressHistoryRef.current = true
     canvas.remove(cropFrame)
     cropObjectRef.current = null
@@ -364,10 +367,18 @@ function App() {
     canvas.discardActiveObject()
     canvas.requestRenderAll()
     suppressHistoryRef.current = false
-    setActiveTool('select')
+    setActiveTool(nextTool)
     if (cropTransformChangedRef.current) recordHistory(true)
     cropTransformChangedRef.current = false
   }, [recordHistory])
+ 
+  const setActiveEditorTool = useCallback((tool: EditorTool) => {
+    if (activeTool === 'crop' && tool !== 'crop') {
+      cancelCrop(tool)
+      return
+    }
+    setActiveTool(tool)
+  }, [activeTool, cancelCrop])
 
   const applyAdjustments = (nextBrightness = brightness, nextContrast = contrast, nextSaturation = saturation) => {
     const image = imageObjectRef.current
@@ -450,7 +461,7 @@ function App() {
     },
     history: { canUndo, canRedo, undo: () => void undo(), redo: () => void redo() },
     project: { name: projectName, setName: setProjectName, isRenaming, setIsRenaming },
-    tools: { active: activeTool, setActive: setActiveTool, openFilePicker, uploadFile, beginCrop, setDraggingFile, notice, setNotice,deleteImage },
+    tools: { active: activeTool, setActive: setActiveEditorTool, openFilePicker, uploadFile, beginCrop, setDraggingFile, notice, setNotice,deleteImage },
     crop: {
       active: cropActive,
       ratio: cropRatio,

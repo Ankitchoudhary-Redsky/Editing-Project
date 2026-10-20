@@ -35,7 +35,7 @@ export interface EditorContextValue {
   }
   tools: {
     active: EditorTool
-    setActive: Dispatch<SetStateAction<EditorTool>>
+    setActive: (tool: EditorTool) => void
     openFilePicker: () => void
     uploadFile: (file?: File) => Promise<void>
     setDraggingFile: Dispatch<SetStateAction<boolean>>
