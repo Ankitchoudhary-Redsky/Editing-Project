@@ -10,6 +10,7 @@ import type { EditorTool } from './types'
 export const editorTools: { id: EditorTool; label: string; icon: typeof Upload }[] = [
   { id: 'upload', label: 'Upload', icon: Upload },
   { id: 'select', label: 'Select', icon: MousePointer2 },
+  { id: 'resize', label: 'Resize', icon: SlidersHorizontal },
   { id: 'crop', label: 'Crop', icon: Crop },
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal },
 ]

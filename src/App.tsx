@@ -70,6 +70,7 @@ function App() {
   const [cropRotation, setCropRotation] = useState(0)
   const [resizeWidth, setResizeWidth] = useState(1200)
   const [resizeHeight, setResizeHeight] = useState(800)
+  const [keepRatio, setKeepRatio] = useState(true)
   const [brightness, setBrightness] = useState(0)
   const [contrast, setContrast] = useState(0)
   const [saturation, setSaturation] = useState(0)
@@ -374,27 +375,40 @@ function App() {
     cropTransformChangedRef.current = false
   }, [recordHistory])
 
-  // const applyResize = () => {
-  //   const canvas = canvasRef.current
-  //   if (!canvas) return
-  //   const width = Math.min(12000, Math.max(1, Math.round(resizeWidth)))
-  //   const height = Math.min(12000, Math.max(1, Math.round(resizeHeight)))
-  //   const scaleX = width / canvas.getWidth()
-  //   const scaleY = height / canvas.getHeight()
-  //   if (scaleArtwork) {
-  //     canvas.getObjects().forEach((object) => {
-  //       object.set({ left: (object.left ?? 0) * scaleX, top: (object.top ?? 0) * scaleY, scaleX: (object.scaleX ?? 1) * scaleX, scaleY: (object.scaleY ?? 1) * scaleY })
-  //       object.setCoords()
-  //     })
-  //   }
-  //   canvas.setDimensions({ width, height })
-  //   canvas.requestRenderAll()
-  //   setDimensions({ width, height })
-  //   setResizeWidth(width)
-  //   setResizeHeight(height)
-  //   recordHistory(true)
-  //   resizeDisplay()
-  // }
+  const applyResize = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const width = Math.min(12000, Math.max(1, Math.round(resizeWidth)))
+    const height = Math.min(12000, Math.max(1, Math.round(resizeHeight)))
+    const scaleX = width / canvas.getWidth()
+    const scaleY = height / canvas.getHeight()
+    if (scaleArtwork) {
+      canvas.getObjects().forEach((object) => {
+        object.set({ left: (object.left ?? 0) * scaleX, top: (object.top ?? 0) * scaleY, scaleX: (object.scaleX ?? 1) * scaleX, scaleY: (object.scaleY ?? 1) * scaleY })
+        object.setCoords()
+      })
+    }
+    canvas.setDimensions({ width, height })
+    canvas.requestRenderAll()
+    setDimensions({ width, height })
+    setResizeWidth(width)
+    setResizeHeight(height)
+    recordHistory(true)
+    resizeDisplay()
+  }
+
+
+  // resize 
+  const updateResizeWidth = (value: number) => {
+    setResizeWidth(value)
+    if (keepRatio && dimensions.width) setResizeHeight(Math.round(value * dimensions.height / dimensions.width))
+  }
+
+  const updateResizeHeight = (value: number) => {
+    setResizeHeight(value)
+    if (keepRatio && dimensions.height) setResizeWidth(Math.round(value * dimensions.width / dimensions.height))
+  }
+
 
   const applyAdjustments = (nextBrightness = brightness, nextContrast = contrast, nextSaturation = saturation) => {
     const image = imageObjectRef.current
@@ -490,6 +504,7 @@ function App() {
       apply: applyCrop,
       cancel: cancelCrop,
     },
+    resize: { width: resizeWidth, height: resizeHeight, setWidth: updateResizeWidth, setHeight: updateResizeHeight, keepRatio, setKeepRatio, scaleArtwork, setScaleArtwork, apply: applyResize },
     adjustments: { brightness, setBrightness, contrast, setContrast, saturation, setSaturation, apply: applyAdjustments, reset: resetAdjustments },
     preview: { open: previewOpen, imageUrl: previewUrl, show: openPreview, close: () => setPreviewOpen(false) },
     draggingFile,

@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Canvas, FabricObject } from 'fabric'
 
-export type EditorTool = 'upload' | 'select' | 'crop' | 'adjust'
+export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'adjust'
 export type ShapeKind = 'rect' | 'circle' | 'line' | 'arrow' | 'triangle'
 export type ExportFormat = 'png' | 'jpeg'
 export type Dimensions = { width: number; height: number }
@@ -55,6 +55,17 @@ export interface EditorContextValue {
     setRotation: (rotation: number) => void
     apply: () => void
     cancel: () => void
+  }
+  resize: {
+    width: number
+    height: number
+    setWidth: (value: number) => void
+    setHeight: (value: number) => void
+    keepRatio: boolean
+    setKeepRatio: Dispatch<SetStateAction<boolean>>
+    scaleArtwork: boolean
+    setScaleArtwork: Dispatch<SetStateAction<boolean>>
+    apply: () => void
   }
   adjustments: {
     brightness: number
