@@ -2,10 +2,12 @@ import { X } from 'lucide-react'
 import { useEditor } from '../EditorContext'
 import { AdjustmentsPanel } from './panels/AdjustmentsPanel'
 import { UploadPanel } from './panels/UploadPanel'
+import { CropPanel } from './panels/CropPanel'
 
 const panelTitles = {
   upload: 'Upload',
   select: 'Select',
+  crop: 'Crop',
   adjust: 'Adjustments',
 }
 
@@ -17,6 +19,7 @@ export function ToolPanel() {
     <aside className="tool-panel">
       <div className="panel-heading"><div><h3 className="panel-kicker">{panelTitles[tools.active]}</h3></div><button className="panel-close" onClick={() => tools.setActive('select')} aria-label="Close tool panel"><X size={17} /></button></div>
       {tools.active === 'upload' && <UploadPanel />}
+      {tools.active === 'crop' && <CropPanel />}
       {tools.active === 'adjust' && <AdjustmentsPanel />}
     </aside>
   )

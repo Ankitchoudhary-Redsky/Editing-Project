@@ -13,6 +13,7 @@ import { ToolRail } from './features/editor/components/ToolRail'
 import { EditorWorkspace } from './features/editor/components/EditorWorkspace'
 import { IMAGE_SOURCE_TOKEN, serializeCanvas } from './features/editor/model/constants'
 import { applyImageAdjustments } from './features/editor/operations/imageAdjustments'
+import { applyCanvasCrop, createCropFrame, updateCropRatio } from './features/editor/operations/cropCanvas'
 import { loadLocalImage } from './features/editor/operations/loadLocalImage'
 import type { EditorContextValue, EditorTool } from './features/editor/model/types'
 import './App.css'
@@ -35,6 +36,7 @@ function App() {
   const cropObjectRef = useRef<Rect | null>(null)
   const imageObjectRef = useRef<FabricImage | null>(null)
   const imageSourceRef = useRef('')
+  const cropTransformChangedRef = useRef(false)
 
   const setCanvasElement = useCallback((element: HTMLCanvasElement | null) => {
     canvasElementRef.current = element
@@ -62,6 +64,12 @@ function App() {
   const [fitScale, setFitScale] = useState(1)
   const [draggingFile, setDraggingFile] = useState(false)
   const [notice, setNotice] = useState('')
+  const [scaleArtwork, setScaleArtwork] = useState(false)
+  const [cropActive, setCropActive] = useState(false)
+  const [cropRatio, setCropRatio] = useState('Free')
+  const [cropRotation, setCropRotation] = useState(0)
+  const [resizeWidth, setResizeWidth] = useState(1200)
+  const [resizeHeight, setResizeHeight] = useState(800)
   const [brightness, setBrightness] = useState(0)
   const [contrast, setContrast] = useState(0)
   const [saturation, setSaturation] = useState(0)
@@ -75,6 +83,7 @@ function App() {
     const canvasObjects = canvas.getObjects()
     const image = canvasObjects.find((item) => item instanceof FabricImage)
     imageObjectRef.current = image instanceof FabricImage ? image : null
+    setCropRotation(image instanceof FabricImage ? Math.round(image.angle || 0) : 0)
     setHasImage(Boolean(image))
     setObjects(canvasObjects.filter((item) => item !== cropObjectRef.current))
     const active = canvas.getActiveObject() ?? null
@@ -278,6 +287,114 @@ function App() {
     }
   }
 
+  const beginCrop = () => {
+    const canvas = canvasRef.current
+    if (!canvas || !hasDocument || cropObjectRef.current) return
+    const cropFrame = createCropFrame(canvas)
+    cropTransformChangedRef.current = false
+    cropObjectRef.current = cropFrame
+    setCropActive(true)
+    suppressHistoryRef.current = true
+    canvas.add(cropFrame)
+    suppressHistoryRef.current = false
+    canvas.setActiveObject(cropFrame)
+    canvas.requestRenderAll()
+    setActiveTool('crop')
+  }
+
+  const changeCropRatio = (ratioName: string) => {
+    setCropRatio(ratioName)
+    const cropFrame = cropObjectRef.current
+    const canvas = canvasRef.current
+    if (!cropFrame || !canvas) return
+    updateCropRatio(canvas, cropFrame, ratioName)
+  }
+
+  const flipImage = (axis: 'horizontal' | 'vertical') => {
+    const image = imageObjectRef.current
+    const canvas = canvasRef.current
+    if (!image || !canvas) return
+    const property = axis === 'horizontal' ? 'flipX' : 'flipY'
+    image.set(property, !image[property])
+    image.setCoords()
+    canvas.requestRenderAll()
+    cropTransformChangedRef.current = true
+  }
+
+  const setImageRotation = (angle: number) => {
+    const image = imageObjectRef.current
+    const canvas = canvasRef.current
+    if (!image || !canvas) return
+    const nextAngle = Math.max(-180, Math.min(180, Math.round(angle)))
+    const center = image.getCenterPoint()
+    image.set('angle', nextAngle)
+    image.setPositionByOrigin(center, 'center', 'center')
+    image.setCoords()
+    setCropRotation(nextAngle)
+    canvas.requestRenderAll()
+    cropTransformChangedRef.current = true
+  }
+
+  const applyCrop = () => {
+    const canvas = canvasRef.current
+    const cropFrame = cropObjectRef.current
+    if (!canvas || !cropFrame) return
+    suppressHistoryRef.current = true
+    const cropDimensions = applyCanvasCrop(canvas, cropFrame, imageObjectRef.current)
+    if (!cropDimensions) {
+      suppressHistoryRef.current = false
+      return
+    }
+    cropObjectRef.current = null
+    setCropActive(false)
+    setDimensions(cropDimensions)
+    setResizeWidth(cropDimensions.width)
+    setResizeHeight(cropDimensions.height)
+    setActiveTool('select')
+    suppressHistoryRef.current = false
+    cropTransformChangedRef.current = false
+    recordHistory(true)
+    syncObjects()
+    resizeDisplay()
+  }
+
+  const cancelCrop = useCallback(() => {
+    const canvas = canvasRef.current
+    const cropFrame = cropObjectRef.current
+    if (!canvas || !cropFrame) return
+    suppressHistoryRef.current = true
+    canvas.remove(cropFrame)
+    cropObjectRef.current = null
+    setCropActive(false)
+    canvas.discardActiveObject()
+    canvas.requestRenderAll()
+    suppressHistoryRef.current = false
+    setActiveTool('select')
+    if (cropTransformChangedRef.current) recordHistory(true)
+    cropTransformChangedRef.current = false
+  }, [recordHistory])
+
+  // const applyResize = () => {
+  //   const canvas = canvasRef.current
+  //   if (!canvas) return
+  //   const width = Math.min(12000, Math.max(1, Math.round(resizeWidth)))
+  //   const height = Math.min(12000, Math.max(1, Math.round(resizeHeight)))
+  //   const scaleX = width / canvas.getWidth()
+  //   const scaleY = height / canvas.getHeight()
+  //   if (scaleArtwork) {
+  //     canvas.getObjects().forEach((object) => {
+  //       object.set({ left: (object.left ?? 0) * scaleX, top: (object.top ?? 0) * scaleY, scaleX: (object.scaleX ?? 1) * scaleX, scaleY: (object.scaleY ?? 1) * scaleY })
+  //       object.setCoords()
+  //     })
+  //   }
+  //   canvas.setDimensions({ width, height })
+  //   canvas.requestRenderAll()
+  //   setDimensions({ width, height })
+  //   setResizeWidth(width)
+  //   setResizeHeight(height)
+  //   recordHistory(true)
+  //   resizeDisplay()
+  // }
 
   const applyAdjustments = (nextBrightness = brightness, nextContrast = contrast, nextSaturation = saturation) => {
     const image = imageObjectRef.current
@@ -360,7 +477,19 @@ function App() {
     },
     history: { canUndo, canRedo, undo: () => void undo(), redo: () => void redo() },
     project: { name: projectName, setName: setProjectName, isRenaming, setIsRenaming },
-    tools: { active: activeTool, setActive: setActiveTool, openFilePicker, uploadFile, setDraggingFile, notice, setNotice,deleteImage },
+    tools: { active: activeTool, setActive: setActiveTool, openFilePicker, uploadFile, beginCrop, setDraggingFile, notice, setNotice,deleteImage },
+    crop: {
+      active: cropActive,
+      ratio: cropRatio,
+      rotation: cropRotation,
+      setRatio: setCropRatio,
+      changeRatio: changeCropRatio,
+      flipHorizontal: () => flipImage('horizontal'),
+      flipVertical: () => flipImage('vertical'),
+      setRotation: setImageRotation,
+      apply: applyCrop,
+      cancel: cancelCrop,
+    },
     adjustments: { brightness, setBrightness, contrast, setContrast, saturation, setSaturation, apply: applyAdjustments, reset: resetAdjustments },
     preview: { open: previewOpen, imageUrl: previewUrl, show: openPreview, close: () => setPreviewOpen(false) },
     draggingFile,

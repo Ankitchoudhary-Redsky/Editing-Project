@@ -12,6 +12,7 @@ export function ToolRail() {
           className={`rail-tool ${tools.active === id ? 'active' : ''}`}
           onClick={() => {
             tools.setActive(id)
+            if (id === 'crop') tools.beginCrop()
           }}
           title={label}
           aria-label={label}

@@ -1,4 +1,5 @@
 import {
+  Crop,
   MousePointer2,
   SlidersHorizontal,
   Upload,
@@ -9,9 +10,17 @@ import type { EditorTool } from './types'
 export const editorTools: { id: EditorTool; label: string; icon: typeof Upload }[] = [
   { id: 'upload', label: 'Upload', icon: Upload },
   { id: 'select', label: 'Select', icon: MousePointer2 },
+  { id: 'crop', label: 'Crop', icon: Crop },
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal },
 ]
 
+export const cropRatios: Record<string, number | null> = {
+  Free: null,
+  '1:1': 1,
+  '4:3': 4 / 3,
+  '16:9': 16 / 9,
+  '3:2': 3 / 2,
+}
 
 export const IMAGE_SOURCE_TOKEN = '__pixel_studio_image_source__'
 

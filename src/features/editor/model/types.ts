@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Canvas, FabricObject } from 'fabric'
 
-export type EditorTool = 'upload' | 'select' | 'adjust'
+export type EditorTool = 'upload' | 'select' | 'crop' | 'adjust'
 export type ShapeKind = 'rect' | 'circle' | 'line' | 'arrow' | 'triangle'
 export type ExportFormat = 'png' | 'jpeg'
 export type Dimensions = { width: number; height: number }
@@ -40,8 +40,21 @@ export interface EditorContextValue {
     uploadFile: (file?: File) => Promise<void>
     setDraggingFile: Dispatch<SetStateAction<boolean>>
     notice: string
+    beginCrop: () => void
     setNotice: Dispatch<SetStateAction<string>>
     deleteImage: () => void
+  }
+  crop: {
+    active: boolean
+    ratio: string
+    rotation: number
+    setRatio: Dispatch<SetStateAction<string>>
+    changeRatio: (ratio: string) => void
+    flipHorizontal: () => void
+    flipVertical: () => void
+    setRotation: (rotation: number) => void
+    apply: () => void
+    cancel: () => void
   }
   adjustments: {
     brightness: number
