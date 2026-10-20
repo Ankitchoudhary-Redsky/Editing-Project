@@ -1,11 +1,14 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Canvas, FabricObject } from 'fabric'
 
-export type EditorTool = 'upload' | 'select' | 'adjust'
+export type EditorTool = 'upload' | 'select' | 'adjust' | 'filters' | 'background' | 'draw-remove'
+export type DrawingMode = 'pencil' | 'eraser' | 'magic-remover' | 'lasso'
 export type ShapeKind = 'rect' | 'circle' | 'line' | 'arrow' | 'triangle'
 export type ExportFormat = 'png' | 'jpeg'
 export type Dimensions = { width: number; height: number }
 export type TextProperty = 'text' | 'fontFamily' | 'fontSize' | 'fill' | 'backgroundColor' | 'opacity' | 'fontWeight' | 'fontStyle' | 'textAlign'
+export type FilterId = 'original' | 'grayscale' | 'blackWhite' | 'sepia' | 'vintage' |'retro' | 'warm' | 'cool' | 'vivid' | 'cinematic' | 'dramatic' | 'fade' | 'pastel' | 'noir' | 'dreamy'
+export type FilterSettings = { id: FilterId; intensity: number }
 
 export interface EditorContextValue {
   canvas: {
@@ -58,6 +61,33 @@ export interface EditorContextValue {
     imageUrl: string
     show: () => void
     close: () => void
+  }
+  filters: {
+    selected: FilterId
+    intensity: number
+    setFilter: (id: FilterId) => void
+    setIntensity: (value: number) => void
+    reset: () => void
+  }
+  background: {
+    removed: boolean
+    isRemoving: boolean
+    progress: string
+    color: string
+    setColor: (color: string) => void
+    remove: () => Promise<void>
+    uploadBackground: (file?: File) => Promise<void>
+    clearBackground: () => void
+  }
+  drawing: {
+    activeMode: DrawingMode
+    setActiveMode: (mode: DrawingMode) => void
+    color: string
+    setColor: (color: string) => void
+    brushSize: number
+    setBrushSize: (size: number) => void
+    clearSelection: () => void
+    deleteSelection: () => void
   }
   draggingFile: boolean
   handleDrop: (event: React.DragEvent<HTMLDivElement>) => void
