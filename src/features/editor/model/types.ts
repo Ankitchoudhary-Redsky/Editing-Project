@@ -1,17 +1,12 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { Canvas, FabricObject } from 'fabric'
+import type { Canvas, FabricObject, IText } from 'fabric'
 
-export type EditorTool = 'upload' | 'select' | 'crop' | 'adjust' | 'music' 
- | 'filters' | 'background' | 'draw-remove' | 'stickers'
+export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers'
 export type DrawingMode = 'pencil' | 'eraser' | 'magic-remover' | 'lasso'
-export type ShapeKind = 'rect' | 'circle' | 'line' | 'arrow' | 'triangle'
+export type ShapeKind = 'rect' | 'roundRect' | 'circle' | 'ellipse' | 'line' | 'arrow' | 'triangle' | 'star' | 'pentagon'
 
 export type ExportFormat = 'png' | 'jpeg'
 
-export type Dimensions = {
-  width: number
-  height: number
-}
 
 export type VideoPreviewData = {
   imageUrl: string
@@ -44,20 +39,11 @@ export type VideoAudioDraft = {
   voiceVolume: number
 }
 
-export type TextProperty =
-  | 'text'
-  | 'fontFamily'
-  | 'fontSize'
-  | 'fill'
-  | 'backgroundColor'
-  | 'opacity'
-  | 'fontWeight'
-  | 'fontStyle'
-  | 'textAlign'
-
 export type EditorCanvas = Canvas
 export type FilterId = 'original' | 'grayscale' | 'blackWhite' | 'sepia' | 'vintage' |'retro' | 'warm' | 'cool' | 'vivid' | 'cinematic' | 'dramatic' | 'fade' | 'pastel' | 'noir' | 'dreamy'
 export type FilterSettings = { id: FilterId; intensity: number }
+export type Dimensions = { width: number; height: number }
+export type TextProperty = 'text' | 'fontFamily' | 'fontSize' | 'fill' | 'backgroundColor' | 'opacity' | 'fontWeight' | 'fontStyle' | 'textAlign' | 'stroke' | 'strokeWidth' | 'shadow'
 
 export interface EditorContextValue {
   /** Actual Fabric.js Canvas instance used for image editing. */
@@ -114,7 +100,61 @@ export interface EditorContextValue {
     apply: () => void
     cancel: () => void
   }
-
+  resize: {
+    width: number
+    height: number
+    setWidth: (value: number) => void
+    setHeight: (value: number) => void
+    keepRatio: boolean
+    setKeepRatio: Dispatch<SetStateAction<boolean>>
+    scaleArtwork: boolean
+    setScaleArtwork: Dispatch<SetStateAction<boolean>>
+    apply: () => void
+  }
+    text: {
+    selected: IText | null
+    value: string
+    fontFamily: string
+    setFontFamily: Dispatch<SetStateAction<string>>
+    fontSize: number
+    setFontSize: Dispatch<SetStateAction<number>>
+    color: string
+    setColor: Dispatch<SetStateAction<string>>
+    background: string
+    setBackground: Dispatch<SetStateAction<string>>
+    opacity: number
+    setOpacity: Dispatch<SetStateAction<number>>
+    outline: string
+    setOutline: Dispatch<SetStateAction<string>>
+    outlineWidth: number
+    setOutlineWidth: Dispatch<SetStateAction<number>>
+    shadow: string
+    setShadow: Dispatch<SetStateAction<string>>
+    add: () => void
+    update: (property: TextProperty, value: string | number) => void
+  }
+  shapes: {
+    selected: FabricObject | null
+    isSelectedShape: boolean
+    kind: ShapeKind
+    setKind: Dispatch<SetStateAction<ShapeKind>>
+    fill: string
+    setFill: Dispatch<SetStateAction<string>>
+    transparentFill: boolean
+    setTransparentFill: Dispatch<SetStateAction<boolean>>
+    stroke: string
+    setStroke: Dispatch<SetStateAction<string>>
+    strokeWidth: number
+    setStrokeWidth: Dispatch<SetStateAction<number>>
+    opacity: number
+    setOpacity: Dispatch<SetStateAction<number>>
+    add: () => void
+    duplicate: () => Promise<void>
+    delete: () => void
+    updateAppearance: (property: 'fill' | 'stroke' | 'strokeWidth' | 'opacity', value: string | number) => void
+    moveLayer: (object: FabricObject, direction: 'forward' | 'backward') => void
+    selectLayer: (object: FabricObject) => void
+  }
   adjustments: {
     brightness: number
     setBrightness: Dispatch<SetStateAction<number>>

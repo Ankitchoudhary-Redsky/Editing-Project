@@ -1,0 +1,22 @@
+import { AlignCenter, AlignLeft, AlignRight, Bold, Italic, Plus } from 'lucide-react'
+import { useEditor } from '../../EditorContext'
+
+const fontFamilies = ['Georgia', 'Arial', 'Verdana', 'Trebuchet MS', 'Courier New', 'Times New Roman']
+
+export function TextPanel() {
+  const { text } = useEditor()
+  return (
+    <div className="panel-content">
+      <button className="primary-button full-button" onClick={text.add}><Plus size={16} /> Add a text box</button>
+      {text.selected && <div className="control-section"><label className="field-label">Text<textarea rows={3} value={text.selected.text ?? text.value} onChange={(event) => text.update('text', event.target.value)} /></label></div>}
+      <div className="control-section"><span className="field-label">Font</span><select value={text.selected?.fontFamily ?? text.fontFamily} onChange={(event) => { text.setFontFamily(event.target.value); text.update('fontFamily', event.target.value) }}>{fontFamilies.map((family) => <option key={family}>{family}</option>)}</select></div>
+      <div className="dimensions-fields"><label className="field-label">Size<input type="number" min="8" max="400" value={text.selected?.fontSize ?? text.fontSize} onChange={(event) => { const value = Number(event.target.value); text.setFontSize(value); text.update('fontSize', value) }} /></label><label className="field-label color-field">Color<input type="color" value={text.selected && typeof text.selected.fill === 'string' ? text.selected.fill : text.color} onChange={(event) => { text.setColor(event.target.value); text.update('fill', event.target.value) }} /></label></div>
+      <label className="field-label color-field">Text background<input type="color" value={text.selected && typeof text.selected.backgroundColor === 'string' && text.selected.backgroundColor !== '' ? text.selected.backgroundColor : text.background} onChange={(event) => { text.setBackground(event.target.value); text.update('backgroundColor', event.target.value) }} /></label>
+      <div className="dimensions-fields"><label className="field-label color-field">Outline<input type="color" value={text.selected && typeof text.selected.stroke === 'string' ? text.selected.stroke : text.outline} onChange={(event) => { text.setOutline(event.target.value); text.update('stroke', event.target.value) }} /></label><label className="field-label">Outline width<input type="number" min="0" max="24" value={text.selected?.strokeWidth ?? text.outlineWidth} onChange={(event) => { const value = Number(event.target.value); text.setOutlineWidth(value); text.update('strokeWidth', value) }} /></label></div>
+      <label className="field-label">Shadow<select value={text.selected?.shadow ? (text.shadow === 'none' ? 'soft' : text.shadow) : text.shadow} onChange={(event) => { text.setShadow(event.target.value); text.update('shadow', event.target.value) }}><option value="none">None</option><option value="soft">Soft</option><option value="strong">Strong</option></select></label>
+      <div className="format-toolbar"><button title="Bold" className={text.selected?.fontWeight === 'bold' ? 'pressed' : ''} onClick={() => text.update('fontWeight', text.selected?.fontWeight === 'bold' ? 'normal' : 'bold')}><Bold size={16} /></button><button title="Italic" className={text.selected?.fontStyle === 'italic' ? 'pressed' : ''} onClick={() => text.update('fontStyle', text.selected?.fontStyle === 'italic' ? 'normal' : 'italic')}><Italic size={16} /></button><span /><button title="Align left" onClick={() => text.update('textAlign', 'left')}><AlignLeft size={16} /></button><button title="Align center" onClick={() => text.update('textAlign', 'center')}><AlignCenter size={16} /></button><button title="Align right" onClick={() => text.update('textAlign', 'right')}><AlignRight size={16} /></button></div>
+      <label className="range-field"><span>Opacity <b>{text.selected ? Math.round(text.selected.opacity * 100) : text.opacity}%</b></span><input type="range" min="0" max="100" value={text.selected ? Math.round(text.selected.opacity * 100) : text.opacity} onChange={(event) => { const value = Number(event.target.value); text.setOpacity(value); text.update('opacity', value / 100) }} /></label>
+      <p className="panel-note">Double-click a text object to edit its contents on the canvas.</p>
+    </div>
+  )
+}

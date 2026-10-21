@@ -3,9 +3,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Canvas,
   FabricImage,
+  IText,
   Rect,
   PencilBrush,
+  Shadow,
   type FabricObject,
+  type TPointerEvent,
 } from 'fabric'
 
 import { EditorContext } from './features/editor/EditorContext'
@@ -19,14 +22,14 @@ import { ToolRail } from './features/editor/components/ToolRail'
 import { EditorWorkspace } from './features/editor/components/EditorWorkspace'
 import { BACKGROUND_IMAGE_NAME,
   IMAGE_SOURCE_TOKEN, resolveImageSourceToken,
-  serializeCanvas,
+  serializeCanvas, shapeNames,
 } from './features/editor/model/constants'
 import { applyImageAdjustments } from './features/editor/operations/imageAdjustments'
 import { applyCanvasCrop, createCropFrame, updateCropRatio } from './features/editor/operations/cropCanvas'
 import { loadLocalImage } from './features/editor/operations/loadLocalImage'
 import type { DrawingMode,
   EditorContextValue,
-  EditorTool, FilterId,
+  EditorTool, ShapeKind, TextProperty, FilterId,
   VideoAudioDraft, VideoPreviewData,
 } from './features/editor/model/types'
 import { hasTransparentPixels, removeImageBackground } from './features/editor/operations/removeImageBackground'
@@ -34,6 +37,9 @@ import { editImagePixels, type EditPoint } from './features/editor/operations/ed
 import { restartAnimatedStickers } from './features/editor/operations/animatedSticker'
 
 import './App.css'
+import { buildShapeObject, createShapeObject } from './features/editor/operations/shapeObjects'
+import { createTextObject } from './features/editor/operations/textObjects'
+import { objectName } from './features/editor/model/objectName'
 
 type EditorSnapshot = {
   width: number
@@ -63,6 +69,7 @@ function App() {
   const drawingLayerImageRef = useRef<FabricImage | null>(null)
   const imageSourceRef = useRef('')
   const cropTransformChangedRef = useRef(false)
+  const shapeDrawingRef = useRef<{ start: { x: number; y: number }; preview: FabricObject | null } | null>(null)
   const selectedFilterRef = useRef<FilterId>('original')
   const filterIntensityRef = useRef(100)
   const backgroundRemovedRef = useRef(false)
@@ -124,6 +131,25 @@ function App() {
   const [cropActive, setCropActive] = useState(false)
   const [cropRatio, setCropRatio] = useState('Free')
   const [cropRotation, setCropRotation] = useState(0)
+  const [resizeWidth, setResizeWidth] = useState(1200)
+  const [resizeHeight, setResizeHeight] = useState(800)
+  const [keepRatio, setKeepRatio] = useState(true)
+  const [scaleArtwork, setScaleArtwork] = useState(true)
+  const [textValue, setTextValue] = useState('Your text here')
+  const [fontFamily, setFontFamily] = useState('Georgia')
+  const [fontSize, setFontSize] = useState(72)
+  const [textColor, setTextColor] = useState('#273a32')
+  const [textBackground, setTextBackground] = useState('#ffffff')
+  const [textOpacity, setTextOpacity] = useState(100)
+  const [textOutline, setTextOutline] = useState('#ffffff')
+  const [textOutlineWidth, setTextOutlineWidth] = useState(0)
+  const [textShadow, setTextShadow] = useState('none')
+  const [shapeKind, setShapeKind] = useState<ShapeKind>('rect')
+  const [fillColor, setFillColor] = useState('#b9e4d1')
+  const [transparentFill, setTransparentFill] = useState(false)
+  const [strokeColor, setStrokeColor] = useState('#27332f')
+  const [strokeWidth, setStrokeWidth] = useState(2)
+  const [shapeOpacity, setShapeOpacity] = useState(90)
   const [brightness, setBrightness] = useState(0)
   const [contrast, setContrast] = useState(0)
   const [saturation, setSaturation] = useState(0)
@@ -160,7 +186,7 @@ function App() {
 
     const canvasObjects = canvas.getObjects()
     const image = canvasObjects.find((item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME)
-
+    image?.set({ selectable: false, evented: false, lockMovementX: true, lockMovementY: true, lockScalingX: true, lockScalingY: true, lockRotation: true })
     imageObjectRef.current = image instanceof FabricImage ? image : null
     setCropRotation(image instanceof FabricImage ? Math.round(image.angle || 0) : 0)
 
@@ -344,6 +370,74 @@ function App() {
       }
     }
   }, [recordHistory, syncHistoryControls, syncObjects])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const drawing = activeTool === 'shapes'
+    canvas.selection = !drawing
+    canvas.skipTargetFind = false
+    canvas.defaultCursor = drawing ? 'crosshair' : 'default'
+    canvas.hoverCursor = 'move'
+
+    const handlePointerDown = (event: { e: TPointerEvent }) => {
+      if (!drawing || !hasDocument) return
+      if (canvas.findTarget(event.e)) return
+      const start = canvas.getPointer(event.e)
+      shapeDrawingRef.current = { start, preview: null }
+      suppressHistoryRef.current = true
+      const preview = buildShapeObject({ kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, { left: start.x, top: start.y, width: 1, height: 1 })
+      shapeDrawingRef.current.preview = preview
+      canvas.add(preview)
+      canvas.requestRenderAll()
+    }
+    const handlePointerMove = (event: { e: TPointerEvent }) => {
+      const drawingState = shapeDrawingRef.current
+      if (!drawing || !drawingState) return
+      const point = canvas.getPointer(event.e)
+      const left = Math.min(drawingState.start.x, point.x)
+      const top = Math.min(drawingState.start.y, point.y)
+      const width = Math.max(1, Math.abs(point.x - drawingState.start.x))
+      const height = Math.max(1, Math.abs(point.y - drawingState.start.y))
+      if (drawingState.preview) canvas.remove(drawingState.preview)
+      const preview = buildShapeObject({ kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, { left, top, width, height })
+      drawingState.preview = preview
+      canvas.add(preview)
+      canvas.requestRenderAll()
+    }
+    const handlePointerUp = () => {
+      const drawingState = shapeDrawingRef.current
+      if (!drawing || !drawingState) return
+      shapeDrawingRef.current = null
+      const preview = drawingState.preview
+      if (!preview || (preview.getScaledWidth() < 4 && preview.getScaledHeight() < 4)) {
+        if (preview) canvas.remove(preview)
+        suppressHistoryRef.current = false
+        canvas.requestRenderAll()
+        return
+      }
+      preview.set({ selectable: true, evented: true })
+      canvas.setActiveObject(preview)
+      canvas.requestRenderAll()
+      suppressHistoryRef.current = false
+      recordHistory(true)
+      syncObjects()
+    }
+
+    canvas.on('mouse:down', handlePointerDown)
+    canvas.on('mouse:move', handlePointerMove)
+    canvas.on('mouse:up', handlePointerUp)
+    return () => {
+      canvas.off('mouse:down', handlePointerDown)
+      canvas.off('mouse:move', handlePointerMove)
+      canvas.off('mouse:up', handlePointerUp)
+      if (shapeDrawingRef.current?.preview) canvas.remove(shapeDrawingRef.current.preview)
+      shapeDrawingRef.current = null
+      suppressHistoryRef.current = false
+      canvas.skipTargetFind = false
+      canvas.selection = true
+    }
+  }, [activeTool, fillColor, hasDocument, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, syncObjects, transparentFill])
 
   useEffect(() => {
     const timer = setTimeout(() => setNotice(''), 3200)
@@ -549,24 +643,11 @@ function App() {
 
       canvas.setDimensions({ width, height })
       canvas.backgroundColor = 'rgba(0,0,0,0)'
-
-      image.set({
-        left: 0,
-        top: 0,
-        originX: 'left',
-        originY: 'top',
-        selectable: true,
-        evented: true,
-      })
-
-      image.set(
-        'name',
-        file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Image',
-      )
-
+      image.set({ left: 0, top: 0, originX: 'left', originY: 'top', selectable: false, evented: false, lockMovementX: true, lockMovementY: true, lockScalingX: true, lockScalingY: true, lockRotation: true })
+      image.set('name', file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Image')
       canvas.add(image)
       canvas.sendObjectToBack(image)
-      canvas.setActiveObject(image)
+      canvas.discardActiveObject()
       canvas.requestRenderAll()
       selectedFilterRef.current = 'original'
       filterIntensityRef.current = 100
@@ -602,6 +683,22 @@ function App() {
       setDraggingFile(false)
     }
   }
+
+  const createText = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    createTextObject(canvas, { value: textValue, fontFamily, fontSize, color: textColor, opacity: textOpacity, outline: textOutline, outlineWidth: textOutlineWidth, shadow: textShadow })
+    recordHistory(true)
+    setActiveTool('text')
+  }
+
+  const addShape = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    createShapeObject(canvas, { kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] })
+    recordHistory(true)
+  }
+
 
   const beginCrop = () => {
     const canvas = canvasRef.current
@@ -691,6 +788,53 @@ function App() {
     cropTransformChangedRef.current = false
   }, [recordHistory])
 
+  const applyResize = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const width = Math.min(12000, Math.max(1, Math.round(resizeWidth)))
+    const height = Math.min(12000, Math.max(1, Math.round(resizeHeight)))
+    const scaleX = width / canvas.getWidth()
+    const scaleY = height / canvas.getHeight()
+    if (scaleArtwork) {
+      canvas.getObjects().forEach((object) => {
+        object.set({ left: (object.left ?? 0) * scaleX, top: (object.top ?? 0) * scaleY, scaleX: (object.scaleX ?? 1) * scaleX, scaleY: (object.scaleY ?? 1) * scaleY })
+        object.setCoords()
+      })
+    }
+    canvas.setDimensions({ width, height })
+    canvas.requestRenderAll()
+    setDimensions({ width, height })
+    setResizeWidth(width)
+    setResizeHeight(height)
+    recordHistory(true)
+    resizeDisplay()
+  }
+
+
+  // resize 
+  const updateResizeWidth = (value: number) => {
+    setResizeWidth(value)
+    if (keepRatio && dimensions.width) setResizeHeight(Math.round(value * dimensions.height / dimensions.width))
+  }
+
+  const updateResizeHeight = (value: number) => {
+    setResizeHeight(value)
+    if (keepRatio && dimensions.height) setResizeWidth(Math.round(value * dimensions.width / dimensions.height))
+  }
+
+  const updateText = (property: TextProperty, value: string | number) => {
+    const active = canvasRef.current?.getActiveObject()
+    if (!(active instanceof IText)) return
+    if (property === 'shadow') {
+      const shadow = value === 'none' ? null : new Shadow({ color: 'rgba(12, 20, 17, 0.48)', blur: value === 'soft' ? 12 : 3, offsetX: 2, offsetY: value === 'soft' ? 5 : 3 })
+      active.set('shadow', shadow)
+    } else active.set(property, value)
+    active.setCoords()
+    canvasRef.current?.requestRenderAll()
+    recordHistory()
+    if (property === 'text') setTextValue(String(value))
+  }
+
   const setActiveEditorTool = useCallback((tool: EditorTool) => {
     if (activeTool === 'crop' && tool !== 'crop') {
       cancelCrop(tool)
@@ -698,6 +842,7 @@ function App() {
     }
     setActiveTool(tool)
   }, [activeTool, cancelCrop])
+
   const applyAdjustments = (
     nextBrightness = brightness,
     nextContrast = contrast,
@@ -941,6 +1086,42 @@ const clearBackground = () => {
 
     recordHistory(true)
   }, [recordHistory])
+
+    const duplicateSelected = async () => {
+    const canvas = canvasRef.current
+    const active = canvas?.getActiveObject()
+    if (!canvas || !active) return
+    const clone = await active.clone()
+    clone.set({ left: (active.left ?? 0) + 24, top: (active.top ?? 0) + 24 })
+    clone.set('name', `${objectName(active, 0)} copy`)
+    canvas.add(clone)
+    canvas.setActiveObject(clone)
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const selectLayer = (object: FabricObject) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.setActiveObject(object)
+    canvas.requestRenderAll()
+  }
+
+  const moveLayer = (object: FabricObject, direction: 'forward' | 'backward') => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    if (direction === 'forward') canvas.bringObjectForward(object)
+    else if (object !== imageObjectRef.current) canvas.sendObjectBackwards(object)
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const updateShapeAppearance = (property: 'fill' | 'stroke' | 'strokeWidth' | 'opacity', value: string | number) => {
+    if (!selectedObject || selectedIsImage || selectedObject instanceof IText || selectedObject === cropObjectRef.current) return
+    selectedObject.set(property, value)
+    canvasRef.current?.requestRenderAll()
+    recordHistory()
+  }
 
   const resetAdjustments = () => {
     setBrightness(0)
@@ -1390,6 +1571,9 @@ const deleteSelection = async () => {
     canvas.off('mouse:up', onMouseUp)
   }
 }, [activeTool, drawOnDrawingLayer, finishMagicRemoval, hasDocument, paintMagicRemoval, recordHistory, startMagicRemoval])
+  
+  const selectedText = selectedObject instanceof IText ? selectedObject : null
+  const selectedIsShape = Boolean(selectedObject && !selectedIsImage && !(selectedObject instanceof IText) && !cropActive)
 
   const contextValue: EditorContextValue = {
     fabricCanvas,
@@ -1444,6 +1628,9 @@ const deleteSelection = async () => {
       apply: applyCrop,
       cancel: cancelCrop,
     },
+    resize: { width: resizeWidth, height: resizeHeight, setWidth: updateResizeWidth, setHeight: updateResizeHeight, keepRatio, setKeepRatio, scaleArtwork, setScaleArtwork, apply: applyResize },
+    text: { selected: selectedText, value: textValue, fontFamily, setFontFamily, fontSize, setFontSize, color: textColor, setColor: setTextColor, background: textBackground, setBackground: setTextBackground, opacity: textOpacity, setOpacity: setTextOpacity, outline: textOutline, setOutline: setTextOutline, outlineWidth: textOutlineWidth, setOutlineWidth: setTextOutlineWidth, shadow: textShadow, setShadow: setTextShadow, add: createText, update: updateText },
+    shapes: { selected: selectedObject, isSelectedShape: selectedIsShape, kind: shapeKind, setKind: setShapeKind, fill: fillColor, setFill: setFillColor, transparentFill, setTransparentFill, stroke: strokeColor, setStroke: setStrokeColor, strokeWidth, setStrokeWidth, opacity: shapeOpacity, setOpacity: setShapeOpacity, add: addShape, duplicate: duplicateSelected, delete: deleteSelected, updateAppearance: updateShapeAppearance, moveLayer, selectLayer },
 
     adjustments: {
       brightness,

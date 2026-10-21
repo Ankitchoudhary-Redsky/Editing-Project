@@ -3,21 +3,26 @@ import {
   Crop,
   Eraser,
   MousePointer2,
+  Shapes,
   SlidersHorizontal,
+  Type,
   Upload,
   WandSparkles,
   Pencil,
   Sticker,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
-import type { EditorTool } from './types'
+import type { EditorTool, ShapeKind } from './types'
 
 export const BACKGROUND_IMAGE_NAME = '__pixel_studio_background_image__'
 
 export const editorTools: { id: EditorTool; label: string; icon: typeof Upload }[] = [
   { id: 'upload', label: 'Upload', icon: Upload },
   { id: 'select', label: 'Select', icon: MousePointer2 },
+  { id: 'resize', label: 'Resize', icon: SlidersHorizontal },
   { id: 'crop', label: 'Crop', icon: Crop },
+  { id: 'text', label: 'Text', icon: Type },
+  { id: 'shapes', label: 'Shapes', icon: Shapes },
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal },
   { id: 'music', label: 'Add music', icon: Music2 },
   { id: 'filters', label: 'Filters', icon: WandSparkles },
@@ -33,6 +38,19 @@ export const cropRatios: Record<string, number | null> = {
   '16:9': 16 / 9,
   '3:2': 3 / 2,
 }
+
+export const shapeNames: Record<ShapeKind, string> = {
+  rect: 'Rectangle',
+  roundRect: 'Rounded rectangle',
+  circle: 'Circle',
+  ellipse: 'Ellipse',
+  line: 'Line',
+  arrow: 'Arrow',
+  triangle: 'Triangle',
+  star: 'Star',
+  pentagon: 'Pentagon',
+}
+
 
 export const IMAGE_SOURCE_TOKEN = '__pixel_studio_image_source__'
 let nextSourceId = 1

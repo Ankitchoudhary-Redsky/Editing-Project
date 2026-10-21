@@ -73,7 +73,7 @@ export function EditorWorkspace({
       >
         <div className="canvas-holder">
           <div
-            className="canvas-surface"
+            className={`canvas-surface ${tools.active === 'shapes' ? 'drawing-mode' : ''}`}
             data-drawing-cursor={showDrawingCursor}
             style={{
               transform: `translate(-50%, -50%) scale(${
