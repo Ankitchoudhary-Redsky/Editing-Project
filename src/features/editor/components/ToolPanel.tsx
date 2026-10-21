@@ -4,6 +4,8 @@ import { AdjustmentsPanel } from './panels/AdjustmentsPanel'
 import { UploadPanel } from './panels/UploadPanel'
 import { CropPanel } from './panels/CropPanel'
 import { ResizePanel } from './panels/ResizePanel'
+import { TextPanel } from './panels/TextPanel'
+import { ShapesPanel } from './panels/ShapesPanel'
 
 const panelTitles = {
   upload: 'Upload',
@@ -11,6 +13,8 @@ const panelTitles = {
   crop: 'Crop',
   resize: 'Resize',
   adjust: 'Adjustments',
+  text: 'Text',
+  shapes: 'Shapes'
 }
 
 export function ToolPanel() {
@@ -23,6 +27,8 @@ export function ToolPanel() {
       {tools.active === 'upload' && <UploadPanel />}
       {tools.active === 'crop' && <CropPanel />}
       {tools.active === 'resize' && <ResizePanel />}
+      {tools.active === 'text' && <TextPanel />}
+      {tools.active === 'shapes' && <ShapesPanel />}
       {tools.active === 'adjust' && <AdjustmentsPanel />}
     </aside>
   )
