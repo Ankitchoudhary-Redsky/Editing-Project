@@ -53,26 +53,49 @@ export default function ImageMusicVideoExport({
   hasImage = false,
   imagePreviewUrl = "",
   imageDimensions = { width: 0, height: 0 },
+  isActive = true,
   onBack,
 }) {
-  const { preview, tools } = useEditor();
+  const { preview, tools, videoAudio, setVideoAudio } = useEditor();
+  const {
+    music: { file: musicFile, url: musicUrl, duration: audioDuration },
+    voice: { file: voiceFile, url: voiceUrl, duration: voiceDuration },
+    startTime,
+    endTime,
+    musicVolume: volume,
+    voiceVolume,
+  } = videoAudio;
 
-  const [musicFile, setMusicFile] = useState(null);
-  const [musicUrl, setMusicUrl] = useState("");
+  const updateMusicTrack = (updates) =>
+    setVideoAudio((current) => ({
+      ...current,
+      music: { ...current.music, ...updates },
+    }));
+  const updateVoiceTrack = (updates) =>
+    setVideoAudio((current) => ({
+      ...current,
+      voice: { ...current.voice, ...updates },
+    }));
+  const setMusicFile = (file) => updateMusicTrack({ file });
+  const setMusicUrl = (url) => updateMusicTrack({ url });
+  const setAudioDuration = (duration) => updateMusicTrack({ duration });
+  const setVoiceFile = (file) => updateVoiceTrack({ file });
+  const setVoiceUrl = (url) => updateVoiceTrack({ url });
+  const setVoiceDuration = (duration) => updateVoiceTrack({ duration });
+  const setStartTime = (value) =>
+    setVideoAudio((current) => ({ ...current, startTime: value }));
+  const setEndTime = (value) =>
+    setVideoAudio((current) => ({ ...current, endTime: value }));
+  const setVolume = (musicVolume) =>
+    setVideoAudio((current) => ({ ...current, musicVolume }));
+  const setVoiceVolume = (voiceVolume) =>
+    setVideoAudio((current) => ({ ...current, voiceVolume }));
 
-  const [voiceFile, setVoiceFile] = useState(null);
-  const [voiceUrl, setVoiceUrl] = useState("");
-  const [voiceDuration, setVoiceDuration] = useState(0);
-  const [voiceVolume, setVoiceVolume] = useState(100);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
 
-  const [audioDuration, setAudioDuration] = useState(0);
-  const [startTime, setStartTime] = useState(0);
-  const [endTime, setEndTime] = useState(0);
   const [waveformPeaks, setWaveformPeaks] = useState([]);
   const [isDraggingTrim, setIsDraggingTrim] = useState(false);
 
-  const [volume, setVolume] = useState(80);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [status, setStatus] = useState("idle");
   const [progressText, setProgressText] = useState("");
@@ -80,7 +103,6 @@ export default function ImageMusicVideoExport({
 
   const audioRef = useRef(null);
   const voiceAudioRef = useRef(null);
-  const voiceUrlRef = useRef("");
   const voiceRecorderRef = useRef(null);
   const voiceStreamRef = useRef(null);
   const voiceChunksRef = useRef([]);
@@ -90,8 +112,6 @@ export default function ImageMusicVideoExport({
 
   const ffmpegRef = useRef(null);
   const ffmpegLoadedRef = useRef(false);
-  const musicUrlRef = useRef("");
-
   const segmentDuration = endTime - startTime;
   const sourceDuration = musicFile ? audioDuration : voiceDuration;
   const waveformFile = musicFile || voiceFile;
@@ -164,14 +184,6 @@ export default function ImageMusicVideoExport({
       }
 
       voiceStreamRef.current?.getTracks().forEach((track) => track.stop());
-
-      if (voiceUrlRef.current) {
-        URL.revokeObjectURL(voiceUrlRef.current);
-      }
-
-      if (musicUrlRef.current) {
-        URL.revokeObjectURL(musicUrlRef.current);
-      }
 
       ffmpegRef.current?.terminate();
     };
@@ -277,12 +289,11 @@ export default function ImageMusicVideoExport({
       return;
     }
 
-    if (musicUrlRef.current) {
-      URL.revokeObjectURL(musicUrlRef.current);
+    if (musicUrl) {
+      URL.revokeObjectURL(musicUrl);
     }
 
     const url = URL.createObjectURL(file);
-    musicUrlRef.current = url;
 
     setMusicFile(file);
     setMusicUrl(url);
@@ -315,12 +326,11 @@ export default function ImageMusicVideoExport({
       setEndTime(0);
     }
 
-    if (voiceUrlRef.current) {
-      URL.revokeObjectURL(voiceUrlRef.current);
+    if (voiceUrl) {
+      URL.revokeObjectURL(voiceUrl);
     }
 
     const url = URL.createObjectURL(file);
-    voiceUrlRef.current = url;
 
     setVoiceFile(file);
     setVoiceUrl(url);
@@ -433,11 +443,9 @@ export default function ImageMusicVideoExport({
   function clearVoiceOver() {
     stopPreview();
 
-    if (voiceUrlRef.current) {
-      URL.revokeObjectURL(voiceUrlRef.current);
+    if (voiceUrl) {
+      URL.revokeObjectURL(voiceUrl);
     }
-
-    voiceUrlRef.current = "";
 
     setVoiceUrl("");
     setVoiceFile(null);
@@ -1019,7 +1027,11 @@ export default function ImageMusicVideoExport({
   }
 
   return (
-    <section className="music-export">
+    <section
+      className="music-export"
+      style={{ display: isActive ? undefined : "none" }}
+      aria-hidden={!isActive}
+    >
       <div className="music-preview-panel">
         <button
           type="button"
@@ -1031,7 +1043,7 @@ export default function ImageMusicVideoExport({
         </button>
 
         <div className="music-preview-frame">
-          {imagePreviewUrl ? (
+          {hasCanvasImage && imagePreviewUrl ? (
             <img
               src={imagePreviewUrl}
               alt="Selected image preview"

@@ -5,6 +5,7 @@ type ImageMusicVideoExportProps = {
   hasImage: boolean
   imagePreviewUrl: string
   imageDimensions: { width: number; height: number }
+  isActive?: boolean
   onBack: () => void
 }
 

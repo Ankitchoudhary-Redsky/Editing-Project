@@ -1,11 +1,12 @@
 
-import type { DragEvent } from 'react'
-import { Eraser, Paintbrush, Pencil, Upload } from 'lucide-react'
+import type { DragEvent, PointerEvent } from 'react'
 import { useState } from 'react'
+import { Eraser, Paintbrush, Pencil, Upload } from 'lucide-react'
+
 import { useEditor } from '../EditorContext'
 import { objectName } from '../model/objectName'
-import ImageMusicVideoExport from './ImageMusicVideoExport'
 import type { DrawingMode } from '../model/types'
+import ImageMusicVideoExport from './ImageMusicVideoExport'
 
 type EditorWorkspaceProps = {
   setCanvasElement: (element: HTMLCanvasElement | null) => void
@@ -20,26 +21,49 @@ export function EditorWorkspace({
     canvas,
     fabricCanvas,
     tools,
-    drawing, draggingFile,
+    drawing,
+    draggingFile,
     handleDrop,
   } = useEditor()
 
-  const [cursorPosition, setCursorPosition] = useState<{ x: number; y: number } | null>(null)
+  const [cursorPosition, setCursorPosition] = useState<{
+    x: number
+    y: number
+  } | null>(null)
+
   const drawingCursorIcons: Partial<Record<DrawingMode, typeof Pencil>> = {
     pencil: Pencil,
     eraser: Eraser,
     'magic-remover': Paintbrush,
   }
+
   const DrawingCursorIcon = drawingCursorIcons[drawing.activeMode]
-  const showDrawingCursor = tools.active === 'draw-remove' && Boolean(DrawingCursorIcon)
+
+  const showDrawingCursor =
+    tools.active === 'draw-remove' && Boolean(DrawingCursorIcon)
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     tools.setDraggingFile(true)
   }
 
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const scale =
+      bounds.width / (event.currentTarget.offsetWidth || 1) || 1
+
+    setCursorPosition({
+      x: (event.clientX - bounds.left) / scale,
+      y: (event.clientY - bounds.top) / scale,
+    })
+  }
+
   return (
-    <section className={`workspace ${tools.active === 'music' ? 'music-mode' : ''}`}>
+    <section
+      className={`workspace ${
+        tools.active === 'music' ? 'music-mode' : ''
+      }`}
+    >
       <div
         className="stage"
         ref={setStageElement}
@@ -50,13 +74,45 @@ export function EditorWorkspace({
         <div className="canvas-holder">
           <div
             className="canvas-surface"
+            data-drawing-cursor={showDrawingCursor}
             style={{
               transform: `translate(-50%, -50%) scale(${
                 canvas.fitScale * canvas.zoom
               })`,
             }}
+            onPointerMoveCapture={handlePointerMove}
+            onPointerLeave={() => setCursorPosition(null)}
           >
+            {/* Only one canvas element for Fabric.js */}
             <canvas ref={setCanvasElement} />
+
+            {showDrawingCursor &&
+              cursorPosition &&
+              DrawingCursorIcon && (
+                <div
+                  className="drawing-cursor"
+                  style={{
+                    left: cursorPosition.x,
+                    top: cursorPosition.y,
+                  }}
+                  aria-hidden="true"
+                >
+                  <span
+                    className="drawing-cursor-brush"
+                    style={{
+                      width: drawing.brushSize,
+                      height: drawing.brushSize,
+                    }}
+                  />
+
+                  <span className="drawing-cursor-icon">
+                    <DrawingCursorIcon
+                      size={17}
+                      strokeWidth={2.2}
+                    />
+                  </span>
+                </div>
+              )}
           </div>
 
           {!canvas.hasDocument && (
@@ -69,6 +125,7 @@ export function EditorWorkspace({
               </div>
 
               <h1>Your next idea starts here</h1>
+
               <p>
                 Drop an image to begin, or choose one from your computer.
               </p>
@@ -81,41 +138,11 @@ export function EditorWorkspace({
                 Upload an image
               </button>
 
-              <span className="empty-format">PNG · JPG · WEBP</span>
+              <span className="empty-format">
+                PNG · JPG · WEBP
+              </span>
             </div>
           )}
-          <div
-            className="canvas-surface"
-            data-drawing-cursor={showDrawingCursor}
-            style={{ transform: `translate(-50%, -50%) scale(${canvas.fitScale * canvas.zoom})` }}
-            onPointerMoveCapture={(event) => {
-              const bounds = event.currentTarget.getBoundingClientRect()
-              const scale = bounds.width / event.currentTarget.offsetWidth || 1
-              setCursorPosition({
-                x: (event.clientX - bounds.left) / scale,
-                y: (event.clientY - bounds.top) / scale,
-              })
-            }}
-            onPointerLeave={() => setCursorPosition(null)}
-          >
-            <canvas ref={setCanvasElement} />
-            {showDrawingCursor && cursorPosition && DrawingCursorIcon && (
-              <div
-                className="drawing-cursor"
-                style={{ left: cursorPosition.x, top: cursorPosition.y }}
-                aria-hidden="true"
-              >
-                <span
-                  className="drawing-cursor-brush"
-                  style={{ width: drawing.brushSize, height: drawing.brushSize }}
-                />
-                <span className="drawing-cursor-icon">
-                  <DrawingCursorIcon size={17} strokeWidth={2.2} />
-                </span>
-              </div>
-            )}
-          </div>
-          {!canvas.hasDocument && <div className="empty-prompt"><div className="empty-art"><div className="empty-sun" /><div className="empty-mountain one" /><div className="empty-mountain two" /><span className="empty-sparkle">✳</span></div><h1>Your next idea starts here</h1><p>Drop an image to begin, or choose one from your computer.</p><button className="primary-button" onClick={tools.openFilePicker}><Upload size={16} /> Upload an image</button><span className="empty-format">PNG · JPG · WEBP</span></div>}
         </div>
 
         {draggingFile && (
@@ -144,12 +171,16 @@ export function EditorWorkspace({
         </span>
       </div>
 
-      {tools.active === 'music' && fabricCanvas && (
+      {fabricCanvas && (
         <ImageMusicVideoExport
           fabricCanvas={fabricCanvas}
           hasImage={canvas.hasImage}
-          imagePreviewUrl={fabricCanvas.toDataURL({ format: 'png', multiplier: 1 })}
+          imagePreviewUrl={fabricCanvas.toDataURL({
+            format: 'png',
+            multiplier: 1,
+          })}
           imageDimensions={canvas.dimensions}
+          isActive={tools.active === 'music'}
           onBack={() => tools.setActive('adjust')}
         />
       )}

@@ -7,6 +7,7 @@ import {
   Upload,
   WandSparkles,
   Pencil,
+  Sticker,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
 import type { EditorTool } from './types'
@@ -22,6 +23,7 @@ export const editorTools: { id: EditorTool; label: string; icon: typeof Upload }
   { id: 'filters', label: 'Filters', icon: WandSparkles },
   { id: 'background', label: 'Background', icon: Eraser },
   { id: 'draw-remove', label: 'Draw & Remove', icon: Pencil },
+  { id: 'stickers', label: 'Stickers', icon: Sticker },
 ]
 
 export const cropRatios: Record<string, number | null> = {

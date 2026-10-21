@@ -27,10 +27,11 @@ import { loadLocalImage } from './features/editor/operations/loadLocalImage'
 import type { DrawingMode,
   EditorContextValue,
   EditorTool, FilterId,
-  VideoPreviewData,
+  VideoAudioDraft, VideoPreviewData,
 } from './features/editor/model/types'
 import { hasTransparentPixels, removeImageBackground } from './features/editor/operations/removeImageBackground'
 import { editImagePixels, type EditPoint } from './features/editor/operations/editImagePixels'
+import { restartAnimatedStickers } from './features/editor/operations/animatedSticker'
 
 import './App.css'
 
@@ -130,6 +131,14 @@ function App() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewMode, setPreviewMode] = useState<'image' | 'video'>('image')
   const [videoPreview, setVideoPreview] = useState<VideoPreviewData | null>(null)
+  const [videoAudio, setVideoAudio] = useState<VideoAudioDraft>({
+    music: { file: null, url: '', duration: 0 },
+    voice: { file: null, url: '', duration: 0 },
+    startTime: 0,
+    endTime: 0,
+    musicVolume: 80,
+    voiceVolume: 100,
+  })
   const [dimensions, setDimensions] = useState({
     width: 1200,
     height: 800,
@@ -416,6 +425,7 @@ function App() {
       })
 
       await canvas.loadFromJSON(restoreScene(snapshot))
+      restartAnimatedStickers(canvas)
       canvas.requestRenderAll()
 
       setDimensions({
@@ -465,6 +475,7 @@ function App() {
       })
 
       await canvas.loadFromJSON(restoreScene(snapshot))
+      restartAnimatedStickers(canvas)
       canvas.requestRenderAll()
 
       setDimensions({
@@ -998,7 +1009,7 @@ const clearBackground = () => {
     })()
 
     setPreviewUrl(previewUrl)
-    setPreviewMode(activeTool === 'music' ? 'video' : 'image')
+    setPreviewMode(videoPreview?.audioUrl ? 'video' : 'image')
     setPreviewOpen(true)
   }
 
@@ -1454,6 +1465,8 @@ const deleteSelection = async () => {
       show: openPreview,
       close: () => setPreviewOpen(false),
     },
+    videoAudio,
+    setVideoAudio,
 
     draggingFile,
     handleDrop,

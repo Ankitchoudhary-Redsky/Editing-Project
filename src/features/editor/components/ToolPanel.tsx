@@ -6,6 +6,7 @@ import { CropPanel } from './panels/CropPanel'
 import { FiltersPanel } from './panels/FiltersPanel'
 import { BackgroundPanel } from './panels/BackgroundPanel'
 import { DrawingPanel } from './panels/DrawingPanel'
+import { StickersPanel } from './panels/StickersPanel'
 
 const panelTitles = {
   upload: 'Upload',
@@ -15,6 +16,7 @@ const panelTitles = {
   filters: 'Filters',
   background: 'Background',
   'draw-remove': 'Draw & Remove',
+  stickers: 'Animated Stickers',
 }
 
 export function ToolPanel() {
@@ -30,6 +32,7 @@ export function ToolPanel() {
       {tools.active === 'filters' && <FiltersPanel />}
       {tools.active === 'background' && <BackgroundPanel />}
       {tools.active === 'draw-remove' && <DrawingPanel />}
+      {tools.active === 'stickers' && <StickersPanel />}
     </aside>
   )
 }

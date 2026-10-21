@@ -1,8 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Canvas, FabricObject } from 'fabric'
 
-export type EditorTool = 'upload' | 'select' | 'crop' | 'adjust' | 'music'
- | 'filters' | 'background' | 'draw-remove'
+export type EditorTool = 'upload' | 'select' | 'crop' | 'adjust' | 'music' 
+ | 'filters' | 'background' | 'draw-remove' | 'stickers'
 export type DrawingMode = 'pencil' | 'eraser' | 'magic-remover' | 'lasso'
 export type ShapeKind = 'rect' | 'circle' | 'line' | 'arrow' | 'triangle'
 
@@ -27,6 +27,21 @@ export type VideoPreviewData = {
   voiceOverUrl?: string
   voiceOverVolume?: number
   voiceOverStartTime?: number
+}
+
+export type AudioTrackDraft = {
+  file: File | null
+  url: string
+  duration: number
+}
+
+export type VideoAudioDraft = {
+  music: AudioTrackDraft
+  voice: AudioTrackDraft
+  startTime: number
+  endTime: number
+  musicVolume: number
+  voiceVolume: number
 }
 
 export type TextProperty =
@@ -124,6 +139,8 @@ export interface EditorContextValue {
     show: () => void
     close: () => void
   }
+  videoAudio: VideoAudioDraft
+  setVideoAudio: Dispatch<SetStateAction<VideoAudioDraft>>
   filters: {
     selected: FilterId
     intensity: number
