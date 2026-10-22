@@ -208,6 +208,29 @@ export interface EditorContextValue {
     clearSelection: () => void
     deleteSelection: () => void
   }
+  table: {
+    tables: Array<{ id: number; rows: number; columns: number }>
+    activeId: number | null
+    rows: number
+    columns: number
+    selectedRow: number
+    selectedColumn: number
+    borderColor: string
+    editing: boolean
+    resizeHover: 'row' | 'column' | null
+    create: () => void
+    select: (id: number) => void
+    beginEditing: () => void
+    finishEditing: () => void
+    deleteTable: () => void
+    addRow: () => void
+    addColumn: () => void
+    removeRow: () => void
+    removeColumn: () => void
+    selectRow: (row: number) => void
+    selectColumn: (column: number) => void
+    setBorderColor: (color: string) => void
+  }
 
   draggingFile: boolean
 
