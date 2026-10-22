@@ -152,6 +152,8 @@ export interface EditorContextValue {
     deleteSelection: () => void
   }
   table: {
+    tables: Array<{ id: number; rows: number; columns: number }>
+    activeId: number | null
     rows: number
     columns: number
     selectedRow: number
@@ -160,6 +162,7 @@ export interface EditorContextValue {
     editing: boolean
     resizeHover: 'row' | 'column' | null
     create: () => void
+    select: (id: number) => void
     beginEditing: () => void
     finishEditing: () => void
     deleteTable: () => void

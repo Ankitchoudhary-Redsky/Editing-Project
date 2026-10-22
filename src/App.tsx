@@ -220,6 +220,7 @@ function App() {
   const magicDisplayContextRef = useRef<CanvasRenderingContext2D | null>(null)
   const magicFiltersRef = useRef<FabricImage['filters'] | null>(null)
   const activeTableRef = useRef<CanvasTable | null>(null)
+  const tablesRef = useRef<CanvasTable[]>([])
   const nextTableIdRef = useRef(0)
   const tableGestureRef = useRef<TableGesture | null>(null)
   
@@ -288,6 +289,8 @@ function App() {
   const [drawingColor, setDrawingColor] = useState('#222222')
   const [brushSize, setBrushSize] = useState(12)
   const [activeDrawingMode, setActiveDrawingMode] = useState<DrawingMode>('pencil')
+  const [tableList, setTableList] = useState<Array<{ id: number; rows: number; columns: number }>>([])
+  const [activeTableId, setActiveTableId] = useState<number | null>(null)
   const [tableRows, setTableRows] = useState(0)
   const [tableColumns, setTableColumns] = useState(0)
   const [tableSelectedRow, setTableSelectedRow] = useState(0)
@@ -296,6 +299,10 @@ function App() {
   const [tableBorderColor, setTableBorderColorState] = useState('#537a67')
   const [tableEditing, setTableEditing] = useState(false)
   const [tableResizeHover, setTableResizeHover] = useState<'row' | 'column' | null>(null)
+
+  const updateTableList = useCallback((tables: CanvasTable[]) => {
+    setTableList(tables.map(({ id, rows, columns }) => ({ id, rows, columns })))
+  }, [])
 
   const syncTableLayout = useCallback((canvas: Canvas, table: CanvasTable) => {
     syncTableGeometry(canvas, table, getImageBounds(canvas, imageObjectRef.current))
@@ -549,6 +556,9 @@ function App() {
 
     if (cells.length === 0) {
       activeTableRef.current = null
+      tablesRef.current = []
+      setTableList([])
+      setActiveTableId(null)
       setTableRows(0)
       setTableColumns(0)
       setTableSelectedRow(0)
@@ -558,51 +568,65 @@ function App() {
       return
     }
 
-    const id = Math.max(...cells.map((cell) => cell.id))
-    const tableCells = cells.filter((cell) => cell.id === id)
-    const rows = Math.max(...tableCells.map((cell) => cell.row)) + 1
-    const columns = Math.max(...tableCells.map((cell) => cell.column)) + 1
-    const findCell = (row: number, column: number) =>
-      tableCells.find((cell) => cell.row === row && cell.column === column)?.object
-    const firstCell = findCell(0, 0)
-    if (!firstCell) return
-
-    const cellWidth = firstCell.width || 1
-    const cellHeight = firstCell.height || 1
+    const previousActiveId = activeTableRef.current?.id
     const tableWasMissing = activeTableRef.current === null
-    activeTableRef.current = {
-      id,
-      left: firstCell.left ?? 0,
-      top: firstCell.top ?? 0,
-      cellWidth,
-      cellHeight,
-      columnWidths: Array.from({ length: columns }, (_, column) =>
-        findCell(0, column)?.width || cellWidth,
-      ),
-      rowHeights: Array.from({ length: rows }, (_, row) =>
-        findCell(row, 0)?.height || cellHeight,
-      ),
-      rows,
-      columns,
-    }
-    nextTableIdRef.current = Math.max(nextTableIdRef.current, id)
-    if (tableWasMissing) setTableEditing(true)
-    setTableRows(rows)
-    setTableColumns(columns)
+    const tableIds = [...new Set(cells.map((cell) => cell.id))].sort((left, right) => left - right)
+    const restoredTables = tableIds.flatMap((id) => {
+      const tableCells = cells.filter((cell) => cell.id === id)
+      const rows = Math.max(...tableCells.map((cell) => cell.row)) + 1
+      const columns = Math.max(...tableCells.map((cell) => cell.column)) + 1
+      const findCell = (row: number, column: number) =>
+        tableCells.find((cell) => cell.row === row && cell.column === column)?.object
+      const firstCell = findCell(0, 0)
+      if (!firstCell) return []
 
-    const selectedRow = Math.min(tableSelectedRow, rows - 1)
-    const selectedColumn = Math.min(tableSelectedColumn, columns - 1)
+      const cellWidth = firstCell.width || 1
+      const cellHeight = firstCell.height || 1
+      return [{
+        id,
+        left: firstCell.left ?? 0,
+        top: firstCell.top ?? 0,
+        cellWidth,
+        cellHeight,
+        columnWidths: Array.from({ length: columns }, (_, column) =>
+          findCell(0, column)?.width || cellWidth,
+        ),
+        rowHeights: Array.from({ length: rows }, (_, row) =>
+          findCell(row, 0)?.height || cellHeight,
+        ),
+        rows,
+        columns,
+      }]
+    })
+    tablesRef.current = restoredTables
+    updateTableList(restoredTables)
+    nextTableIdRef.current = Math.max(nextTableIdRef.current, ...tableIds)
+    const table = restoredTables.find((candidate) => candidate.id === previousActiveId)
+      ?? restoredTables.at(-1)
+    activeTableRef.current = table ?? null
+    setActiveTableId(table?.id ?? null)
+    if (tableWasMissing) setTableEditing(Boolean(table))
+    if (!table) return
+
+    setTableRows(table.rows)
+    setTableColumns(table.columns)
+
+    const selectedRow = Math.min(tableSelectedRow, table.rows - 1)
+    const selectedColumn = Math.min(tableSelectedColumn, table.columns - 1)
     setTableSelectedRow(selectedRow)
     setTableSelectedColumn(selectedColumn)
     const text = canvas.getObjects().find(
-      (object) => object.get('name') === tableTextName(id, selectedRow, selectedColumn),
+      (object) => object.get('name') === tableTextName(table.id, selectedRow, selectedColumn),
     )
     setTableSelectedText(text instanceof Textbox ? text.text : '')
 
-    if (typeof firstCell.stroke === 'string') {
+    const firstCell = canvas.getObjects().find(
+      (object) => object.get('name') === tableCellName(table.id, 0, 0),
+    )
+    if (typeof firstCell?.stroke === 'string') {
       setTableBorderColorState(firstCell.stroke)
     }
-  }, [tableSelectedColumn, tableSelectedRow])
+  }, [tableSelectedColumn, tableSelectedRow, updateTableList])
 
   const deleteImage = () => {
     const canvas = canvasRef.current
@@ -763,6 +787,9 @@ function App() {
       cropObjectRef.current = null
       imageObjectRef.current = image
       activeTableRef.current = null
+      tablesRef.current = []
+      setTableList([])
+      setActiveTableId(null)
       setTableRows(0)
       setTableColumns(0)
       setTableSelectedRow(0)
@@ -1634,6 +1661,30 @@ const addTableCells = (
   canvas.add(...cells, ...texts)
 }
 
+const selectTable = (id: number) => {
+  const table = tablesRef.current.find((candidate) => candidate.id === id)
+  if (!table) return
+
+  activeTableRef.current = table
+  setActiveTableId(table.id)
+  setTableRows(table.rows)
+  setTableColumns(table.columns)
+  setTableSelectedRow(0)
+  setTableSelectedColumn(0)
+  const text = canvasRef.current?.getObjects().find(
+    (object) => object.get('name') === tableTextName(table.id, 0, 0),
+  )
+  setTableSelectedText(text instanceof Textbox ? text.text : '')
+  const cell = canvasRef.current?.getObjects().find(
+    (object) => object.get('name') === tableCellName(table.id, 0, 0),
+  )
+  if (typeof cell?.stroke === 'string') setTableBorderColorState(cell.stroke)
+  setActiveTool('draw-remove')
+  setActiveDrawingMode('pencil')
+  setTableEditing(true)
+  canvasRef.current?.requestRenderAll()
+}
+
 const createTable = () => {
   const canvas = canvasRef.current
   if (!canvas) return
@@ -1649,8 +1700,8 @@ const createTable = () => {
   }
   const table: CanvasTable = {
     id: nextTableIdRef.current + 1,
-    left: bounds.left + (bounds.width - columns * cellWidth) / 2,
-    top: bounds.top + (bounds.height - rows * cellHeight) / 2,
+    left: 0,
+    top: 0,
     cellWidth,
     cellHeight,
     columnWidths: Array(columns).fill(cellWidth),
@@ -1658,8 +1709,36 @@ const createTable = () => {
     rows,
     columns,
   }
+  const horizontalSlots = Math.max(1, Math.floor((bounds.width - 12) / (tableWidth(table) + 20)))
+  const verticalSlots = Math.max(1, Math.floor((bounds.height - 12) / (tableHeight(table) + 20)))
+  let position: { left: number; top: number } | null = null
+  for (let slot = 0; slot < horizontalSlots * verticalSlots; slot += 1) {
+    const candidate = {
+      left: bounds.left + 16 + (slot % horizontalSlots) * (tableWidth(table) + 20),
+      top: bounds.top + 16 + Math.floor(slot / horizontalSlots) * (tableHeight(table) + 20),
+    }
+    const overlaps = tablesRef.current.some((existing) =>
+      candidate.left < existing.left + tableWidth(existing) &&
+      candidate.left + tableWidth(table) > existing.left &&
+      candidate.top < existing.top + tableHeight(existing) &&
+      candidate.top + tableHeight(table) > existing.top,
+    )
+    if (!overlaps) {
+      position = candidate
+      break
+    }
+  }
+  if (!position) {
+    setNotice('There is no room for another table inside the image.')
+    return
+  }
+  table.left = position.left
+  table.top = position.top
   nextTableIdRef.current = table.id
+  tablesRef.current = [...tablesRef.current, table]
+  updateTableList(tablesRef.current)
   activeTableRef.current = table
+  setActiveTableId(table.id)
   addTableCells(table, 0, rows, 0, columns)
   syncTableLayout(canvas, table)
   setTableEditing(true)
@@ -1686,6 +1765,7 @@ const addTableRow = () => {
   addTableCells(table, table.rows, table.rows + 1, 0, table.columns)
   table.rows += 1
   syncTableLayout(canvas, table)
+  updateTableList(tablesRef.current)
   setTableRows(table.rows)
   setTableSelectedRow(table.rows - 1)
   setTableSelectedText('')
@@ -1706,6 +1786,7 @@ const addTableColumn = () => {
   addTableCells(table, 0, table.rows, table.columns, table.columns + 1)
   table.columns += 1
   syncTableLayout(canvas, table)
+  updateTableList(tablesRef.current)
   setTableColumns(table.columns)
   setTableSelectedColumn(table.columns - 1)
   setTableSelectedText('')
@@ -1746,6 +1827,7 @@ const removeTableRow = () => {
   table.rowHeights.splice(removedRow, 1)
   table.rows -= 1
   syncTableLayout(canvas, table)
+  updateTableList(tablesRef.current)
   const nextRow = Math.min(removedRow, table.rows - 1)
   setTableRows(table.rows)
   selectTableCell(nextRow, tableSelectedColumn)
@@ -1786,6 +1868,7 @@ const removeTableColumn = () => {
   table.columnWidths.splice(removedColumn, 1)
   table.columns -= 1
   syncTableLayout(canvas, table)
+  updateTableList(tablesRef.current)
   const nextColumn = Math.min(removedColumn, table.columns - 1)
   setTableColumns(table.columns)
   selectTableCell(tableSelectedRow, nextColumn)
@@ -1811,11 +1894,18 @@ const deleteTable = () => {
     }
   }
 
+  tablesRef.current = tablesRef.current.filter((candidate) => candidate.id !== table.id)
+  updateTableList(tablesRef.current)
   activeTableRef.current = null
-  setTableRows(0)
-  setTableColumns(0)
-  setTableSelectedText('')
-  setTableEditing(false)
+  if (tablesRef.current.length > 0) {
+    selectTable(tablesRef.current.at(-1)!.id)
+  } else {
+    setActiveTableId(null)
+    setTableRows(0)
+    setTableColumns(0)
+    setTableSelectedText('')
+    setTableEditing(false)
+  }
   setActiveDrawingMode('pencil')
   canvas.requestRenderAll()
   recordHistory(true)
@@ -2249,6 +2339,8 @@ const deleteSelection = async () => {
       deleteSelection,
     },
     table: {
+      tables: tableList,
+      activeId: activeTableId,
       rows: tableRows,
       columns: tableColumns,
       selectedRow: tableSelectedRow,
@@ -2257,6 +2349,7 @@ const deleteSelection = async () => {
       editing: tableEditing,
       resizeHover: tableResizeHover,
       create: createTable,
+      select: selectTable,
       beginEditing: beginTableEditing,
       finishEditing: finishTableEditing,
       deleteTable,

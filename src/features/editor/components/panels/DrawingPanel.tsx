@@ -86,20 +86,39 @@ export function DrawingPanel() {
       <section className="table-panel" aria-label="Table editor">
         <div className="table-panel-heading">
           <strong>Table</strong>
-          {table.rows > 0 && <span>{table.rows} × {table.columns}</span>}
+          {table.tables.length > 0 && <span>{table.tables.length} total</span>}
         </div>
-        {table.rows === 0 ? (
-          <button type="button" className="secondary-button full-button" disabled={isDisabled} onClick={table.create}>
-            Create 3 × 3 table
-          </button>
+        <button type="button" className="secondary-button full-button" disabled={isDisabled} onClick={table.create}>
+          Add 3 × 3 table
+        </button>
+        {table.tables.length > 0 && (
+          <div className="table-list" role="group" aria-label="Tables">
+            {table.tables.map((item, index) => (
+              <button
+                key={item.id}
+                type="button"
+                className={table.activeId === item.id ? 'table-list-option active' : 'table-list-option'}
+                aria-pressed={table.activeId === item.id}
+                onClick={() => table.select(item.id)}
+              >
+                <span>Table {index + 1}</span>
+                <small>{item.rows} × {item.columns}</small>
+              </button>
+            ))}
+          </div>
+        )}
+        {table.activeId === null ? (
+          <p className="panel-note">Add a table to edit its cells and layout.</p>
         ) : (
           <>
-            <div className="button-row table-add-actions">
-              <button type="button" className="secondary-button" onClick={table.addRow}>+ Row</button>
-              <button type="button" className="secondary-button" disabled={table.rows <= 1} onClick={table.removeRow}><Minus size={14} /> Row</button>
-              <button type="button" className="secondary-button" onClick={table.addColumn}>+ Column</button>
-              <button type="button" className="secondary-button" disabled={table.columns <= 1} onClick={table.removeColumn}><Minus size={14} /> Column</button>
-            </div>
+            {table.editing && (
+              <div className="button-row table-add-actions">
+                <button type="button" className="secondary-button" onClick={table.addRow}>+ Row</button>
+                <button type="button" className="secondary-button" disabled={table.rows <= 1} onClick={table.removeRow}><Minus size={14} /> Row</button>
+                <button type="button" className="secondary-button" onClick={table.addColumn}>+ Column</button>
+                <button type="button" className="secondary-button" disabled={table.columns <= 1} onClick={table.removeColumn}><Minus size={14} /> Column</button>
+              </div>
+            )}
             <button type="button" className="secondary-button full-button" onClick={table.editing ? table.finishEditing : table.beginEditing}>
               {table.editing ? 'Done editing table' : 'Edit table'}
             </button>

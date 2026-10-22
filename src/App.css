@@ -158,6 +158,11 @@
 .table-panel { display: flex; flex-direction: column; gap: 10px; padding-top: 13px; border-top: 1px solid #e4e9e5; }
 .table-panel-heading { display: flex; align-items: center; justify-content: space-between; color: #34433b; font-size: 12px; }
 .table-panel-heading span { color: #7b8980; font-size: 11px; font-weight: 500; }
+.table-list { display: flex; flex-direction: column; gap: 5px; max-height: 142px; overflow: auto; }
+.table-list-option { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 9px; border: 1px solid #dfe4e0; border-radius: 5px; color: #536258; background: #fff; text-align: left; font: inherit; font-size: 11px; cursor: pointer; }
+.table-list-option:hover, .table-list-option.active { border-color: #94b7a0; color: var(--accent); background: #f4f9f5; }
+.table-list-option.active { box-shadow: inset 0 0 0 1px #94b7a0; }
+.table-list-option small { color: #7b8980; font-size: 10px; }
 .table-add-actions { display: grid; grid-template-columns: 1fr 1fr; }
 .table-add-actions > button { min-width: 0; padding-inline: 8px; }
 .table-column-section { display: flex; flex-direction: column; gap: 7px; }
