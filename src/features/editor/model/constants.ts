@@ -59,7 +59,7 @@ export function serializeCanvas(canvas: Canvas) {
     {
       width: canvas.getWidth(),
       height: canvas.getHeight(),
-      scene: canvas.toJSON(),
+      scene: canvas.toObject(['name']),
     },
     (key, value: unknown) => {
       if (

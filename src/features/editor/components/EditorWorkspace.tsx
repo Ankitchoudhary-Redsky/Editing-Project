@@ -1,6 +1,6 @@
 
 import type { DragEvent } from 'react'
-import { Eraser, Paintbrush, Pencil, Upload } from 'lucide-react'
+import { Eraser, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { useEditor } from '../EditorContext'
 import { objectName } from '../model/objectName'
@@ -21,6 +21,7 @@ export function EditorWorkspace({
     fabricCanvas,
     tools,
     drawing, draggingFile,
+    table,
     handleDrop,
   } = useEditor()
 
@@ -32,6 +33,12 @@ export function EditorWorkspace({
   }
   const DrawingCursorIcon = drawingCursorIcons[drawing.activeMode]
   const showDrawingCursor = tools.active === 'draw-remove' && Boolean(DrawingCursorIcon)
+  const resizeCursor = table.resizeHover === 'column'
+    ? MoveHorizontal
+    : table.resizeHover === 'row'
+      ? MoveVertical
+      : undefined
+  const CursorIcon = resizeCursor ?? DrawingCursorIcon
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -99,18 +106,20 @@ export function EditorWorkspace({
             onPointerLeave={() => setCursorPosition(null)}
           >
             <canvas ref={setCanvasElement} />
-            {showDrawingCursor && cursorPosition && DrawingCursorIcon && (
+            {showDrawingCursor && cursorPosition && CursorIcon && (
               <div
                 className="drawing-cursor"
                 style={{ left: cursorPosition.x, top: cursorPosition.y }}
                 aria-hidden="true"
               >
-                <span
-                  className="drawing-cursor-brush"
-                  style={{ width: drawing.brushSize, height: drawing.brushSize }}
-                />
-                <span className="drawing-cursor-icon">
-                  <DrawingCursorIcon size={17} strokeWidth={2.2} />
+                {!resizeCursor && (
+                  <span
+                    className="drawing-cursor-brush"
+                    style={{ width: drawing.brushSize, height: drawing.brushSize }}
+                  />
+                )}
+                <span className={resizeCursor ? 'drawing-cursor-icon table-resize-cursor' : 'drawing-cursor-icon'}>
+                  <CursorIcon size={17} strokeWidth={2.2} />
                 </span>
               </div>
             )}

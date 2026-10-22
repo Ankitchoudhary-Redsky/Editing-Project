@@ -1,6 +1,6 @@
 import { useEditor } from '../../EditorContext'
 import type { DrawingMode } from '../../model/types'
-import { Eraser, Lasso, Pencil, WandSparkles } from 'lucide-react'
+import { Eraser, Lasso, Minus, Pencil, Trash2, WandSparkles } from 'lucide-react'
 
 const toolDescriptions: Record<
   'pencil' | 'eraser' | 'magic-remover' | 'lasso',
@@ -13,7 +13,7 @@ const toolDescriptions: Record<
 }
 
 export function DrawingPanel() {
-  const { canvas, drawing } = useEditor()
+  const { canvas, drawing, table } = useEditor()
   const isDisabled = !canvas.hasImage
   const modes = [
     { id: 'pencil', label: 'Pencil', icon: Pencil },
@@ -27,7 +27,7 @@ export function DrawingPanel() {
       <div className="drawing-mode-grid" role="group" aria-label="Drawing mode">
         {modes.map((mode) => {
           const Icon = mode.icon
-          const isActive = drawing.activeMode === mode.id
+          const isActive = !table.editing && drawing.activeMode === mode.id
 
           return (
             <button
@@ -35,7 +35,7 @@ export function DrawingPanel() {
               type="button"
               className={isActive ? 'drawing-mode-button active' : 'drawing-mode-button'}
               aria-pressed={isActive}
-              disabled={isDisabled}
+              disabled={isDisabled || table.editing}
               onClick={() => drawing.setActiveMode(mode.id as DrawingMode)}
             >
               <Icon size={16} />
@@ -45,9 +45,9 @@ export function DrawingPanel() {
         })}
       </div>
       <p className="panel-note">
-        {isDisabled ? 'Upload an image to enable drawing tools.' : toolDescriptions[drawing.activeMode]}
+        {table.editing ? 'Table editing' : isDisabled ? 'Upload an image to enable drawing tools.' : toolDescriptions[drawing.activeMode]}
       </p>
-      {drawing.activeMode !== 'lasso' && (
+      {drawing.activeMode !== 'lasso' && !table.editing && (
         <>
           {drawing.activeMode === 'pencil' && (
             <label className="field-label">
@@ -83,6 +83,41 @@ export function DrawingPanel() {
           </button>
         </div>
       )}
+      <section className="table-panel" aria-label="Table editor">
+        <div className="table-panel-heading">
+          <strong>Table</strong>
+          {table.rows > 0 && <span>{table.rows} × {table.columns}</span>}
+        </div>
+        {table.rows === 0 ? (
+          <button type="button" className="secondary-button full-button" disabled={isDisabled} onClick={table.create}>
+            Create 3 × 3 table
+          </button>
+        ) : (
+          <>
+            <div className="button-row table-add-actions">
+              <button type="button" className="secondary-button" onClick={table.addRow}>+ Row</button>
+              <button type="button" className="secondary-button" disabled={table.rows <= 1} onClick={table.removeRow}><Minus size={14} /> Row</button>
+              <button type="button" className="secondary-button" onClick={table.addColumn}>+ Column</button>
+              <button type="button" className="secondary-button" disabled={table.columns <= 1} onClick={table.removeColumn}><Minus size={14} /> Column</button>
+            </div>
+            <button type="button" className="secondary-button full-button" onClick={table.editing ? table.finishEditing : table.beginEditing}>
+              {table.editing ? 'Done editing table' : 'Edit table'}
+            </button>
+            <button type="button" className="secondary-button full-button danger-action" onClick={table.deleteTable}>
+              <Trash2 size={15} /> Delete table
+            </button>
+            <label className="field-label">
+              Table border color
+              <input
+                type="color"
+                value={table.borderColor}
+                onInput={(event) => table.setBorderColor(event.currentTarget.value)}
+                onChange={(event) => table.setBorderColor(event.target.value)}
+              />
+            </label>
+          </>
+        )}
+      </section>
     </div>
   )
 }

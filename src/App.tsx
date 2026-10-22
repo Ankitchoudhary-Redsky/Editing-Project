@@ -3,8 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Canvas,
   FabricImage,
+  Point,
   Rect,
+  Textbox,
   PencilBrush,
+  util,
   type FabricObject,
 } from 'fabric'
 
@@ -46,6 +49,142 @@ type EditorSnapshot = {
   }
 }
 
+type CanvasTable = {
+  id: number
+  left: number
+  top: number
+  cellWidth: number
+  cellHeight: number
+  columnWidths: number[]
+  rowHeights: number[]
+  rows: number
+  columns: number
+}
+
+type TableGesture = {
+  mode: 'move' | 'resize-row' | 'resize-column'
+  startX: number
+  startY: number
+  left: number
+  top: number
+  resizeIndex: number
+  columnWidths: number[]
+  rowHeights: number[]
+  moved: boolean
+}
+
+function getImageBounds(canvas: Canvas, image: FabricImage | null) {
+  const bounds = image?.getBoundingRect() ?? {
+    left: 0,
+    top: 0,
+    width: canvas.getWidth(),
+    height: canvas.getHeight(),
+  }
+  const left = Math.max(0, bounds.left)
+  const top = Math.max(0, bounds.top)
+  const right = Math.min(canvas.getWidth(), bounds.left + bounds.width)
+  const bottom = Math.min(canvas.getHeight(), bounds.top + bounds.height)
+  return {
+    left,
+    top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  }
+}
+
+function tableCellName(tableId: number, row: number, column: number) {
+  return `__pixel_studio_table_cell__${tableId}__${row}__${column}`
+}
+
+function tableTextName(tableId: number, row: number, column: number) {
+  return `__pixel_studio_table_text__${tableId}__${row}__${column}`
+}
+
+function tableColumnOffset(table: CanvasTable, column: number) {
+  return table.columnWidths.slice(0, column).reduce((total, width) => total + width, 0)
+}
+
+function tableRowOffset(table: CanvasTable, row: number) {
+  return table.rowHeights.slice(0, row).reduce((total, height) => total + height, 0)
+}
+
+function tableWidth(table: CanvasTable) {
+  return table.columnWidths.reduce((total, width) => total + width, 0)
+}
+
+function tableHeight(table: CanvasTable) {
+  return table.rowHeights.reduce((total, height) => total + height, 0)
+}
+
+function fitTableTextbox(textbox: Textbox, cellWidth: number, cellHeight: number) {
+  textbox.set({ width: Math.max(8, cellWidth - 16), fontSize: 15 })
+  textbox.initDimensions()
+  textbox.setCoords()
+  return Math.max(cellHeight, textbox.height + 12)
+}
+
+function syncTableGeometry(canvas: Canvas, table: CanvasTable, bounds: ReturnType<typeof getImageBounds>) {
+  for (let row = 0; row < table.rows; row += 1) {
+    const maxRowHeight = Math.max(
+      28,
+      bounds.top + bounds.height - table.top - tableRowOffset(table, row) -
+        table.rowHeights.slice(row + 1).reduce((total, height) => total + height, 0),
+    )
+    let requiredRowHeight = Math.min(table.rowHeights[row] || table.cellHeight, maxRowHeight)
+    for (let column = 0; column < table.columns; column += 1) {
+      const text = canvas.getObjects().find(
+        (object) => object.get('name') === tableTextName(table.id, row, column),
+      )
+      if (text instanceof Textbox) {
+        requiredRowHeight = Math.max(
+          requiredRowHeight,
+          Math.min(
+            maxRowHeight,
+            fitTableTextbox(text, table.columnWidths[column], requiredRowHeight),
+          ),
+        )
+      }
+    }
+    table.rowHeights[row] = requiredRowHeight
+  }
+
+  for (let row = 0; row < table.rows; row += 1) {
+    for (let column = 0; column < table.columns; column += 1) {
+      const left = table.left + tableColumnOffset(table, column)
+      const top = table.top + tableRowOffset(table, row)
+      const cell = canvas.getObjects().find(
+        (object) => object.get('name') === tableCellName(table.id, row, column),
+      )
+      const text = canvas.getObjects().find(
+        (object) => object.get('name') === tableTextName(table.id, row, column),
+      )
+      cell?.set({ left, top, width: table.columnWidths[column], height: table.rowHeights[row] })
+      cell?.setCoords()
+      if (text instanceof Textbox) {
+        text.set({ left: left + 8, top: top + 7 })
+        fitTableTextbox(text, table.columnWidths[column], table.rowHeights[row])
+      }
+    }
+  }
+
+}
+
+function toImagePoint(image: FabricImage, point: EditPoint): EditPoint {
+  const inverse = util.invertTransform(image.calcTransformMatrix())
+  const localPoint = util.transformPoint(new Point(point.x, point.y), inverse)
+  return {
+    x: localPoint.x + image.width / 2,
+    y: localPoint.y + image.height / 2,
+  }
+}
+
+function getImageBrushScale(image: FabricImage) {
+  const inverse = util.invertTransform(image.calcTransformMatrix())
+  const scaleX = Math.hypot(inverse[0], inverse[1])
+  const scaleY = Math.hypot(inverse[2], inverse[3])
+  return (scaleX + scaleY) / 2
+}
+
 function App() {
   const canvasElementRef = useRef<HTMLCanvasElement>(null)
   const stageElementRef = useRef<HTMLDivElement>(null)
@@ -77,6 +216,12 @@ function App() {
   const magicCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const magicContextRef = useRef<CanvasRenderingContext2D | null>(null)
   const magicImageRef = useRef<FabricImage | null>(null)
+  const magicDisplayCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const magicDisplayContextRef = useRef<CanvasRenderingContext2D | null>(null)
+  const magicFiltersRef = useRef<FabricImage['filters'] | null>(null)
+  const activeTableRef = useRef<CanvasTable | null>(null)
+  const nextTableIdRef = useRef(0)
+  const tableGestureRef = useRef<TableGesture | null>(null)
   
   
 
@@ -143,6 +288,18 @@ function App() {
   const [drawingColor, setDrawingColor] = useState('#222222')
   const [brushSize, setBrushSize] = useState(12)
   const [activeDrawingMode, setActiveDrawingMode] = useState<DrawingMode>('pencil')
+  const [tableRows, setTableRows] = useState(0)
+  const [tableColumns, setTableColumns] = useState(0)
+  const [tableSelectedRow, setTableSelectedRow] = useState(0)
+  const [tableSelectedColumn, setTableSelectedColumn] = useState(0)
+  const [tableSelectedText, setTableSelectedText] = useState('')
+  const [tableBorderColor, setTableBorderColorState] = useState('#537a67')
+  const [tableEditing, setTableEditing] = useState(false)
+  const [tableResizeHover, setTableResizeHover] = useState<'row' | 'column' | null>(null)
+
+  const syncTableLayout = useCallback((canvas: Canvas, table: CanvasTable) => {
+    syncTableGeometry(canvas, table, getImageBounds(canvas, imageObjectRef.current))
+  }, [])
   
 
   const syncObjects = useCallback(() => {
@@ -194,6 +351,7 @@ function App() {
       }
 
       const saveSnapshot = () => {
+        historyTimerRef.current = null
         const current = serializeEditorSnapshot(canvas)
         const history = historyRef.current.slice(
           0,
@@ -314,7 +472,7 @@ function App() {
 
     const resizeObserver = new ResizeObserver(fitCanvas)
 
-    fitCanvas()
+    canvas.renderAll()
 
     if (stageElementRef.current) {
       resizeObserver.observe(stageElementRef.current)
@@ -378,6 +536,74 @@ function App() {
     return scene
   }
 
+  const restoreTableState = useCallback((canvas: Canvas) => {
+    const cells = canvas.getObjects().flatMap((object) => {
+      const name = object.get('name')
+      const match = typeof name === 'string'
+        ? /^__pixel_studio_table_cell__(\d+)__(\d+)__(\d+)$/.exec(name)
+        : null
+      return match
+        ? [{ object, id: Number(match[1]), row: Number(match[2]), column: Number(match[3]) }]
+        : []
+    })
+
+    if (cells.length === 0) {
+      activeTableRef.current = null
+      setTableRows(0)
+      setTableColumns(0)
+      setTableSelectedRow(0)
+      setTableSelectedColumn(0)
+      setTableSelectedText('')
+      setTableEditing(false)
+      return
+    }
+
+    const id = Math.max(...cells.map((cell) => cell.id))
+    const tableCells = cells.filter((cell) => cell.id === id)
+    const rows = Math.max(...tableCells.map((cell) => cell.row)) + 1
+    const columns = Math.max(...tableCells.map((cell) => cell.column)) + 1
+    const findCell = (row: number, column: number) =>
+      tableCells.find((cell) => cell.row === row && cell.column === column)?.object
+    const firstCell = findCell(0, 0)
+    if (!firstCell) return
+
+    const cellWidth = firstCell.width || 1
+    const cellHeight = firstCell.height || 1
+    const tableWasMissing = activeTableRef.current === null
+    activeTableRef.current = {
+      id,
+      left: firstCell.left ?? 0,
+      top: firstCell.top ?? 0,
+      cellWidth,
+      cellHeight,
+      columnWidths: Array.from({ length: columns }, (_, column) =>
+        findCell(0, column)?.width || cellWidth,
+      ),
+      rowHeights: Array.from({ length: rows }, (_, row) =>
+        findCell(row, 0)?.height || cellHeight,
+      ),
+      rows,
+      columns,
+    }
+    nextTableIdRef.current = Math.max(nextTableIdRef.current, id)
+    if (tableWasMissing) setTableEditing(true)
+    setTableRows(rows)
+    setTableColumns(columns)
+
+    const selectedRow = Math.min(tableSelectedRow, rows - 1)
+    const selectedColumn = Math.min(tableSelectedColumn, columns - 1)
+    setTableSelectedRow(selectedRow)
+    setTableSelectedColumn(selectedColumn)
+    const text = canvas.getObjects().find(
+      (object) => object.get('name') === tableTextName(id, selectedRow, selectedColumn),
+    )
+    setTableSelectedText(text instanceof Textbox ? text.text : '')
+
+    if (typeof firstCell.stroke === 'string') {
+      setTableBorderColorState(firstCell.stroke)
+    }
+  }, [tableSelectedColumn, tableSelectedRow])
+
   const deleteImage = () => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -396,6 +622,7 @@ function App() {
   }
 
   const undo = useCallback(async () => {
+    if (historyTimerRef.current) recordHistory(true)
     if (historyIndexRef.current <= 0) return
 
     historyIndexRef.current -= 1
@@ -416,6 +643,7 @@ function App() {
       })
 
       await canvas.loadFromJSON(restoreScene(snapshot))
+      restoreTableState(canvas)
       canvas.requestRenderAll()
 
       setDimensions({
@@ -442,9 +670,10 @@ function App() {
     } finally {
       suppressHistoryRef.current = false
     }
-  }, [resizeDisplay, syncHistoryControls, syncObjects])
+  }, [recordHistory, resizeDisplay, restoreTableState, syncHistoryControls, syncObjects])
 
   const redo = useCallback(async () => {
+    if (historyTimerRef.current) recordHistory(true)
     if (historyIndexRef.current >= historyRef.current.length - 1) return
 
     historyIndexRef.current += 1
@@ -465,6 +694,7 @@ function App() {
       })
 
       await canvas.loadFromJSON(restoreScene(snapshot))
+      restoreTableState(canvas)
       canvas.requestRenderAll()
 
       setDimensions({
@@ -491,7 +721,7 @@ function App() {
     } finally {
       suppressHistoryRef.current = false
     }
-  }, [resizeDisplay, syncHistoryControls, syncObjects])
+  }, [recordHistory, resizeDisplay, restoreTableState, syncHistoryControls, syncObjects])
 
   const uploadFile = async (file?: File) => {
     if (!file) return
@@ -532,6 +762,13 @@ function App() {
       canvas.clear()
       cropObjectRef.current = null
       imageObjectRef.current = image
+      activeTableRef.current = null
+      setTableRows(0)
+      setTableColumns(0)
+      setTableSelectedRow(0)
+      setTableSelectedColumn(0)
+      setTableSelectedText('')
+      setTableEditing(false)
       drawingLayerCanvasRef.current = null
       drawingLayerImageRef.current = null
       lassoPreviewObjectsRef.current = []
@@ -949,6 +1186,41 @@ const clearBackground = () => {
         return
       }
 
+      if (activeToolRef.current === 'draw-remove' && tableEditing && activeTableRef.current) {
+        let nextText: string | null = null
+        if (event.key === 'Backspace') {
+          nextText = tableSelectedText.slice(0, -1)
+        } else if (event.key === 'Delete') {
+          nextText = ''
+        } else if (event.key === 'Enter') {
+          nextText = `${tableSelectedText}\n`
+        } else if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
+          nextText = `${tableSelectedText}${event.key}`
+        }
+
+        if (nextText !== null) {
+          event.preventDefault()
+          setTableSelectedText(nextText)
+          const table = activeTableRef.current
+          const canvas = canvasRef.current
+          const textbox = canvas?.getObjects().find(
+            (object) => object.get('name') === tableTextName(table.id, tableSelectedRow, tableSelectedColumn),
+          )
+          if (textbox instanceof Textbox && canvas) {
+            textbox.set('text', nextText)
+            table.rowHeights[tableSelectedRow] = fitTableTextbox(
+              textbox,
+              table.columnWidths[tableSelectedColumn],
+              table.rowHeights[tableSelectedRow],
+            )
+            syncTableLayout(canvas, table)
+            canvas.requestRenderAll()
+            recordHistory()
+          }
+          return
+        }
+      }
+
       const command = event.metaKey || event.ctrlKey
 
       if (command && event.key.toLowerCase() === 'z') {
@@ -970,7 +1242,7 @@ const clearBackground = () => {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undo, redo, deleteSelected])
+  }, [undo, redo, deleteSelected, recordHistory, syncTableLayout, tableEditing, tableSelectedColumn, tableSelectedRow, tableSelectedText])
 
   const openPreview = () => {
     const canvas = canvasRef.current
@@ -1015,7 +1287,7 @@ const clearBackground = () => {
   }
 
   const createVisibleImageCanvas = (image: FabricImage) => {
-    const source = image.getElement()
+    const source = image._originalElement
     const width = Math.max(1, Math.round(image.width))
     const height = Math.max(1, Math.round(image.height))
     const output = document.createElement('canvas')
@@ -1117,35 +1389,57 @@ const drawOnDrawingLayer = useCallback((points: EditPoint[], mode: 'pencil' | 'e
 const paintMagicRemoval = useCallback((from: EditPoint, to: EditPoint) => {
   const preview = magicCanvasRef.current
   const context = magicContextRef.current
+  const displayContext = magicDisplayContextRef.current
   const image = magicImageRef.current
   const canvas = canvasRef.current
-  if (!preview || !context || !image || !canvas) return
+  if (!preview || !context || !displayContext || !image || !canvas) return
 
-  const scaleX = preview.width / canvas.getWidth()
-  const scaleY = preview.height / canvas.getHeight()
-  const fromX = from.x * scaleX
-  const fromY = from.y * scaleY
-  const toX = to.x * scaleX
-  const toY = to.y * scaleY
+  const fromPoint = toImagePoint(image, from)
+  const toPoint = toImagePoint(image, to)
+  const scaleX = preview.width / image.width
+  const scaleY = preview.height / image.height
+  const fromX = fromPoint.x * scaleX
+  const fromY = fromPoint.y * scaleY
+  const toX = toPoint.x * scaleX
+  const toY = toPoint.y * scaleY
 
   context.save()
   context.globalCompositeOperation = 'destination-out'
   context.lineCap = 'round'
   context.lineJoin = 'round'
-  context.lineWidth = brushSizeRef.current * ((scaleX + scaleY) / 2)
+  const lineWidth = brushSizeRef.current * getImageBrushScale(image) * ((scaleX + scaleY) / 2)
+  const isDot = fromPoint.x === toPoint.x && fromPoint.y === toPoint.y
+
+  context.lineWidth = lineWidth
   context.beginPath()
   context.moveTo(fromX, fromY)
   context.lineTo(toX, toY)
   context.stroke()
-  if (from.x === to.x && from.y === to.y) {
+  if (isDot) {
     context.beginPath()
     context.arc(fromX, fromY, context.lineWidth / 2, 0, Math.PI * 2)
     context.fill()
   }
   context.restore()
 
+  displayContext.save()
+  displayContext.globalCompositeOperation = 'destination-out'
+  displayContext.lineCap = 'round'
+  displayContext.lineJoin = 'round'
+  displayContext.lineWidth = lineWidth
+  displayContext.beginPath()
+  displayContext.moveTo(fromX, fromY)
+  displayContext.lineTo(toX, toY)
+  displayContext.stroke()
+  if (isDot) {
+    displayContext.beginPath()
+    displayContext.arc(fromX, fromY, lineWidth / 2, 0, Math.PI * 2)
+    displayContext.fill()
+  }
+  displayContext.restore()
+
   image.dirty = true
-  canvas.requestRenderAll()
+  canvas.renderAll()
 }, [])
 
 const startMagicRemoval = useCallback((point: EditPoint) => {
@@ -1158,16 +1452,35 @@ const startMagicRemoval = useCallback((point: EditPoint) => {
 
   const preview = createVisibleImageCanvas(image)
   const context = preview.getContext('2d')
-  if (!context) {
+  const displayPreview = document.createElement('canvas')
+  displayPreview.width = preview.width
+  displayPreview.height = preview.height
+  const displayContext = displayPreview.getContext('2d')
+  if (!context || !displayContext) {
     setNotice('Could not edit this image.')
     return false
   }
 
+  displayContext.drawImage(
+    image.getElement(),
+    image.cropX || 0,
+    image.cropY || 0,
+    image.width,
+    image.height,
+    0,
+    0,
+    displayPreview.width,
+    displayPreview.height,
+  )
+  magicFiltersRef.current = image.filters
+  image.filters = []
+  image.setElement(displayPreview)
+  image.set({ cropX: 0, cropY: 0, width: displayPreview.width, height: displayPreview.height })
   magicCanvasRef.current = preview
   magicContextRef.current = context
+  magicDisplayCanvasRef.current = displayPreview
+  magicDisplayContextRef.current = displayContext
   magicImageRef.current = image
-  image.setElement(preview)
-  image.set({ cropX: 0, cropY: 0, width: preview.width, height: preview.height })
   image.dirty = true
   paintMagicRemoval(point, point)
   return true
@@ -1177,12 +1490,17 @@ const finishMagicRemoval = useCallback(async () => {
   const preview = magicCanvasRef.current
   const image = magicImageRef.current
   const canvas = canvasRef.current
+  const filters = magicFiltersRef.current
   magicCanvasRef.current = null
   magicContextRef.current = null
+  magicDisplayCanvasRef.current = null
+  magicDisplayContextRef.current = null
   magicImageRef.current = null
+  magicFiltersRef.current = null
   if (!preview || !image || !canvas) return
 
   try {
+    image.filters = filters || []
     await image.setSrc(preview.toDataURL('image/png'), {})
     image.setCoords()
     canvas.requestRenderAll()
@@ -1208,13 +1526,14 @@ const applyPixelEdit = async (
 
   try {
     const source = createVisibleImageCanvas(image).toDataURL('image/png')
+    const localPoints = points.map((point) => toImagePoint(image, point))
 
     const editedSource = await editImagePixels(
       source,
-      canvas.getWidth(),
-      canvas.getHeight(),
-      points,
-      brushSizeRef.current,
+      image.width,
+      image.height,
+      localPoints,
+      brushSizeRef.current * getImageBrushScale(image),
       mode,
     )
 
@@ -1242,7 +1561,7 @@ const applyPixelEdit = async (
   }
 }
 
-const removeLassoPreview = () => {
+const removeLassoPreview = useCallback(() => {
   const canvas = canvasRef.current
   if (!canvas) return
 
@@ -1257,12 +1576,310 @@ const removeLassoPreview = () => {
   lassoPreviewObjectsRef.current = []
 
   canvas.requestRenderAll()
-}
+}, [])
+
+useEffect(() => {
+  if (activeTool === 'draw-remove' && activeDrawingMode === 'lasso') return
+
+  lassoPointsRef.current = []
+  removeLassoPreview()
+}, [activeTool, activeDrawingMode, removeLassoPreview])
 
 const clearSelection = () => {
   lassoPointsRef.current = []
   removeLassoPreview()
   setNotice('Selection cleared.')
+}
+
+const addTableCells = (
+  table: CanvasTable,
+  firstRow: number,
+  lastRow: number,
+  firstColumn: number,
+  lastColumn: number,
+  borderColor = tableBorderColor,
+) => {
+  const canvas = canvasRef.current
+  if (!canvas) return
+
+  const cells: Rect[] = []
+  const texts: Textbox[] = []
+  for (let row = firstRow; row < lastRow; row += 1) {
+    for (let column = firstColumn; column < lastColumn; column += 1) {
+      const left = table.left + tableColumnOffset(table, column)
+      const top = table.top + tableRowOffset(table, row)
+      cells.push(new Rect({
+        left,
+        top,
+        width: table.columnWidths[column],
+        height: table.rowHeights[row],
+        fill: 'rgba(255,255,255,0)',
+        stroke: borderColor,
+        strokeWidth: 2,
+        name: tableCellName(table.id, row, column),
+      }))
+      texts.push(new Textbox('', {
+        left: left + 8,
+        top: top + 7,
+        width: table.columnWidths[column] - 16,
+        fontFamily: 'Avenir Next',
+        fontSize: 15,
+        fill: '#28372f',
+        splitByGrapheme: true,
+        name: tableTextName(table.id, row, column),
+      }))
+    }
+  }
+
+  canvas.add(...cells, ...texts)
+}
+
+const createTable = () => {
+  const canvas = canvasRef.current
+  if (!canvas) return
+
+  const bounds = getImageBounds(canvas, imageObjectRef.current)
+  const rows = 3
+  const columns = 3
+  const cellWidth = Math.min(150, (bounds.width - 32) / columns)
+  const cellHeight = Math.min(54, bounds.height / rows)
+  if (cellWidth < 32 || cellHeight < 28) {
+    setNotice('The image is too small to fit a table.')
+    return
+  }
+  const table: CanvasTable = {
+    id: nextTableIdRef.current + 1,
+    left: bounds.left + (bounds.width - columns * cellWidth) / 2,
+    top: bounds.top + (bounds.height - rows * cellHeight) / 2,
+    cellWidth,
+    cellHeight,
+    columnWidths: Array(columns).fill(cellWidth),
+    rowHeights: Array(rows).fill(cellHeight),
+    rows,
+    columns,
+  }
+  nextTableIdRef.current = table.id
+  activeTableRef.current = table
+  addTableCells(table, 0, rows, 0, columns)
+  syncTableLayout(canvas, table)
+  setTableEditing(true)
+  setActiveDrawingMode('pencil')
+  setTableRows(rows)
+  setTableColumns(columns)
+  setTableSelectedRow(0)
+  setTableSelectedColumn(0)
+  setTableSelectedText('')
+  canvas.requestRenderAll()
+  recordHistory(true)
+}
+
+const addTableRow = () => {
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas) return
+  const bounds = getImageBounds(canvas, imageObjectRef.current)
+  if (table.top + tableHeight(table) + table.cellHeight > bounds.top + bounds.height) {
+    setNotice('There is no room for another table row inside the image.')
+    return
+  }
+  table.rowHeights.push(table.cellHeight)
+  addTableCells(table, table.rows, table.rows + 1, 0, table.columns)
+  table.rows += 1
+  syncTableLayout(canvas, table)
+  setTableRows(table.rows)
+  setTableSelectedRow(table.rows - 1)
+  setTableSelectedText('')
+  canvasRef.current?.requestRenderAll()
+  recordHistory(true)
+}
+
+const addTableColumn = () => {
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas) return
+  const bounds = getImageBounds(canvas, imageObjectRef.current)
+  if (table.left + tableWidth(table) + table.cellWidth > bounds.left + bounds.width) {
+    setNotice('There is no room for another table column inside the image.')
+    return
+  }
+  table.columnWidths.push(table.cellWidth)
+  addTableCells(table, 0, table.rows, table.columns, table.columns + 1)
+  table.columns += 1
+  syncTableLayout(canvas, table)
+  setTableColumns(table.columns)
+  setTableSelectedColumn(table.columns - 1)
+  setTableSelectedText('')
+  canvasRef.current?.requestRenderAll()
+  recordHistory(true)
+}
+
+const removeTableRow = () => {
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas || table.rows <= 1) return
+
+  const removedRow = tableSelectedRow
+  for (let column = 0; column < table.columns; column += 1) {
+    const cell = canvas.getObjects().find(
+      (object) => object.get('name') === tableCellName(table.id, removedRow, column),
+    )
+    const text = canvas.getObjects().find(
+      (object) => object.get('name') === tableTextName(table.id, removedRow, column),
+    )
+    if (cell) canvas.remove(cell)
+    if (text) canvas.remove(text)
+  }
+
+  for (let row = removedRow + 1; row < table.rows; row += 1) {
+    for (let column = 0; column < table.columns; column += 1) {
+      const cell = canvas.getObjects().find(
+        (object) => object.get('name') === tableCellName(table.id, row, column),
+      )
+      const text = canvas.getObjects().find(
+        (object) => object.get('name') === tableTextName(table.id, row, column),
+      )
+      cell?.set('name', tableCellName(table.id, row - 1, column))
+      text?.set('name', tableTextName(table.id, row - 1, column))
+    }
+  }
+
+  table.rowHeights.splice(removedRow, 1)
+  table.rows -= 1
+  syncTableLayout(canvas, table)
+  const nextRow = Math.min(removedRow, table.rows - 1)
+  setTableRows(table.rows)
+  selectTableCell(nextRow, tableSelectedColumn)
+  canvas.requestRenderAll()
+  recordHistory(true)
+}
+
+const removeTableColumn = () => {
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas || table.columns <= 1) return
+
+  const removedColumn = tableSelectedColumn
+  for (let row = 0; row < table.rows; row += 1) {
+    const cell = canvas.getObjects().find(
+      (object) => object.get('name') === tableCellName(table.id, row, removedColumn),
+    )
+    const text = canvas.getObjects().find(
+      (object) => object.get('name') === tableTextName(table.id, row, removedColumn),
+    )
+    if (cell) canvas.remove(cell)
+    if (text) canvas.remove(text)
+  }
+
+  for (let column = removedColumn + 1; column < table.columns; column += 1) {
+    for (let row = 0; row < table.rows; row += 1) {
+      const cell = canvas.getObjects().find(
+        (object) => object.get('name') === tableCellName(table.id, row, column),
+      )
+      const text = canvas.getObjects().find(
+        (object) => object.get('name') === tableTextName(table.id, row, column),
+      )
+      cell?.set('name', tableCellName(table.id, row, column - 1))
+      text?.set('name', tableTextName(table.id, row, column - 1))
+    }
+  }
+
+  table.columnWidths.splice(removedColumn, 1)
+  table.columns -= 1
+  syncTableLayout(canvas, table)
+  const nextColumn = Math.min(removedColumn, table.columns - 1)
+  setTableColumns(table.columns)
+  selectTableCell(tableSelectedRow, nextColumn)
+  canvas.requestRenderAll()
+  recordHistory(true)
+}
+
+const deleteTable = () => {
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas) return
+
+  for (let row = 0; row < table.rows; row += 1) {
+    for (let column = 0; column < table.columns; column += 1) {
+      const cell = canvas.getObjects().find(
+        (object) => object.get('name') === tableCellName(table.id, row, column),
+      )
+      const text = canvas.getObjects().find(
+        (object) => object.get('name') === tableTextName(table.id, row, column),
+      )
+      if (cell) canvas.remove(cell)
+      if (text) canvas.remove(text)
+    }
+  }
+
+  activeTableRef.current = null
+  setTableRows(0)
+  setTableColumns(0)
+  setTableSelectedText('')
+  setTableEditing(false)
+  setActiveDrawingMode('pencil')
+  canvas.requestRenderAll()
+  recordHistory(true)
+}
+
+const beginTableEditing = () => {
+  if (!activeTableRef.current) return
+  setActiveTool('draw-remove')
+  setTableEditing(true)
+  canvasRef.current?.requestRenderAll()
+  setActiveDrawingMode('pencil')
+}
+
+const finishTableEditing = () => {
+  setTableEditing(false)
+  canvasRef.current?.requestRenderAll()
+  setActiveDrawingMode('pencil')
+}
+
+const selectTableRow = (row: number) => {
+  setTableSelectedRow(row)
+  const table = activeTableRef.current
+  const text = canvasRef.current?.getObjects().find(
+    (object) => object.get('name') === tableTextName(table?.id ?? -1, row, tableSelectedColumn),
+  )
+  setTableSelectedText(text instanceof Textbox ? text.text : '')
+}
+
+const selectTableColumn = (column: number) => {
+  setTableSelectedColumn(column)
+  const table = activeTableRef.current
+  const text = canvasRef.current?.getObjects().find(
+    (object) => object.get('name') === tableTextName(table?.id ?? -1, tableSelectedRow, column),
+  )
+  setTableSelectedText(text instanceof Textbox ? text.text : '')
+}
+
+const selectTableCell = (row: number, column: number) => {
+  const table = activeTableRef.current
+  const text = canvasRef.current?.getObjects().find(
+    (object) => object.get('name') === tableTextName(table?.id ?? -1, row, column),
+  )
+  setTableSelectedRow(row)
+  setTableSelectedColumn(column)
+  setTableSelectedText(text instanceof Textbox ? text.text : '')
+}
+
+const updateTableBorderColor = (color: string) => {
+  setTableBorderColorState(color)
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas) return
+
+  for (let row = 0; row < table.rows; row += 1) {
+    for (let column = 0; column < table.columns; column += 1) {
+      const cell = canvas.getObjects().find(
+        (object) => object.get('name') === tableCellName(table.id, row, column),
+      )
+      cell?.set('stroke', color)
+      cell?.setCoords()
+    }
+  }
+  canvas.requestRenderAll()
+  recordHistory()
 }
 
 const deleteSelection = async () => {
@@ -1293,6 +1910,72 @@ const deleteSelection = async () => {
       return
     }
 
+    const table = activeTableRef.current
+    if (table && tableEditing) {
+      const relativeX = point.x - table.left
+      const relativeY = point.y - table.top
+
+      if (relativeY >= 0 && relativeY < tableHeight(table)) {
+        for (let column = 0; column < table.columns; column += 1) {
+          const dividerX = table.left + tableColumnOffset(table, column + 1)
+          if (Math.abs(point.x - dividerX) <= 6) {
+            tableGestureRef.current = {
+              mode: 'resize-column',
+              startX: point.x,
+              startY: point.y,
+              left: table.left,
+              top: table.top,
+              resizeIndex: column,
+              columnWidths: [...table.columnWidths],
+              rowHeights: [...table.rowHeights],
+              moved: false,
+            }
+            return
+          }
+        }
+      }
+
+      if (relativeX >= 0 && relativeX < tableWidth(table)) {
+        for (let row = 0; row < table.rows; row += 1) {
+          const dividerY = table.top + tableRowOffset(table, row + 1)
+          if (Math.abs(point.y - dividerY) <= 6) {
+            tableGestureRef.current = {
+              mode: 'resize-row',
+              startX: point.x,
+              startY: point.y,
+              left: table.left,
+              top: table.top,
+              resizeIndex: row,
+              columnWidths: [...table.columnWidths],
+              rowHeights: [...table.rowHeights],
+              moved: false,
+            }
+            return
+          }
+        }
+      }
+
+      if (relativeX >= 0 && relativeY >= 0 && relativeX < tableWidth(table) && relativeY < tableHeight(table)) {
+        let row = 0
+        while (row < table.rows - 1 && relativeY >= tableRowOffset(table, row + 1)) row += 1
+        let column = 0
+        while (column < table.columns - 1 && relativeX >= tableColumnOffset(table, column + 1)) column += 1
+        selectTableCell(row, column)
+        tableGestureRef.current = {
+          mode: 'move',
+          startX: point.x,
+          startY: point.y,
+          left: table.left,
+          top: table.top,
+          resizeIndex: -1,
+          columnWidths: [...table.columnWidths],
+          rowHeights: [...table.rowHeights],
+          moved: false,
+        }
+      }
+      return
+    }
+
     const mode = activeDrawingModeRef.current
 
     if (mode === 'pencil' || mode === 'eraser') {
@@ -1319,6 +2002,77 @@ const deleteSelection = async () => {
     scenePoint?: { x: number; y: number }
   }) => {
     const point = event.scenePoint
+    const tableGesture = tableGestureRef.current
+    const table = activeTableRef.current
+    const canvas = canvasRef.current
+    const bounds = canvas ? getImageBounds(canvas, imageObjectRef.current) : null
+    if (point && table && tableEditing && !tableGesture) {
+      const isOverColumnDivider = point.y >= table.top &&
+        point.y < table.top + tableHeight(table) &&
+        Array.from({ length: table.columns }, (_, column) =>
+          Math.abs(point.x - (table.left + tableColumnOffset(table, column + 1))) <= 6,
+        ).some(Boolean)
+      const isOverRowDivider = point.x >= table.left &&
+        point.x < table.left + tableWidth(table) &&
+        Array.from({ length: table.rows }, (_, row) =>
+          Math.abs(point.y - (table.top + tableRowOffset(table, row + 1))) <= 6,
+        ).some(Boolean)
+      const nextHover = isOverColumnDivider ? 'column' : isOverRowDivider ? 'row' : null
+      setTableResizeHover((current) => current === nextHover ? current : nextHover)
+    } else {
+      setTableResizeHover((current) => current === null ? current : null)
+    }
+
+    if (point && tableGesture && table && canvas) {
+      const deltaX = point.x - tableGesture.startX
+      const deltaY = point.y - tableGesture.startY
+      if (Math.abs(deltaX) + Math.abs(deltaY) > 2) tableGesture.moved = true
+      if (tableGesture.moved) {
+        if (tableGesture.mode === 'resize-row') {
+          const row = tableGesture.resizeIndex
+          const otherRowsHeight = tableGesture.rowHeights
+            .filter((_, index) => index !== row)
+            .reduce((total, height) => total + height, 0)
+          const maxRowHeight = Math.max(
+            28,
+            (bounds?.top ?? 0) + (bounds?.height ?? 0) - table.top - otherRowsHeight,
+          )
+          table.rowHeights = [...tableGesture.rowHeights]
+          table.rowHeights[row] = Math.max(
+            28,
+            Math.min(maxRowHeight, tableGesture.rowHeights[row] + deltaY),
+          )
+        } else if (tableGesture.mode === 'resize-column') {
+          table.columnWidths = [...tableGesture.columnWidths]
+          const otherColumnsWidth = tableGesture.columnWidths
+            .filter((_, index) => index !== tableGesture.resizeIndex)
+            .reduce((total, width) => total + width, 0)
+          const maxColumnWidth = Math.max(
+            32,
+            (bounds?.left ?? 0) + (bounds?.width ?? 0) - table.left - otherColumnsWidth,
+          )
+          table.columnWidths[tableGesture.resizeIndex] = Math.max(
+            32,
+            Math.min(
+              maxColumnWidth,
+              tableGesture.columnWidths[tableGesture.resizeIndex] + deltaX,
+            ),
+          )
+        } else {
+          table.left = Math.max(bounds?.left ?? 0, Math.min(
+            (bounds?.left ?? 0) + (bounds?.width ?? canvas.getWidth()) - tableWidth(table),
+            tableGesture.left + deltaX,
+          ))
+          table.top = Math.max(bounds?.top ?? 0, Math.min(
+            (bounds?.top ?? 0) + (bounds?.height ?? canvas.getHeight()) - tableHeight(table),
+            tableGesture.top + deltaY,
+          ))
+        }
+        syncTableLayout(canvas, table)
+        canvas.requestRenderAll()
+      }
+      return
+    }
     if (!point || !isGestureDrawingRef.current) return
 
     const mode = activeDrawingModeRef.current
@@ -1335,14 +2089,24 @@ const deleteSelection = async () => {
       gesturePointsRef.current.push({ x: point.x, y: point.y })
       if (previousPoint) paintMagicRemoval(previousPoint, point)
     } else if (mode === 'lasso') {
-      gesturePointsRef.current.push({
-        x: point.x,
-        y: point.y,
-      })
+      gesturePointsRef.current.push({ x: point.x, y: point.y })
     }
   }
 
   const onMouseUp = () => {
+    const tableGesture = tableGestureRef.current
+    if (tableGesture) {
+      tableGestureRef.current = null
+      if (tableGesture.moved) {
+        const table = activeTableRef.current
+        if (table) {
+          setTableRows(table.rows)
+          setTableColumns(table.columns)
+        }
+        recordHistory(true)
+      }
+      return
+    }
     if (!isGestureDrawingRef.current) return
 
     isGestureDrawingRef.current = false
@@ -1378,7 +2142,7 @@ const deleteSelection = async () => {
     canvas.off('mouse:move', onMouseMove)
     canvas.off('mouse:up', onMouseUp)
   }
-}, [activeTool, drawOnDrawingLayer, finishMagicRemoval, hasDocument, paintMagicRemoval, recordHistory, startMagicRemoval])
+}, [activeTool, drawOnDrawingLayer, finishMagicRemoval, hasDocument, paintMagicRemoval, recordHistory, startMagicRemoval, syncTableLayout, tableEditing])
 
   const contextValue: EditorContextValue = {
     fabricCanvas,
@@ -1483,6 +2247,26 @@ const deleteSelection = async () => {
       setBrushSize,
       clearSelection,
       deleteSelection,
+    },
+    table: {
+      rows: tableRows,
+      columns: tableColumns,
+      selectedRow: tableSelectedRow,
+      selectedColumn: tableSelectedColumn,
+      borderColor: tableBorderColor,
+      editing: tableEditing,
+      resizeHover: tableResizeHover,
+      create: createTable,
+      beginEditing: beginTableEditing,
+      finishEditing: finishTableEditing,
+      deleteTable,
+      addRow: addTableRow,
+      addColumn: addTableColumn,
+      removeRow: removeTableRow,
+      removeColumn: removeTableColumn,
+      selectRow: selectTableRow,
+      selectColumn: selectTableColumn,
+      setBorderColor: updateTableBorderColor,
     },
   }
 
