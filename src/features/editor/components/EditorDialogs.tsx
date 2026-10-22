@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useState } from 'react'
-import { ArrowLeft, Pause, Play, Volume2, X } from 'lucide-react'
+import { ArrowLeft, Download, FileImage, Pause, Play, Volume2, X } from 'lucide-react'
 import { useEditor } from '../EditorContext'
 
 function formatPreviewTime(seconds: number) {
@@ -242,6 +242,24 @@ export function PreviewDialog() {
     </div>
   )
 }
+
+export function ExportDialog() {
+  const { canvas, export: exportState } = useEditor()
+  if (!exportState.open) return null
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={() => exportState.setOpen(false)}>
+      <section className="export-modal" role="dialog" aria-modal="true" aria-label="Export design" onClick={(event) => event.stopPropagation()}>
+        <header><div><span className="panel-kicker">DOWNLOAD FILE</span><h2>Export your design</h2></div><button className="icon-button" onClick={() => exportState.setOpen(false)} aria-label="Close export dialog"><X size={19} /></button></header>
+        <label className="field-label">File format<select value={exportState.format} onChange={(event) => exportState.setFormat(event.target.value as 'png' | 'jpeg')}><option value="png">PNG · transparent background</option><option value="jpeg">JPG · white background</option></select></label>
+        <label className="field-label export-scale-label">Output size<select value={exportState.scale} onChange={(event) => exportState.setScale(Number(event.target.value))}><option value={1}>Original · {canvas.dimensions.width} × {canvas.dimensions.height}</option><option value={2}>2× · {canvas.dimensions.width * 2} × {canvas.dimensions.height * 2}</option><option value={3}>3× · {canvas.dimensions.width * 3} × {canvas.dimensions.height * 3}</option></select></label>
+        <label className="export-watermark-option"><input type="checkbox" checked={exportState.watermark} onChange={(event) => exportState.setWatermark(event.target.checked)} /><span>Add project watermark</span></label>
+        <div className="export-info"><FileImage size={17} /><span>Exported locally from the full-resolution document.</span></div>
+        <button className="download-button full-button" onClick={() => void exportState.download()} disabled={exportState.busy}><Download size={16} /> {exportState.busy ? 'Preparing file…' : 'Download design'}</button>
+      </section>
+    </div>
+  )
+}
+
 
 export function EditorNotice() {
   const { tools } = useEditor()

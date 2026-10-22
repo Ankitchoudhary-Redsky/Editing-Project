@@ -1097,6 +1097,22 @@
 .export-modal .field-label select {
   appearance: auto;
 }
+.export-watermark-option {
+  display: flex;
+  width: calc(100% - 40px);
+  align-items: center;
+  gap: 9px;
+  margin: 17px 20px 0;
+  color: #34443b;
+  font-size: 12px;
+  cursor: pointer;
+}
+.export-watermark-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #32745d;
+}
 .export-info {
   box-sizing: border-box;
   gap: 10px;

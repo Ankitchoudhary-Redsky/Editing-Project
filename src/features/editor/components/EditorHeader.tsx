@@ -1,9 +1,9 @@
-import { ArrowRight, ChevronDown,Eye, Redo2, Undo2 } from 'lucide-react'
+import { ArrowRight, ChevronDown,Download,Eye, Redo2, Undo2 } from 'lucide-react'
 import { useEditor } from '../EditorContext'
 import img1 from '../../../assets/logo.png'
 
 export function EditorHeader() {
-  const { canvas, history, project, preview } = useEditor()
+  const { canvas, history, project, preview, export: exportState } = useEditor()
 
   return (
     <header className="topbar">
@@ -19,6 +19,7 @@ export function EditorHeader() {
         <button className="icon-button" title="Redo" aria-label="Redo" disabled={!history.canRedo} onClick={history.redo}><Redo2 size={18} /></button>
         <span className="action-divider" />
         <button className="preview-button" onClick={preview.show} disabled={!canvas.hasImage} ><Eye size={16} /> Preview</button>
+        <button className="download-button" onClick={() => exportState.setOpen(true)}><Download size={16} /> Export</button>
       </div>
     </header>
   )

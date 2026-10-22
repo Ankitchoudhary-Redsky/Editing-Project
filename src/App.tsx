@@ -14,6 +14,7 @@ import {
 import { EditorContext } from './features/editor/EditorContext'
 import {
   EditorNotice,
+  ExportDialog,
   PreviewDialog,
 } from './features/editor/components/EditorDialogs'
 import { EditorHeader } from './features/editor/components/EditorHeader'
@@ -31,6 +32,7 @@ import type { DrawingMode,
   EditorContextValue,
   EditorTool, ShapeKind, TextProperty, FilterId,
   VideoAudioDraft, VideoPreviewData,
+  ExportFormat,
 } from './features/editor/model/types'
 import { hasTransparentPixels, removeImageBackground } from './features/editor/operations/removeImageBackground'
 import { editImagePixels, type EditPoint } from './features/editor/operations/editImagePixels'
@@ -40,6 +42,8 @@ import './App.css'
 import { buildShapeObject, createShapeObject } from './features/editor/operations/shapeObjects'
 import { createTextObject } from './features/editor/operations/textObjects'
 import { objectName } from './features/editor/model/objectName'
+import { loadProjectDraft, saveProjectDraft } from './features/editor/operations/projectStorage'
+import { drawProjectWatermark } from './features/editor/operations/projectWatermark'
 
 type EditorSnapshot = {
   width: number
@@ -51,6 +55,45 @@ type EditorSnapshot = {
     backgroundRemoved?: boolean
     backgroundColor?: string
   }
+}
+
+type PersistedEditorDraft = EditorSnapshot & {
+  projectName: string
+  activeTool: EditorTool
+  zoom: number
+  selectedFilter: FilterId
+  filterIntensity: number
+  backgroundRemoved: boolean
+  backgroundColor: string
+  drawingColor: string
+  brushSize: number
+  activeDrawingMode: DrawingMode
+  brightness: number
+  contrast: number
+  saturation: number
+  videoAudio: VideoAudioDraft
+  resizeWidth: number
+  resizeHeight: number
+  keepRatio: boolean
+  scaleArtwork: boolean
+  textValue: string
+  fontFamily: string
+  fontSize: number
+  textColor: string
+  textBackground: string
+  textOpacity: number
+  textOutline: string
+  textOutlineWidth: number
+  textShadow: string
+  shapeKind: ShapeKind
+  fillColor: string
+  transparentFill: boolean
+  strokeColor: string
+  strokeWidth: number
+  shapeOpacity: number
+  exportFormat: ExportFormat
+  exportScale: number
+  exportWatermark: boolean
 }
 
 function App() {
@@ -85,6 +128,7 @@ function App() {
   const magicCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const magicContextRef = useRef<CanvasRenderingContext2D | null>(null)
   const magicImageRef = useRef<FabricImage | null>(null)
+  const userEditedBeforeDraftLoadRef = useRef(false)
   
   
 
@@ -178,6 +222,15 @@ function App() {
   const [drawingColor, setDrawingColor] = useState('#222222')
   const [brushSize, setBrushSize] = useState(12)
   const [activeDrawingMode, setActiveDrawingMode] = useState<DrawingMode>('pencil')
+  const [draftReady, setDraftReady] = useState(false)
+
+  //export
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
+  const [exportScale, setExportScale] = useState(1)
+  const [exportWatermark, setExportWatermark] = useState(true)
+  const [exportBusy, setExportBusy] = useState(false)
+
   
 
   const syncObjects = useCallback(() => {
@@ -257,7 +310,7 @@ function App() {
         historyTimerRef.current = setTimeout(saveSnapshot, 220)
       }
     },
-    [syncHistoryControls, syncObjects],
+    [serializeEditorSnapshot, syncHistoryControls, syncObjects],
   )
 
   useEffect(() => {
@@ -312,7 +365,95 @@ function App() {
     historyIndexRef.current = 0
     syncHistoryControls()
 
+    let disposed = false
+    void loadProjectDraft<PersistedEditorDraft>()
+      .then(async (draft) => {
+        if (disposed || !draft || userEditedBeforeDraftLoadRef.current) return
+
+        suppressHistoryRef.current = true
+        canvas.setDimensions({ width: draft.width, height: draft.height })
+        await canvas.loadFromJSON(draft.scene)
+        if (disposed) return
+
+        restartAnimatedStickers(canvas)
+        canvas.requestRenderAll()
+        fitCanvas()
+        const mainImage = canvas.getObjects().find(
+          (item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME,
+        )
+        imageObjectRef.current = mainImage instanceof FabricImage ? mainImage : null
+        imageSourceRef.current = imageObjectRef.current?.getSrc() ?? ''
+        setDimensions({ width: draft.width, height: draft.height })
+        setHasDocument(Boolean(draft.scene))
+        setImageThumbnail(canvas.toDataURL({ format: 'png', multiplier: 0.12 }))
+        setProjectName(draft.projectName)
+        setActiveTool(draft.activeTool)
+        setZoom(draft.zoom)
+        setSelectedFilter(draft.selectedFilter)
+        selectedFilterRef.current = draft.selectedFilter
+        setFilterIntensity(draft.filterIntensity)
+        filterIntensityRef.current = draft.filterIntensity
+        setBackgroundRemoved(draft.backgroundRemoved)
+        backgroundRemovedRef.current = draft.backgroundRemoved
+        setBackgroundColorState(draft.backgroundColor)
+        backgroundColorRef.current = draft.backgroundColor
+        setDrawingColor(draft.drawingColor)
+        setBrushSize(draft.brushSize)
+        setActiveDrawingMode(draft.activeDrawingMode)
+        setBrightness(draft.brightness)
+        setContrast(draft.contrast)
+        setSaturation(draft.saturation)
+        setResizeWidth(draft.resizeWidth)
+        setResizeHeight(draft.resizeHeight)
+        setKeepRatio(draft.keepRatio)
+        setScaleArtwork(draft.scaleArtwork)
+        setTextValue(draft.textValue)
+        setFontFamily(draft.fontFamily)
+        setFontSize(draft.fontSize)
+        setTextColor(draft.textColor)
+        setTextBackground(draft.textBackground)
+        setTextOpacity(draft.textOpacity)
+        setTextOutline(draft.textOutline)
+        setTextOutlineWidth(draft.textOutlineWidth)
+        setTextShadow(draft.textShadow)
+        setShapeKind(draft.shapeKind)
+        setFillColor(draft.fillColor)
+        setTransparentFill(draft.transparentFill)
+        setStrokeColor(draft.strokeColor)
+        setStrokeWidth(draft.strokeWidth)
+        setShapeOpacity(draft.shapeOpacity)
+        setExportFormat(draft.exportFormat)
+        setExportScale(draft.exportScale)
+        setExportWatermark(draft.exportWatermark)
+        setVideoAudio({
+          ...draft.videoAudio,
+          music: {
+            ...draft.videoAudio.music,
+            url: draft.videoAudio.music.file ? URL.createObjectURL(draft.videoAudio.music.file) : '',
+          },
+          voice: {
+            ...draft.videoAudio.voice,
+            url: draft.videoAudio.voice.file ? URL.createObjectURL(draft.videoAudio.voice.file) : '',
+          },
+        })
+        syncObjects()
+        historyRef.current = [serializeEditorSnapshot(canvas)]
+        historyIndexRef.current = 0
+        syncHistoryControls()
+      })
+      .catch(() => {
+        if (!disposed) setNotice('Saved project data could not be restored.')
+      })
+      .finally(() => {
+        if (!disposed) {
+          suppressHistoryRef.current = false
+          setDraftReady(true)
+          setHistoryVersion((value) => value + 1)
+        }
+      })
+
     const changed = () => {
+      if (!suppressHistoryRef.current) userEditedBeforeDraftLoadRef.current = true
       syncObjects()
       recordHistory()
     }
@@ -356,6 +497,7 @@ function App() {
     }
 
     return () => {
+      disposed = true
       resizeObserver.disconnect()
 
       if (historyTimerRef.current) {
@@ -369,7 +511,106 @@ function App() {
         setFabricCanvas(null)
       }
     }
-  }, [recordHistory, syncHistoryControls, syncObjects])
+  }, [recordHistory, serializeEditorSnapshot, syncHistoryControls, syncObjects])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!draftReady || !canvas || !hasDocument) return
+
+    const timer = window.setTimeout(() => {
+      const draft: PersistedEditorDraft = {
+        width: canvas.getWidth(),
+        height: canvas.getHeight(),
+        scene: canvas.toJSON(),
+        projectName,
+        activeTool,
+        zoom,
+        selectedFilter,
+        filterIntensity,
+        backgroundRemoved,
+        backgroundColor,
+        drawingColor,
+        brushSize,
+        activeDrawingMode,
+        brightness,
+        contrast,
+        saturation,
+        videoAudio: {
+          ...videoAudio,
+          music: { ...videoAudio.music, url: '' },
+          voice: { ...videoAudio.voice, url: '' },
+        },
+        resizeWidth,
+        resizeHeight,
+        keepRatio,
+        scaleArtwork,
+        textValue,
+        fontFamily,
+        fontSize,
+        textColor,
+        textBackground,
+        textOpacity,
+        textOutline,
+        textOutlineWidth,
+        textShadow,
+        shapeKind,
+        fillColor,
+        transparentFill,
+        strokeColor,
+        strokeWidth,
+        shapeOpacity,
+        exportFormat,
+        exportScale,
+        exportWatermark,
+      }
+
+      void saveProjectDraft(draft).catch(() => {
+        setNotice('This project could not be saved in browser storage.')
+      })
+    }, 350)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    activeDrawingMode,
+    activeTool,
+    backgroundColor,
+    backgroundRemoved,
+    brightness,
+    brushSize,
+    contrast,
+    draftReady,
+    drawingColor,
+    filterIntensity,
+    fillColor,
+    fontFamily,
+    fontSize,
+    exportFormat,
+    exportScale,
+    exportWatermark,
+    hasDocument,
+    historyVersion,
+    keepRatio,
+    projectName,
+    resizeHeight,
+    resizeWidth,
+    scaleArtwork,
+    shapeKind,
+    saturation,
+    selectedFilter,
+    shapeOpacity,
+    strokeColor,
+    strokeWidth,
+    textBackground,
+    textColor,
+    textOpacity,
+    textOutline,
+    textOutlineWidth,
+    textShadow,
+    textValue,
+    transparentFill,
+    videoAudio,
+    zoom,
+  ])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -1194,6 +1435,37 @@ const clearBackground = () => {
     setPreviewOpen(true)
   }
 
+  const downloadDesign = async () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    setExportBusy(true)
+    try {
+      const output = canvas.toCanvasElement(exportScale)
+      const context = output.getContext('2d')
+      if (!context) throw new Error('Could not prepare the export image.')
+      if (exportFormat === 'jpeg') {
+        context.globalCompositeOperation = 'destination-over'
+        context.fillStyle = '#ffffff'
+        context.fillRect(0, 0, output.width, output.height)
+        context.globalCompositeOperation = 'source-over'
+      }
+      // if (exportWatermark) drawProjectWatermark(output, projectName)
+      if (exportWatermark) drawProjectWatermark(output)
+      const data = output.toDataURL(exportFormat === 'jpeg' ? 'image/jpeg' : 'image/png', exportFormat === 'jpeg' ? 0.94 : 1)
+      const link = document.createElement('a')
+      const safeName = projectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'pixel-studio-design'
+      link.href = data
+      link.download = `${safeName}.${exportFormat === 'jpeg' ? 'jpg' : 'png'}`
+      link.click()
+      setExportOpen(false)
+    } catch {
+      setNotice('Export failed. Try a smaller output size or PNG format.')
+    } finally {
+      setExportBusy(false)
+    }
+  }
+
+
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.stopPropagation()
@@ -1577,7 +1849,6 @@ const deleteSelection = async () => {
 
   const contextValue: EditorContextValue = {
     fabricCanvas,
-
     canvas: {
       dimensions,
       hasDocument,
@@ -1591,21 +1862,18 @@ const deleteSelection = async () => {
       fitScale,
       fitToScreen,
     },
-
     history: {
       canUndo,
       canRedo,
       undo: () => void undo(),
       redo: () => void redo(),
     },
-
     project: {
       name: projectName,
       setName: setProjectName,
       isRenaming,
       setIsRenaming,
     },
-
     tools: {
       active: activeTool,
       setActive: setActiveEditorTool,
@@ -1631,7 +1899,6 @@ const deleteSelection = async () => {
     resize: { width: resizeWidth, height: resizeHeight, setWidth: updateResizeWidth, setHeight: updateResizeHeight, keepRatio, setKeepRatio, scaleArtwork, setScaleArtwork, apply: applyResize },
     text: { selected: selectedText, value: textValue, fontFamily, setFontFamily, fontSize, setFontSize, color: textColor, setColor: setTextColor, background: textBackground, setBackground: setTextBackground, opacity: textOpacity, setOpacity: setTextOpacity, outline: textOutline, setOutline: setTextOutline, outlineWidth: textOutlineWidth, setOutlineWidth: setTextOutlineWidth, shadow: textShadow, setShadow: setTextShadow, add: createText, update: updateText },
     shapes: { selected: selectedObject, isSelectedShape: selectedIsShape, kind: shapeKind, setKind: setShapeKind, fill: fillColor, setFill: setFillColor, transparentFill, setTransparentFill, stroke: strokeColor, setStroke: setStrokeColor, strokeWidth, setStrokeWidth, opacity: shapeOpacity, setOpacity: setShapeOpacity, add: addShape, duplicate: duplicateSelected, delete: deleteSelected, updateAppearance: updateShapeAppearance, moveLayer, selectLayer },
-
     adjustments: {
       brightness,
       setBrightness,
@@ -1642,7 +1909,6 @@ const deleteSelection = async () => {
       apply: applyAdjustments,
       reset: resetAdjustments,
     },
-
     preview: {
       open: previewOpen,
       imageUrl: previewUrl,
@@ -1654,7 +1920,6 @@ const deleteSelection = async () => {
     },
     videoAudio,
     setVideoAudio,
-
     draggingFile,
     handleDrop,
     filters: {
@@ -1684,6 +1949,8 @@ const deleteSelection = async () => {
       clearSelection,
       deleteSelection,
     },
+    export: { open: exportOpen, setOpen: setExportOpen, format: exportFormat, setFormat: setExportFormat, scale: exportScale, setScale: setExportScale, watermark: exportWatermark, setWatermark: setExportWatermark, busy: exportBusy, download: downloadDesign },
+
   }
 
   return (
@@ -1724,8 +1991,8 @@ const deleteSelection = async () => {
         </section>
 
         <EditorNotice />
+        <ExportDialog />
         <PreviewDialog />
-
         <span className="visually-hidden" aria-live="polite">
           {historyVersion > 0 ? 'Document updated' : ''}
         </span>

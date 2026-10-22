@@ -208,6 +208,18 @@ export interface EditorContextValue {
     clearSelection: () => void
     deleteSelection: () => void
   }
+  export: {
+    open: boolean
+    setOpen: Dispatch<SetStateAction<boolean>>
+    format: ExportFormat
+    setFormat: Dispatch<SetStateAction<ExportFormat>>
+    scale: number
+    setScale: Dispatch<SetStateAction<number>>
+    watermark: boolean
+    setWatermark: Dispatch<SetStateAction<boolean>>
+    busy: boolean
+    download: () => Promise<void>
+  }
 
   draggingFile: boolean
 

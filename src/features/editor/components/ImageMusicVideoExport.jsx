@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import { useEditor } from "../EditorContext";
+import { drawProjectWatermark } from "../operations/projectWatermark";
 import {
   ArrowLeft,
   Image as ImageIcon,
@@ -56,7 +57,7 @@ export default function ImageMusicVideoExport({
   isActive = true,
   onBack,
 }) {
-  const { preview, tools, videoAudio, setVideoAudio } = useEditor();
+  const { preview, tools, project, export: exportState, videoAudio, setVideoAudio } = useEditor();
   const {
     music: { file: musicFile, url: musicUrl, duration: audioDuration },
     voice: { file: voiceFile, url: voiceUrl, duration: voiceDuration },
@@ -756,6 +757,9 @@ export default function ImageMusicVideoExport({
 
   async function recordVideo(durationSeconds) {
     const sourceCanvas = fabricCanvas.toCanvasElement(1);
+    if (exportState.watermark) {
+      drawProjectWatermark(sourceCanvas, project.name);
+    }
 
     const { outputCanvas, context } =
       createRecordingCanvas(sourceCanvas);
