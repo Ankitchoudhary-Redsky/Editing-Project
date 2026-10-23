@@ -1,34 +1,31 @@
 import {
-  Music2,
-  Crop,
-  Eraser,
   MousePointer2,
   Shapes,
   SlidersHorizontal,
-  Type,
   Upload,
   WandSparkles,
   Pencil,
-  Sticker,
+  Layers3,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
 import type { EditorTool, ShapeKind } from './types'
 
 export const BACKGROUND_IMAGE_NAME = '__pixel_studio_background_image__'
 
-export const editorTools: { id: EditorTool; label: string; icon: typeof Upload }[] = [
-  { id: 'upload', label: 'Upload', icon: Upload },
-  { id: 'select', label: 'Select', icon: MousePointer2 },
-  { id: 'resize', label: 'Resize', icon: SlidersHorizontal },
-  { id: 'crop', label: 'Crop', icon: Crop },
-  { id: 'text', label: 'Text', icon: Type },
-  { id: 'shapes', label: 'Shapes', icon: Shapes },
-  { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal },
-  { id: 'music', label: 'Add music', icon: Music2 },
-  { id: 'filters', label: 'Filters', icon: WandSparkles },
-  { id: 'background', label: 'Background', icon: Eraser },
-  { id: 'draw-remove', label: 'Draw & Remove', icon: Pencil },
-  { id: 'stickers', label: 'Stickers', icon: Sticker },
+export const editorToolCategories: {
+  id: string
+  label: string
+  icon: typeof Upload
+  defaultTool: EditorTool
+  tools: { id: EditorTool; label: string }[]
+}[] = [
+  { id: 'upload', label: 'Upload', icon: Upload, defaultTool: 'upload', tools: [{ id: 'upload', label: 'Images' }] },
+  { id: 'transform', label: 'Transform', icon: MousePointer2, defaultTool: 'select', tools: [{ id: 'select', label: 'Select' }, { id: 'crop', label: 'Crop' }, { id: 'resize', label: 'Resize' }] },
+  { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal, defaultTool: 'adjust', tools: [{ id: 'adjust', label: 'Adjustments' }] },
+  { id: 'effects', label: 'Effects', icon: WandSparkles, defaultTool: 'filters', tools: [{ id: 'filters', label: 'Filters' }, { id: 'background', label: 'Background' }] },
+  { id: 'elements', label: 'Elements', icon: Shapes, defaultTool: 'text', tools: [{ id: 'text', label: 'Text' }, { id: 'shapes', label: 'Shapes' }, { id: 'stickers', label: 'Stickers' }] },
+  { id: 'retouch', label: 'Retouch', icon: Pencil, defaultTool: 'draw-remove', tools: [{ id: 'draw-remove', label: 'Retouch' }] },
+  { id: 'layers', label: 'Layers', icon: Layers3, defaultTool: 'layers', tools: [{ id: 'layers', label: 'Layers' }] },
 ]
 
 export const cropRatios: Record<string, number | null> = {

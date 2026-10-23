@@ -1,5 +1,5 @@
-import { X } from 'lucide-react'
 import { useEditor } from '../EditorContext'
+import { editorToolCategories } from '../model/constants'
 import { AdjustmentsPanel } from './panels/AdjustmentsPanel'
 import { UploadPanel } from './panels/UploadPanel'
 import { CropPanel } from './panels/CropPanel'
@@ -10,28 +10,34 @@ import { FiltersPanel } from './panels/FiltersPanel'
 import { BackgroundPanel } from './panels/BackgroundPanel'
 import { DrawingPanel } from './panels/DrawingPanel'
 import { StickersPanel } from './panels/StickersPanel'
-
-const panelTitles = {
-  upload: 'Upload',
-  select: 'Select',
-  crop: 'Crop',
-  resize: 'Resize',
-  adjust: 'Adjustments',
-  text: 'Text',
-  shapes: 'Shapes',
-  filters: 'Filters',
-  background: 'Background',
-  'draw-remove': 'Draw & Remove',
-  stickers: 'Animated Stickers',
-}
+import { LayersPanel } from './panels/LayersPanel'
 
 export function ToolPanel() {
   const { tools } = useEditor()
-  if (tools.active === 'select' || tools.active === 'music') return null
+  if (tools.active === 'music') return null
+  const activeCategory = editorToolCategories.find((category) => category.tools.some(({ id }) => id === tools.active)) ?? editorToolCategories[0]
 
   return (
     <aside className="tool-panel">
-      <div className="panel-heading"><div><h3 className="panel-kicker">{panelTitles[tools.active]}</h3></div><button className="panel-close" onClick={() => tools.setActive('select')} aria-label="Close tool panel"><X size={17} /></button></div>
+      <div className="panel-heading"><div><h3 className="panel-kicker">{activeCategory.label}</h3></div></div>
+      {activeCategory.tools.length > 1 && (
+        <nav className="panel-subtools" aria-label={`${activeCategory.label} tools`}>
+          {activeCategory.tools.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              className={`panel-subtool ${tools.active === id ? 'active' : ''}`}
+              aria-pressed={tools.active === id}
+              onClick={() => {
+                tools.setActive(id)
+                if (id === 'crop') tools.beginCrop()
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
       {tools.active === 'upload' && <UploadPanel />}
       {tools.active === 'crop' && <CropPanel />}
       {tools.active === 'resize' && <ResizePanel />}
@@ -42,6 +48,7 @@ export function ToolPanel() {
       {tools.active === 'background' && <BackgroundPanel />}
       {tools.active === 'draw-remove' && <DrawingPanel />}
       {tools.active === 'stickers' && <StickersPanel />}
+      {tools.active === 'layers' && <LayersPanel />}
     </aside>
   )
 }

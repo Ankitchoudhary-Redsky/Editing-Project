@@ -8,7 +8,7 @@ const toolDescriptions: Record<
 > = {
   pencil: 'Draw freehand strokes on your image.',
   eraser: 'Erase pencil strokes from your design.',
-  'magic-remover': 'Brush over image areas to make them transparent.',
+  'magic-remover': 'Brush over image areas to remove them.',
   lasso: 'Draw around an image area to select it.',
 }
 
@@ -16,9 +16,9 @@ export function DrawingPanel() {
   const { canvas, drawing } = useEditor()
   const isDisabled = !canvas.hasImage
   const modes = [
-    { id: 'pencil', label: 'Pencil', icon: Pencil },
+    { id: 'pencil', label: 'Draw', icon: Pencil },
     { id: 'eraser', label: 'Eraser', icon: Eraser },
-    { id: 'magic-remover', label: 'Magic Remover', icon: WandSparkles },
+    { id: 'magic-remover', label: 'Object removal', icon: WandSparkles },
     { id: 'lasso', label: 'Freehand Select', icon: Lasso },
   ] as const
 
