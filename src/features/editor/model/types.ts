@@ -98,7 +98,7 @@ export interface EditorContextValue {
     flipVertical: () => void
     setRotation: (rotation: number) => void
     apply: () => void
-    cancel: () => void
+    reset: () => Promise<void>
   }
   resize: {
     width: number
@@ -197,6 +197,7 @@ export interface EditorContextValue {
     remove: () => Promise<void>
     uploadBackground: (file?: File) => Promise<void>
     clearBackground: () => void
+    reset: () => Promise<void>
   }
   drawing: {
     activeMode: DrawingMode

@@ -1,4 +1,4 @@
-import { Check, FlipHorizontal2, FlipVertical2 } from 'lucide-react'
+import { Check, FlipHorizontal2, FlipVertical2, RotateCcw } from 'lucide-react'
 import { useEditor } from '../../EditorContext'
 import { cropRatios } from '../../model/constants'
 
@@ -16,7 +16,7 @@ export function CropPanel() {
         </div>
       </div>
       <label className="range-field"><span>Rotate <b>{crop.rotation}°</b></span><input type="range" min="-180" max="180" step="1" value={crop.rotation} disabled={!canvas.hasImage} onChange={(event) => crop.setRotation(Number(event.target.value))} /></label>
-      <div className="button-row crop-actions"><button className="secondary-button" onClick={crop.cancel}>Cancel</button><button className="primary-button" onClick={crop.apply} disabled={!crop.active}><Check size={15} /> Apply crop</button></div>
+      <div className="button-row crop-actions"><button className="secondary-button" onClick={() => void crop.reset()} disabled={!canvas.hasImage}><RotateCcw size={15} /> Reset</button><button className="primary-button" onClick={crop.apply} disabled={!canvas.hasImage}><Check size={15} /> Apply crop</button></div>
     </div>
   )
 }

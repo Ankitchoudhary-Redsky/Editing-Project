@@ -11,7 +11,14 @@ export type NewShapeOptions = {
   name: string
 }
 
-export type ShapeBounds = { left: number; top: number; width: number; height: number }
+export type ShapeBounds = {
+  left: number
+  top: number
+  width: number
+  height: number
+  directionX?: -1 | 1
+  directionY?: -1 | 1
+}
 
 export function buildShapeObject(options: NewShapeOptions, bounds: ShapeBounds): FabricObject {
   const { left, top, width, height } = bounds
@@ -41,14 +48,45 @@ export function buildShapeObject(options: NewShapeOptions, bounds: ShapeBounds):
     })
     shape = new Polygon(points, common)
   } else if (options.kind === 'arrow') {
-    shape = new Path(`M 0 0 L ${width} ${height} M ${width * 0.72} ${height - height * 0.28} L ${width} ${height} L ${width - width * 0.28} ${height * 0.72}`, {
+    const startX = bounds.directionX === -1 ? width : 0
+    const startY = bounds.directionY === -1 ? height : 0
+    const endX = width - startX
+    const endY = height - startY
+    const deltaX = endX - startX
+    const deltaY = endY - startY
+    const angle = Math.atan2(deltaY, deltaX)
+    const length = Math.hypot(deltaX, deltaY)
+    const headLength = Math.min(length * 0.4, Math.max(10, options.strokeWidth * 4))
+    const wingOne = {
+      x: endX + Math.cos(angle + Math.PI - Math.PI / 6) * headLength,
+      y: endY + Math.sin(angle + Math.PI - Math.PI / 6) * headLength,
+    }
+    const wingTwo = {
+      x: endX + Math.cos(angle - Math.PI + Math.PI / 6) * headLength,
+      y: endY + Math.sin(angle - Math.PI + Math.PI / 6) * headLength,
+    }
+    const points = [
+      { x: startX, y: startY },
+      { x: endX, y: endY },
+      wingOne,
+      wingTwo,
+    ]
+    const minX = Math.min(...points.map((point) => point.x))
+    const minY = Math.min(...points.map((point) => point.y))
+    const path = `M ${startX - minX} ${startY - minY} L ${endX - minX} ${endY - minY} M ${wingOne.x - minX} ${wingOne.y - minY} L ${endX - minX} ${endY - minY} L ${wingTwo.x - minX} ${wingTwo.y - minY}`
+
+    shape = new Path(path, {
       ...common,
+      left: left + minX,
+      top: top + minY,
       fill: 'rgba(0,0,0,0)',
       strokeLineCap: 'round',
       strokeLineJoin: 'round',
     })
   } else if (options.kind === 'line') {
-    shape = new Line([0, 0, width, height], {
+    const startX = bounds.directionX === -1 ? width : 0
+    const startY = bounds.directionY === -1 ? height : 0
+    shape = new Line([startX, startY, width - startX, height - startY], {
       ...common,
       strokeWidth: Math.max(2, options.strokeWidth),
       strokeLineCap: 'round',
