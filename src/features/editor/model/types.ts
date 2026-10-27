@@ -1,7 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Canvas, FabricObject, IText } from 'fabric'
 
-export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers'
+export type EditorMode = 'image' | 'video'
+export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'video-upload' | 'video-trim'
 export type DrawingMode = 'pencil' | 'eraser' | 'magic-remover' | 'lasso'
 export type ShapeKind = 'rect' | 'roundRect' | 'circle' | 'ellipse' | 'line' | 'arrow' | 'triangle' | 'star' | 'pentagon'
 
@@ -39,6 +40,14 @@ export type VideoAudioDraft = {
   voiceVolume: number
 }
 
+export type VideoClipDraft = {
+  file: File | null
+  url: string
+  duration: number
+  trimStart: number
+  trimEnd: number
+}
+
 export type EditorCanvas = Canvas
 export type FilterId = 'original' | 'grayscale' | 'blackWhite' | 'sepia' | 'vintage' |'retro' | 'warm' | 'cool' | 'vivid' | 'cinematic' | 'dramatic' | 'fade' | 'pastel' | 'noir' | 'dreamy'
 export type FilterSettings = { id: FilterId; intensity: number }
@@ -46,6 +55,21 @@ export type Dimensions = { width: number; height: number }
 export type TextProperty = 'text' | 'fontFamily' | 'fontSize' | 'fill' | 'backgroundColor' | 'opacity' | 'fontWeight' | 'fontStyle' | 'textAlign' | 'stroke' | 'strokeWidth' | 'shadow'
 
 export interface EditorContextValue {
+  editorMode: {
+    active: EditorMode
+    setActive: (mode: EditorMode) => void
+  }
+
+  videoClip: VideoClipDraft & {
+    isTrimming: boolean
+    setTrimming: (isTrimming: boolean) => void
+    setFile: (file: File) => void
+    clear: () => void
+    setDuration: (duration: number) => void
+    setTrimStart: (time: number) => void
+    setTrimEnd: (time: number) => void
+  }
+
   /** Actual Fabric.js Canvas instance used for image editing. */
   fabricCanvas: EditorCanvas | null
 

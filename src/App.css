@@ -112,6 +112,38 @@
 .top-actions {
   gap: 9px;
 }
+.mode-switch {
+  display: flex;
+  flex: 1;
+  max-width: 150px;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #e0e5e1;
+  border-radius: 7px;
+  background: #f6f8f6;
+  margin-right: 120px;
+}
+.mode-switch button {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 4px;
+  color: #748078;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mode-switch button.active {
+  color: #255843;
+  background: #fff;
+  box-shadow: 0 1px 3px #263a2d1a;
+}
 .icon-button,
 .zoom-button,
 .panel-close,
@@ -742,6 +774,73 @@
 }
 .workspace.music-mode { background: #fff; }
 .workspace.music-mode > .stage, .workspace.music-mode > .workspace-footer { display: none; }
+.workspace.video-mode:not(.music-mode) .canvas-holder { display: none; }
+.video-workspace-preview {
+  display: grid;
+  width: min(900px, calc(100% - 48px));
+  max-height: calc(100% - 48px);
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #dce2de;
+  border-radius: 7px;
+  background: #18201c;
+  box-shadow: 0 12px 34px #20332922;
+}
+.video-workspace-preview video {
+  display: block;
+  width: 100%;
+  max-height: 100%;
+  background: #111;
+}
+.video-trim-loading {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  color: #f4f7f4;
+  background: rgba(24, 32, 28, 0.94);
+  text-align: center;
+}
+.video-trim-loading strong { font-size: 15px; }
+.video-trim-loading > span:last-child { max-width: 360px; color: #c2cec5; font-size: 12px; line-height: 1.5; }
+.video-trim-spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #8ac6a0;
+  border-radius: 50%;
+  animation: video-trim-spin 0.8s linear infinite;
+}
+@keyframes video-trim-spin { to { transform: rotate(360deg); } }
+.video-empty-state {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  color: #d9e4dc;
+}
+.video-empty-state .primary-button { display: inline-flex; align-items: center; gap: 7px; }
+.video-uploaded-item { min-width: 0; }
+.video-uploaded-item > div { min-width: 0; }
+.video-uploaded-item strong { display: block; max-width: 155px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.video-file-icon { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 5px; color: #386a52; background: #e9f2ec; }
+.video-upload-drop .browse-button { display: inline-flex; align-items: center; gap: 6px; }
+.video-trim-content { overflow-y: auto; }
+.video-trim-heading { display: flex; align-items: center; gap: 8px; color: #405348; font-weight: 700; }
+.video-trim-fields { display: flex; flex-direction: column; gap: 13px; }
+.video-trim-fields label { display: grid; grid-template-columns: 1fr auto; gap: 7px; color: #637168; font-size: 11px; }
+.video-trim-fields label span { color: #314b3c; font-weight: 700; font-variant-numeric: tabular-nums; }
+.video-trim-fields input { grid-column: 1 / -1; width: 100%; accent-color: #32745d; }
+.video-trim-summary { display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line); color: #78837c; font-size: 11px; }
+.video-trim-summary strong { color: #314b3c; font-variant-numeric: tabular-nums; }
+.video-export-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; }
 .workspace-toolbar {
   z-index: 1;
   display: flex;
@@ -1137,6 +1236,8 @@
   .brand-mark { width: 23px; height: 23px; }
   .project-title { display: none; }
   .top-actions { gap: 3px; }
+  .mode-switch { gap: 0; padding: 2px; }
+  .mode-switch button { min-height: 27px; gap: 3px; padding: 0 6px; font-size: 10px; }
   .icon-button { width: 30px; height: 30px; }
   .preview-button { width: 33px; padding: 0; overflow: hidden; font-size: 0;}
   .preview-button svg { flex: 0 0 auto; }
@@ -1155,6 +1256,7 @@
   .workspace-footer { flex-basis: 26px; padding: 0 9px; }
   .workspace-footer > span:last-child { display: none; }
   .stage { background-size: 15px 15px; }
+  .video-workspace-preview { width: calc(100% - 24px); max-height: calc(100% - 24px); }
   .empty-prompt h1 { font-size: 19px; }
   .topbar {
     flex-basis: 58px;

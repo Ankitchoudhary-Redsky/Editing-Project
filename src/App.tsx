@@ -29,8 +29,8 @@ import { applyCanvasCrop, createCropFrame, updateCropRatio } from './features/ed
 import { loadLocalImage } from './features/editor/operations/loadLocalImage'
 import type { DrawingMode,
   EditorContextValue,
-  EditorTool, ShapeKind, TextProperty, FilterId,
-  VideoAudioDraft, VideoPreviewData,
+  EditorMode, EditorTool, ShapeKind, TextProperty, FilterId,
+  VideoAudioDraft, VideoClipDraft, VideoPreviewData,
 } from './features/editor/model/types'
 import { hasTransparentPixels, removeImageBackground } from './features/editor/operations/removeImageBackground'
 import { editImagePixels, type EditPoint } from './features/editor/operations/editImagePixels'
@@ -113,6 +113,15 @@ function App() {
   )
 
   const [activeTool, setActiveTool] = useState<EditorTool>('upload')
+  const [activeEditorMode, setActiveEditorMode] = useState<EditorMode>('image')
+  const [videoClip, setVideoClip] = useState<VideoClipDraft>({
+    file: null,
+    url: '',
+    duration: 0,
+    trimStart: 0,
+    trimEnd: 0,
+  })
+  const [isTrimmingVideo, setIsTrimmingVideo] = useState(false)
   const [projectName, setProjectName] = useState('Untitled design')
   const [isRenaming, setIsRenaming] = useState(false)
   const [hasDocument, setHasDocument] = useState(false)
@@ -843,6 +852,42 @@ function App() {
     setActiveTool(tool)
   }, [activeTool, cancelCrop])
 
+  const changeEditorMode = useCallback((mode: EditorMode) => {
+    setActiveEditorMode(mode)
+    setActiveEditorTool(mode === 'image' ? 'upload' : 'video-upload')
+  }, [setActiveEditorTool])
+
+  const uploadVideoFile = useCallback((file: File) => {
+    if (!file.type.startsWith('video/')) {
+      setNotice('Choose a video file to continue.')
+      return
+    }
+
+    if (file.size > 500 * 1024 * 1024) {
+      setNotice('Videos must be smaller than 500 MB.')
+      return
+    }
+
+    setNotice('')
+    setVideoClip({
+      file,
+      url: URL.createObjectURL(file),
+      duration: 0,
+      trimStart: 0,
+      trimEnd: 0,
+    })
+  }, [])
+
+  const clearVideoFile = useCallback(() => {
+    setVideoClip({ file: null, url: '', duration: 0, trimStart: 0, trimEnd: 0 })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (videoClip.url) URL.revokeObjectURL(videoClip.url)
+    }
+  }, [videoClip.url])
+
   const applyAdjustments = (
     nextBrightness = brightness,
     nextContrast = contrast,
@@ -1199,7 +1244,9 @@ const clearBackground = () => {
     event.stopPropagation()
 
     setDraggingFile(false)
-    void uploadFile(event.dataTransfer.files[0])
+    const file = event.dataTransfer.files[0]
+    if (activeEditorMode === 'video') uploadVideoFile(file)
+    else void uploadFile(file)
   }
 
   const openFilePicker = () => {
@@ -1577,6 +1624,29 @@ const deleteSelection = async () => {
 
   const contextValue: EditorContextValue = {
     fabricCanvas,
+
+    editorMode: {
+      active: activeEditorMode,
+      setActive: changeEditorMode,
+    },
+
+    videoClip: {
+      ...videoClip,
+      isTrimming: isTrimmingVideo,
+      setTrimming: setIsTrimmingVideo,
+      setFile: uploadVideoFile,
+      clear: clearVideoFile,
+      setDuration: (duration) => {
+        if (!Number.isFinite(duration) || duration <= 0) return
+        setVideoClip((current) => ({
+          ...current,
+          duration,
+          trimEnd: current.trimEnd <= 0 || current.trimEnd > duration ? duration : current.trimEnd,
+        }))
+      },
+      setTrimStart: (trimStart) => setVideoClip((current) => ({ ...current, trimStart })),
+      setTrimEnd: (trimEnd) => setVideoClip((current) => ({ ...current, trimEnd })),
+    },
 
     canvas: {
       dimensions,

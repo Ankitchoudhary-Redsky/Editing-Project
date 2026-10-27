@@ -10,6 +10,8 @@ import {
   WandSparkles,
   Pencil,
   Sticker,
+  Video,
+  Scissors,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
 import type { EditorTool, ShapeKind } from './types'
@@ -29,6 +31,11 @@ export const editorTools: { id: EditorTool; label: string; icon: typeof Upload }
   { id: 'background', label: 'Background', icon: Eraser },
   { id: 'draw-remove', label: 'Draw & Remove', icon: Pencil },
   { id: 'stickers', label: 'Stickers', icon: Sticker },
+]
+
+export const videoTools: { id: EditorTool; label: string; icon: typeof Upload }[] = [
+  { id: 'video-upload', label: 'Upload video', icon: Video },
+  { id: 'video-trim', label: 'Trim video', icon: Scissors },
 ]
 
 export const cropRatios: Record<string, number | null> = {

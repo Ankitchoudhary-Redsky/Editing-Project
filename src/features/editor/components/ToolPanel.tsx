@@ -10,6 +10,8 @@ import { FiltersPanel } from './panels/FiltersPanel'
 import { BackgroundPanel } from './panels/BackgroundPanel'
 import { DrawingPanel } from './panels/DrawingPanel'
 import { StickersPanel } from './panels/StickersPanel'
+import { VideoUploadPanel } from './panels/VideoUploadPanel'
+import { VideoTrimPanel } from './panels/VideoTrimPanel'
 
 const panelTitles = {
   upload: 'Upload',
@@ -23,15 +25,17 @@ const panelTitles = {
   background: 'Background',
   'draw-remove': 'Draw & Remove',
   stickers: 'Animated Stickers',
+  'video-upload': 'Upload video',
+  'video-trim': 'Trim video',
 }
 
 export function ToolPanel() {
-  const { tools } = useEditor()
+  const { tools, editorMode } = useEditor()
   if (tools.active === 'select' || tools.active === 'music') return null
 
   return (
     <aside className="tool-panel">
-      <div className="panel-heading"><div><h3 className="panel-kicker">{panelTitles[tools.active]}</h3></div><button className="panel-close" onClick={() => tools.setActive('select')} aria-label="Close tool panel"><X size={17} /></button></div>
+      <div className="panel-heading"><div><h3 className="panel-kicker">{panelTitles[tools.active]}</h3></div><button className="panel-close" onClick={() => tools.setActive(editorMode.active === 'image' ? 'select' : 'video-upload')} aria-label="Close tool panel"><X size={17} /></button></div>
       {tools.active === 'upload' && <UploadPanel />}
       {tools.active === 'crop' && <CropPanel />}
       {tools.active === 'resize' && <ResizePanel />}
@@ -42,6 +46,8 @@ export function ToolPanel() {
       {tools.active === 'background' && <BackgroundPanel />}
       {tools.active === 'draw-remove' && <DrawingPanel />}
       {tools.active === 'stickers' && <StickersPanel />}
+      {tools.active === 'video-upload' && <VideoUploadPanel />}
+      {tools.active === 'video-trim' && <VideoTrimPanel />}
     </aside>
   )
 }

@@ -1,12 +1,13 @@
 import { useEditor } from '../EditorContext'
-import { editorTools } from '../model/constants'
+import { editorTools, videoTools } from '../model/constants'
 
 export function ToolRail() {
-  const { tools } = useEditor()
+  const { tools, editorMode } = useEditor()
+  const visibleTools = editorMode.active === 'image' ? editorTools : videoTools
 
   return (
     <nav className="tool-rail" aria-label="Editor tools">
-      {editorTools.map(({ id, label, icon: Icon }) => (
+      {visibleTools.map(({ id, label, icon: Icon }) => (
         <button
           key={id}
           className={`rail-tool ${tools.active === id ? 'active' : ''}`}
