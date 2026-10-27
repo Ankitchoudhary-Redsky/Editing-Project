@@ -3,9 +3,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Canvas,
   FabricImage,
+  Point,
   IText,
   Rect,
+  Textbox,
   PencilBrush,
+  util,
   Shadow,
   type FabricObject,
   type TPointerEvent,
@@ -42,7 +45,7 @@ import './App.css'
 import { buildShapeObject, createShapeObject } from './features/editor/operations/shapeObjects'
 import { createTextObject } from './features/editor/operations/textObjects'
 import { objectName } from './features/editor/model/objectName'
-import { loadProjectDraft, saveProjectDraft } from './features/editor/operations/projectStorage'
+import { deleteProjectDraft, loadProjectDraft, saveProjectDraft } from './features/editor/operations/projectStorage'
 import { drawProjectWatermark } from './features/editor/operations/projectWatermark'
 
 type EditorSnapshot = {
@@ -55,6 +58,194 @@ type EditorSnapshot = {
     backgroundRemoved?: boolean
     backgroundColor?: string
   }
+}
+
+type CanvasTable = {
+  id: number
+  left: number
+  top: number
+  cellWidth: number
+  cellHeight: number
+  columnWidths: number[]
+  rowHeights: number[]
+  rows: number
+  columns: number
+}
+
+type TableGesture = {
+  mode: 'move' | 'resize-row' | 'resize-column'
+  startX: number
+  startY: number
+  left: number
+  top: number
+  resizeIndex: number
+  columnWidths: number[]
+  rowHeights: number[]
+  moved: boolean
+}
+
+function getImageBounds(canvas: Canvas, image: FabricImage | null) {
+  const bounds = image?.getBoundingRect() ?? {
+    left: 0,
+    top: 0,
+    width: canvas.getWidth(),
+    height: canvas.getHeight(),
+  }
+  const left = Math.max(0, bounds.left)
+  const top = Math.max(0, bounds.top)
+  const right = Math.min(canvas.getWidth(), bounds.left + bounds.width)
+  const bottom = Math.min(canvas.getHeight(), bounds.top + bounds.height)
+  return {
+    left,
+    top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  }
+}
+
+function isShapeObject(object: FabricObject) {
+  const name = String(object.get('name') ?? '')
+  return Object.values(shapeNames).some(
+    (shapeName) => name === shapeName || name.startsWith(`${shapeName} copy`),
+  )
+}
+
+function constrainShapeToImage(
+  canvas: Canvas,
+  image: FabricImage | null,
+  object: FabricObject,
+) {
+  const bounds = getImageBounds(canvas, image)
+  if (!bounds.width || !bounds.height) return
+
+  object.setCoords()
+  let objectBounds = object.getBoundingRect()
+  const scale = Math.min(
+    1,
+    bounds.width / Math.max(1, objectBounds.width),
+    bounds.height / Math.max(1, objectBounds.height),
+  )
+
+  if (scale < 1) {
+    object.set({
+      scaleX: (object.scaleX ?? 1) * scale,
+      scaleY: (object.scaleY ?? 1) * scale,
+    })
+    object.setCoords()
+    objectBounds = object.getBoundingRect()
+  }
+
+  const right = bounds.left + bounds.width
+  const bottom = bounds.top + bounds.height
+  const offsetX = objectBounds.left < bounds.left
+    ? bounds.left - objectBounds.left
+    : objectBounds.left + objectBounds.width > right
+      ? right - objectBounds.left - objectBounds.width
+      : 0
+  const offsetY = objectBounds.top < bounds.top
+    ? bounds.top - objectBounds.top
+    : objectBounds.top + objectBounds.height > bottom
+      ? bottom - objectBounds.top - objectBounds.height
+      : 0
+
+  object.set({
+    left: (object.left ?? 0) + offsetX,
+    top: (object.top ?? 0) + offsetY,
+  })
+  object.setCoords()
+}
+
+function tableCellName(tableId: number, row: number, column: number) {
+  return `__pixel_studio_table_cell__${tableId}__${row}__${column}`
+}
+
+function tableTextName(tableId: number, row: number, column: number) {
+  return `__pixel_studio_table_text__${tableId}__${row}__${column}`
+}
+
+function tableColumnOffset(table: CanvasTable, column: number) {
+  return table.columnWidths.slice(0, column).reduce((total, width) => total + width, 0)
+}
+
+function tableRowOffset(table: CanvasTable, row: number) {
+  return table.rowHeights.slice(0, row).reduce((total, height) => total + height, 0)
+}
+
+function tableWidth(table: CanvasTable) {
+  return table.columnWidths.reduce((total, width) => total + width, 0)
+}
+
+function tableHeight(table: CanvasTable) {
+  return table.rowHeights.reduce((total, height) => total + height, 0)
+}
+
+function fitTableTextbox(textbox: Textbox, cellWidth: number, cellHeight: number) {
+  textbox.set({ width: Math.max(8, cellWidth - 16), fontSize: 15 })
+  textbox.initDimensions()
+  textbox.setCoords()
+  return Math.max(cellHeight, textbox.height + 12)
+}
+
+function syncTableGeometry(canvas: Canvas, table: CanvasTable, bounds: ReturnType<typeof getImageBounds>) {
+  for (let row = 0; row < table.rows; row += 1) {
+    const maxRowHeight = Math.max(
+      28,
+      bounds.top + bounds.height - table.top - tableRowOffset(table, row) -
+        table.rowHeights.slice(row + 1).reduce((total, height) => total + height, 0),
+    )
+    let requiredRowHeight = Math.min(table.rowHeights[row] || table.cellHeight, maxRowHeight)
+    for (let column = 0; column < table.columns; column += 1) {
+      const text = canvas.getObjects().find(
+        (object) => object.get('name') === tableTextName(table.id, row, column),
+      )
+      if (text instanceof Textbox) {
+        requiredRowHeight = Math.max(
+          requiredRowHeight,
+          Math.min(
+            maxRowHeight,
+            fitTableTextbox(text, table.columnWidths[column], requiredRowHeight),
+          ),
+        )
+      }
+    }
+    table.rowHeights[row] = requiredRowHeight
+  }
+
+  for (let row = 0; row < table.rows; row += 1) {
+    for (let column = 0; column < table.columns; column += 1) {
+      const left = table.left + tableColumnOffset(table, column)
+      const top = table.top + tableRowOffset(table, row)
+      const cell = canvas.getObjects().find(
+        (object) => object.get('name') === tableCellName(table.id, row, column),
+      )
+      const text = canvas.getObjects().find(
+        (object) => object.get('name') === tableTextName(table.id, row, column),
+      )
+      cell?.set({ left, top, width: table.columnWidths[column], height: table.rowHeights[row] })
+      cell?.setCoords()
+      if (text instanceof Textbox) {
+        text.set({ left: left + 8, top: top + 7 })
+        fitTableTextbox(text, table.columnWidths[column], table.rowHeights[row])
+      }
+    }
+  }
+
+}
+
+function toImagePoint(image: FabricImage, point: EditPoint): EditPoint {
+  const inverse = util.invertTransform(image.calcTransformMatrix())
+  const localPoint = util.transformPoint(new Point(point.x, point.y), inverse)
+  return {
+    x: localPoint.x + image.width / 2,
+    y: localPoint.y + image.height / 2,
+  }
+}
+
+function getImageBrushScale(image: FabricImage) {
+  const inverse = util.invertTransform(image.calcTransformMatrix())
+  const scaleX = Math.hypot(inverse[0], inverse[1])
+  const scaleY = Math.hypot(inverse[2], inverse[3])
+  return (scaleX + scaleY) / 2
 }
 
 type PersistedEditorDraft = EditorSnapshot & {
@@ -107,6 +298,7 @@ function App() {
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const suppressHistoryRef = useRef(false)
   const cropObjectRef = useRef<Rect | null>(null)
+  const cropOriginalSnapshotRef = useRef<string | null>(null)
   const imageObjectRef = useRef<FabricImage | null>(null)
   const drawingLayerCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const drawingLayerImageRef = useRef<FabricImage | null>(null)
@@ -128,6 +320,14 @@ function App() {
   const magicCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const magicContextRef = useRef<CanvasRenderingContext2D | null>(null)
   const magicImageRef = useRef<FabricImage | null>(null)
+  const magicRemovalInProgressRef = useRef(false)
+  const magicDisplayCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const magicDisplayContextRef = useRef<CanvasRenderingContext2D | null>(null)
+  const magicFiltersRef = useRef<FabricImage['filters'] | null>(null)
+  const activeTableRef = useRef<CanvasTable | null>(null)
+  const tablesRef = useRef<CanvasTable[]>([])
+  const nextTableIdRef = useRef(0)
+  const tableGestureRef = useRef<TableGesture | null>(null)
   const userEditedBeforeDraftLoadRef = useRef(false)
   
   
@@ -157,7 +357,7 @@ function App() {
   )
 
   const [activeTool, setActiveTool] = useState<EditorTool>('upload')
-  const [projectName, setProjectName] = useState('Untitled design')
+  const [projectName, setProjectName] = useState('Untitled')
   const [isRenaming, setIsRenaming] = useState(false)
   const [hasDocument, setHasDocument] = useState(false)
   const [selectedObject, setSelectedObject] = useState<FabricObject | null>(null)
@@ -222,6 +422,24 @@ function App() {
   const [drawingColor, setDrawingColor] = useState('#222222')
   const [brushSize, setBrushSize] = useState(12)
   const [activeDrawingMode, setActiveDrawingMode] = useState<DrawingMode>('pencil')
+  const [tableList, setTableList] = useState<Array<{ id: number; rows: number; columns: number }>>([])
+  const [activeTableId, setActiveTableId] = useState<number | null>(null)
+  const [tableRows, setTableRows] = useState(0)
+  const [tableColumns, setTableColumns] = useState(0)
+  const [tableSelectedRow, setTableSelectedRow] = useState(0)
+  const [tableSelectedColumn, setTableSelectedColumn] = useState(0)
+  const [tableSelectedText, setTableSelectedText] = useState('')
+  const [tableBorderColor, setTableBorderColorState] = useState('#537a67')
+  const [tableEditing, setTableEditing] = useState(false)
+  const [tableResizeHover, setTableResizeHover] = useState<'row' | 'column' | null>(null)
+
+  const updateTableList = useCallback((tables: CanvasTable[]) => {
+    setTableList(tables.map(({ id, rows, columns }) => ({ id, rows, columns })))
+  }, [])
+
+  const syncTableLayout = useCallback((canvas: Canvas, table: CanvasTable) => {
+    syncTableGeometry(canvas, table, getImageBounds(canvas, imageObjectRef.current))
+  }, [])
   const [draftReady, setDraftReady] = useState(false)
 
   //export
@@ -282,6 +500,7 @@ function App() {
       }
 
       const saveSnapshot = () => {
+        historyTimerRef.current = null
         const current = serializeEditorSnapshot(canvas)
         const history = historyRef.current.slice(
           0,
@@ -375,19 +594,33 @@ function App() {
         await canvas.loadFromJSON(draft.scene)
         if (disposed) return
 
+        let mainImage = canvas.getObjects().find(
+          (item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME,
+        )
+        if (!(mainImage instanceof FabricImage)) {
+          canvas.clear()
+          canvas.setDimensions({ width: 1200, height: 800 })
+          canvas.backgroundColor = 'rgba(0,0,0,0)'
+          mainImage = undefined
+          void deleteProjectDraft().catch(() => {
+            setNotice('Saved project data could not be cleared from browser storage.')
+          })
+        }
+
         restartAnimatedStickers(canvas)
         canvas.requestRenderAll()
         fitCanvas()
-        const mainImage = canvas.getObjects().find(
-          (item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME,
-        )
         imageObjectRef.current = mainImage instanceof FabricImage ? mainImage : null
         imageSourceRef.current = imageObjectRef.current?.getSrc() ?? ''
-        setDimensions({ width: draft.width, height: draft.height })
-        setHasDocument(Boolean(draft.scene))
-        setImageThumbnail(canvas.toDataURL({ format: 'png', multiplier: 0.12 }))
+        setDimensions(imageObjectRef.current
+          ? { width: draft.width, height: draft.height }
+          : { width: 1200, height: 800 })
+        setHasDocument(Boolean(imageObjectRef.current))
+        setImageThumbnail(imageObjectRef.current
+          ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
+          : '')
         setProjectName(draft.projectName)
-        setActiveTool(draft.activeTool)
+        setActiveTool(draft.activeTool === 'select' ? 'crop' : draft.activeTool)
         setZoom(draft.zoom)
         setSelectedFilter(draft.selectedFilter)
         selectedFilterRef.current = draft.selectedFilter
@@ -465,6 +698,15 @@ function App() {
     canvas.on('object:modified', changed)
     canvas.on('object:removed', changed)
     canvas.on('text:changed', changed)
+    const constrainShape = (event: { target?: FabricObject }) => {
+      const target = event.target
+      if (target && isShapeObject(target)) {
+        constrainShapeToImage(canvas, imageObjectRef.current, target)
+      }
+    }
+    canvas.on('object:moving', constrainShape)
+    canvas.on('object:scaling', constrainShape)
+    canvas.on('object:rotating', constrainShape)
     canvas.on('path:created', (event) => {
       if (activeToolRef.current !== 'draw-remove') return
 
@@ -490,7 +732,7 @@ function App() {
 
     const resizeObserver = new ResizeObserver(fitCanvas)
 
-    fitCanvas()
+    canvas.renderAll()
 
     if (stageElementRef.current) {
       resizeObserver.observe(stageElementRef.current)
@@ -499,6 +741,9 @@ function App() {
     return () => {
       disposed = true
       resizeObserver.disconnect()
+      canvas.off('object:moving', constrainShape)
+      canvas.off('object:scaling', constrainShape)
+      canvas.off('object:rotating', constrainShape)
 
       if (historyTimerRef.current) {
         clearTimeout(historyTimerRef.current)
@@ -616,15 +861,21 @@ function App() {
     const canvas = canvasRef.current
     if (!canvas) return
     const drawing = activeTool === 'shapes'
-    canvas.selection = !drawing
-    canvas.skipTargetFind = false
+    const drawingOnCanvas = drawing || activeTool === 'draw-remove'
+    canvas.selection = !drawingOnCanvas
+    canvas.skipTargetFind = activeTool === 'draw-remove'
     canvas.defaultCursor = drawing ? 'crosshair' : 'default'
     canvas.hoverCursor = 'move'
 
     const handlePointerDown = (event: { e: TPointerEvent }) => {
       if (!drawing || !hasDocument) return
       if (canvas.findTarget(event.e)) return
-      const start = canvas.getPointer(event.e)
+      const imageBounds = getImageBounds(canvas, imageObjectRef.current)
+      const pointer = canvas.getPointer(event.e)
+      const start = {
+        x: Math.max(imageBounds.left, Math.min(imageBounds.left + imageBounds.width, pointer.x)),
+        y: Math.max(imageBounds.top, Math.min(imageBounds.top + imageBounds.height, pointer.y)),
+      }
       shapeDrawingRef.current = { start, preview: null }
       suppressHistoryRef.current = true
       const preview = buildShapeObject({ kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, { left: start.x, top: start.y, width: 1, height: 1 })
@@ -635,13 +886,26 @@ function App() {
     const handlePointerMove = (event: { e: TPointerEvent }) => {
       const drawingState = shapeDrawingRef.current
       if (!drawing || !drawingState) return
-      const point = canvas.getPointer(event.e)
+      const imageBounds = getImageBounds(canvas, imageObjectRef.current)
+      const pointer = canvas.getPointer(event.e)
+      const point = {
+        x: Math.max(imageBounds.left, Math.min(imageBounds.left + imageBounds.width, pointer.x)),
+        y: Math.max(imageBounds.top, Math.min(imageBounds.top + imageBounds.height, pointer.y)),
+      }
       const left = Math.min(drawingState.start.x, point.x)
       const top = Math.min(drawingState.start.y, point.y)
       const width = Math.max(1, Math.abs(point.x - drawingState.start.x))
       const height = Math.max(1, Math.abs(point.y - drawingState.start.y))
       if (drawingState.preview) canvas.remove(drawingState.preview)
-      const preview = buildShapeObject({ kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, { left, top, width, height })
+      const preview = buildShapeObject({ kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, {
+        left,
+        top,
+        width,
+        height,
+        directionX: point.x < drawingState.start.x ? -1 : 1,
+        directionY: point.y < drawingState.start.y ? -1 : 1,
+      })
+      constrainShapeToImage(canvas, imageObjectRef.current, preview)
       drawingState.preview = preview
       canvas.add(preview)
       canvas.requestRenderAll()
@@ -722,6 +986,91 @@ function App() {
     return scene
   }
 
+  const restoreTableState = useCallback((canvas: Canvas) => {
+    const cells = canvas.getObjects().flatMap((object) => {
+      const name = object.get('name')
+      const match = typeof name === 'string'
+        ? /^__pixel_studio_table_cell__(\d+)__(\d+)__(\d+)$/.exec(name)
+        : null
+      return match
+        ? [{ object, id: Number(match[1]), row: Number(match[2]), column: Number(match[3]) }]
+        : []
+    })
+
+    if (cells.length === 0) {
+      activeTableRef.current = null
+      tablesRef.current = []
+      setTableList([])
+      setActiveTableId(null)
+      setTableRows(0)
+      setTableColumns(0)
+      setTableSelectedRow(0)
+      setTableSelectedColumn(0)
+      setTableSelectedText('')
+      setTableEditing(false)
+      return
+    }
+
+    const previousActiveId = activeTableRef.current?.id
+    const tableWasMissing = activeTableRef.current === null
+    const tableIds = [...new Set(cells.map((cell) => cell.id))].sort((left, right) => left - right)
+    const restoredTables = tableIds.flatMap((id) => {
+      const tableCells = cells.filter((cell) => cell.id === id)
+      const rows = Math.max(...tableCells.map((cell) => cell.row)) + 1
+      const columns = Math.max(...tableCells.map((cell) => cell.column)) + 1
+      const findCell = (row: number, column: number) =>
+        tableCells.find((cell) => cell.row === row && cell.column === column)?.object
+      const firstCell = findCell(0, 0)
+      if (!firstCell) return []
+
+      const cellWidth = firstCell.width || 1
+      const cellHeight = firstCell.height || 1
+      return [{
+        id,
+        left: firstCell.left ?? 0,
+        top: firstCell.top ?? 0,
+        cellWidth,
+        cellHeight,
+        columnWidths: Array.from({ length: columns }, (_, column) =>
+          findCell(0, column)?.width || cellWidth,
+        ),
+        rowHeights: Array.from({ length: rows }, (_, row) =>
+          findCell(row, 0)?.height || cellHeight,
+        ),
+        rows,
+        columns,
+      }]
+    })
+    tablesRef.current = restoredTables
+    updateTableList(restoredTables)
+    nextTableIdRef.current = Math.max(nextTableIdRef.current, ...tableIds)
+    const table = restoredTables.find((candidate) => candidate.id === previousActiveId)
+      ?? restoredTables.at(-1)
+    activeTableRef.current = table ?? null
+    setActiveTableId(table?.id ?? null)
+    if (tableWasMissing) setTableEditing(Boolean(table))
+    if (!table) return
+
+    setTableRows(table.rows)
+    setTableColumns(table.columns)
+
+    const selectedRow = Math.min(tableSelectedRow, table.rows - 1)
+    const selectedColumn = Math.min(tableSelectedColumn, table.columns - 1)
+    setTableSelectedRow(selectedRow)
+    setTableSelectedColumn(selectedColumn)
+    const text = canvas.getObjects().find(
+      (object) => object.get('name') === tableTextName(table.id, selectedRow, selectedColumn),
+    )
+    setTableSelectedText(text instanceof Textbox ? text.text : '')
+
+    const firstCell = canvas.getObjects().find(
+      (object) => object.get('name') === tableCellName(table.id, 0, 0),
+    )
+    if (typeof firstCell?.stroke === 'string') {
+      setTableBorderColorState(firstCell.stroke)
+    }
+  }, [tableSelectedColumn, tableSelectedRow, updateTableList])
+
   const deleteImage = () => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -729,17 +1078,45 @@ function App() {
     const image = imageObjectRef.current
     if (!image) return
 
-    canvas.remove(image)
-    canvas.discardActiveObject()
+    suppressHistoryRef.current = true
+    canvas.clear()
+    canvas.setDimensions({ width: 1200, height: 800 })
+    canvas.backgroundColor = 'rgba(0,0,0,0)'
     canvas.requestRenderAll()
 
+    cropObjectRef.current = null
+    cropOriginalSnapshotRef.current = null
     imageObjectRef.current = null
     setHasImage(false)
+    setHasDocument(false)
+    setImageThumbnail('')
+    setCropActive(false)
+    setDimensions({ width: 1200, height: 800 })
+    setResizeWidth(1200)
+    setResizeHeight(800)
+    backgroundRemovedRef.current = false
+    backgroundColorRef.current = '#ffffff'
+    setBackgroundRemoved(false)
+    setBackgroundColorState('#ffffff')
+    setIsRemovingBackground(false)
+    setBackgroundProgress('')
+    drawingLayerCanvasRef.current = null
+    drawingLayerImageRef.current = null
+    lassoPreviewObjectsRef.current = []
+    restoreTableState(canvas)
+    setTableResizeHover(null)
 
+    suppressHistoryRef.current = false
+    syncObjects()
     recordHistory(true)
+    resizeDisplay()
+    void deleteProjectDraft().catch(() => {
+      setNotice('Deleted project data could not be cleared from browser storage.')
+    })
   }
 
   const undo = useCallback(async () => {
+    if (historyTimerRef.current) recordHistory(true)
     if (historyIndexRef.current <= 0) return
 
     historyIndexRef.current -= 1
@@ -760,6 +1137,7 @@ function App() {
       })
 
       await canvas.loadFromJSON(restoreScene(snapshot))
+      restoreTableState(canvas)
       restartAnimatedStickers(canvas)
       canvas.requestRenderAll()
 
@@ -782,14 +1160,19 @@ function App() {
 
       resizeDisplay()
       syncObjects()
+      setImageThumbnail(imageObjectRef.current
+        ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
+        : '')
+      setHasDocument(Boolean(imageObjectRef.current))
       syncHistoryControls()
       setHistoryVersion((value) => value + 1)
     } finally {
       suppressHistoryRef.current = false
     }
-  }, [resizeDisplay, syncHistoryControls, syncObjects])
+  }, [recordHistory, resizeDisplay, restoreTableState, syncHistoryControls, syncObjects])
 
   const redo = useCallback(async () => {
+    if (historyTimerRef.current) recordHistory(true)
     if (historyIndexRef.current >= historyRef.current.length - 1) return
 
     historyIndexRef.current += 1
@@ -810,6 +1193,7 @@ function App() {
       })
 
       await canvas.loadFromJSON(restoreScene(snapshot))
+      restoreTableState(canvas)
       restartAnimatedStickers(canvas)
       canvas.requestRenderAll()
 
@@ -832,12 +1216,16 @@ function App() {
 
       resizeDisplay()
       syncObjects()
+      setImageThumbnail(imageObjectRef.current
+        ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
+        : '')
+      setHasDocument(Boolean(imageObjectRef.current))
       syncHistoryControls()
       setHistoryVersion((value) => value + 1)
     } finally {
       suppressHistoryRef.current = false
     }
-  }, [resizeDisplay, syncHistoryControls, syncObjects])
+  }, [recordHistory, resizeDisplay, restoreTableState, syncHistoryControls, syncObjects])
 
   const uploadFile = async (file?: File) => {
     if (!file) return
@@ -876,8 +1264,19 @@ function App() {
       suppressHistoryRef.current = true
 
       canvas.clear()
+      cropOriginalSnapshotRef.current = null
       cropObjectRef.current = null
       imageObjectRef.current = image
+      activeTableRef.current = null
+      tablesRef.current = []
+      setTableList([])
+      setActiveTableId(null)
+      setTableRows(0)
+      setTableColumns(0)
+      setTableSelectedRow(0)
+      setTableSelectedColumn(0)
+      setTableSelectedText('')
+      setTableEditing(false)
       drawingLayerCanvasRef.current = null
       drawingLayerImageRef.current = null
       lassoPreviewObjectsRef.current = []
@@ -941,9 +1340,10 @@ function App() {
   }
 
 
-  const beginCrop = () => {
+  const beginCrop = useCallback(() => {
     const canvas = canvasRef.current
-    if (!canvas || !hasDocument || cropObjectRef.current) return
+    if (!canvas || !hasImage || cropObjectRef.current) return
+    cropOriginalSnapshotRef.current ??= serializeEditorSnapshot(canvas)
     const cropFrame = createCropFrame(canvas)
     cropTransformChangedRef.current = false
     cropObjectRef.current = cropFrame
@@ -954,7 +1354,13 @@ function App() {
     canvas.setActiveObject(cropFrame)
     canvas.requestRenderAll()
     setActiveTool('crop')
-  }
+  }, [hasImage, serializeEditorSnapshot])
+
+  useEffect(() => {
+    if (activeTool === 'crop' && hasImage && !cropObjectRef.current) {
+      beginCrop()
+    }
+  }, [activeTool, beginCrop, hasImage])
 
   const changeCropRatio = (ratioName: string) => {
     setCropRatio(ratioName)
@@ -992,7 +1398,11 @@ function App() {
   const applyCrop = () => {
     const canvas = canvasRef.current
     const cropFrame = cropObjectRef.current
-    if (!canvas || !cropFrame) return
+    if (!canvas) return
+    if (!cropFrame) {
+      beginCrop()
+      return
+    }
     suppressHistoryRef.current = true
     const cropDimensions = applyCanvasCrop(canvas, cropFrame, imageObjectRef.current)
     if (!cropDimensions) {
@@ -1002,7 +1412,7 @@ function App() {
     cropObjectRef.current = null
     setCropActive(false)
     setDimensions(cropDimensions)
-    setActiveTool('select')
+    setActiveTool('crop')
     suppressHistoryRef.current = false
     cropTransformChangedRef.current = false
     recordHistory(true)
@@ -1010,10 +1420,11 @@ function App() {
     resizeDisplay()
   }
 
-  const cancelCrop = useCallback((nextTool: EditorTool = 'select') => {
+  const cancelCrop = useCallback((nextTool: EditorTool = 'crop') => {
     const canvas = canvasRef.current
     const cropFrame = cropObjectRef.current
     if (!canvas || !cropFrame) {
+      cropOriginalSnapshotRef.current = null
       setActiveTool(nextTool)
       return
     }
@@ -1027,7 +1438,59 @@ function App() {
     setActiveTool(nextTool)
     if (cropTransformChangedRef.current) recordHistory(true)
     cropTransformChangedRef.current = false
+    cropOriginalSnapshotRef.current = null
   }, [recordHistory])
+
+  const resetCrop = async () => {
+    const canvas = canvasRef.current
+    const originalSnapshot = cropOriginalSnapshotRef.current
+
+    if (!canvas || !originalSnapshot) {
+      cancelCrop()
+      return
+    }
+
+    const snapshot = JSON.parse(originalSnapshot) as EditorSnapshot
+    suppressHistoryRef.current = true
+
+    try {
+      canvas.setDimensions({ width: snapshot.width, height: snapshot.height })
+      await canvas.loadFromJSON(restoreScene(snapshot))
+      restoreTableState(canvas)
+      restartAnimatedStickers(canvas)
+      canvas.requestRenderAll()
+
+      cropObjectRef.current = null
+      cropTransformChangedRef.current = false
+      setCropActive(false)
+      setCropRatio('Free')
+      setActiveTool('crop')
+      setDimensions({ width: snapshot.width, height: snapshot.height })
+
+      const restoredBackgroundRemoved = snapshot.editor?.backgroundRemoved ?? false
+      const restoredBackgroundColor = snapshot.editor?.backgroundColor ?? '#ffffff'
+      backgroundRemovedRef.current = restoredBackgroundRemoved
+      backgroundColorRef.current = restoredBackgroundColor
+      setBackgroundRemoved(restoredBackgroundRemoved)
+      setBackgroundColorState(restoredBackgroundColor)
+
+      const restoredFilter = snapshot.editor?.filterId ?? 'original'
+      const restoredIntensity = snapshot.editor?.filterIntensity ?? 100
+      selectedFilterRef.current = restoredFilter
+      filterIntensityRef.current = restoredIntensity
+      setSelectedFilter(restoredFilter)
+      setFilterIntensity(restoredIntensity)
+
+      resizeDisplay()
+      syncObjects()
+      setHasDocument(Boolean(imageObjectRef.current))
+      cropOriginalSnapshotRef.current = null
+    } finally {
+      suppressHistoryRef.current = false
+    }
+
+    recordHistory(true)
+  }
 
   const applyResize = () => {
     const canvas = canvasRef.current
@@ -1282,6 +1745,34 @@ const clearBackground = () => {
   setNotice('Background is now transparent.')
 }
 
+const resetBackground = async () => {
+  const canvas = canvasRef.current
+  const image = imageObjectRef.current
+  const source = imageSourceRef.current
+
+  if (!canvas || !image || !source || !backgroundRemovedRef.current) return
+
+  await image.setSrc(source)
+  image.applyFilters()
+
+  canvas
+    .getObjects()
+    .filter((item) => item.get('name') === BACKGROUND_IMAGE_NAME)
+    .forEach((item) => canvas.remove(item))
+
+  canvas.backgroundColor = 'rgba(0,0,0,0)'
+  backgroundRemovedRef.current = false
+  backgroundColorRef.current = '#ffffff'
+  setBackgroundRemoved(false)
+  setBackgroundColorState('#ffffff')
+  canvas.setActiveObject(image)
+  canvas.requestRenderAll()
+
+  recordHistory(true)
+  syncObjects()
+  setNotice('Original image restored.')
+}
+
   const changeFilter = (id: FilterId) => {
     selectedFilterRef.current = id
     setSelectedFilter(id)
@@ -1382,6 +1873,41 @@ const clearBackground = () => {
         return
       }
 
+      if (activeToolRef.current === 'draw-remove' && tableEditing && activeTableRef.current) {
+        let nextText: string | null = null
+        if (event.key === 'Backspace') {
+          nextText = tableSelectedText.slice(0, -1)
+        } else if (event.key === 'Delete') {
+          nextText = ''
+        } else if (event.key === 'Enter') {
+          nextText = `${tableSelectedText}\n`
+        } else if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
+          nextText = `${tableSelectedText}${event.key}`
+        }
+
+        if (nextText !== null) {
+          event.preventDefault()
+          setTableSelectedText(nextText)
+          const table = activeTableRef.current
+          const canvas = canvasRef.current
+          const textbox = canvas?.getObjects().find(
+            (object) => object.get('name') === tableTextName(table.id, tableSelectedRow, tableSelectedColumn),
+          )
+          if (textbox instanceof Textbox && canvas) {
+            textbox.set('text', nextText)
+            table.rowHeights[tableSelectedRow] = fitTableTextbox(
+              textbox,
+              table.columnWidths[tableSelectedColumn],
+              table.rowHeights[tableSelectedRow],
+            )
+            syncTableLayout(canvas, table)
+            canvas.requestRenderAll()
+            recordHistory()
+          }
+          return
+        }
+      }
+
       const command = event.metaKey || event.ctrlKey
 
       if (command && event.key.toLowerCase() === 'z') {
@@ -1403,12 +1929,11 @@ const clearBackground = () => {
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undo, redo, deleteSelected])
+  }, [undo, redo, deleteSelected, recordHistory, syncTableLayout, tableEditing, tableSelectedColumn, tableSelectedRow, tableSelectedText])
 
-  const openPreview = () => {
+  const openPreview = async () => {
     const canvas = canvasRef.current
     if (!canvas) return
-
 
     const lassoPreviews = canvas.getObjects().filter(
       (object) => object.get('name') === '__pixel_studio_lasso_preview__',
@@ -1419,9 +1944,9 @@ const clearBackground = () => {
       object.visible = false
     })
 
-    const previewUrl = (() => {
+    const output = (() => {
       try {
-        return canvas.toDataURL({ format: 'png', multiplier: 1 })
+        return canvas.toCanvasElement(1)
       } finally {
         lassoPreviews.forEach((object, index) => {
           object.visible = previousVisibility[index]
@@ -1430,7 +1955,8 @@ const clearBackground = () => {
       }
     })()
 
-    setPreviewUrl(previewUrl)
+    if (exportWatermark) await drawProjectWatermark(output)
+    setPreviewUrl(output.toDataURL('image/png'))
     setPreviewMode(videoPreview?.audioUrl ? 'video' : 'image')
     setPreviewOpen(true)
   }
@@ -1450,7 +1976,7 @@ const clearBackground = () => {
         context.globalCompositeOperation = 'source-over'
       }
       // if (exportWatermark) drawProjectWatermark(output, projectName)
-      if (exportWatermark) drawProjectWatermark(output)
+      if (exportWatermark) await drawProjectWatermark(output)
       const data = output.toDataURL(exportFormat === 'jpeg' ? 'image/jpeg' : 'image/png', exportFormat === 'jpeg' ? 0.94 : 1)
       const link = document.createElement('a')
       const safeName = projectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'pixel-studio-design'
@@ -1479,7 +2005,7 @@ const clearBackground = () => {
   }
 
   const createVisibleImageCanvas = (image: FabricImage) => {
-    const source = image.getElement()
+    const source = image._originalElement
     const width = Math.max(1, Math.round(image.width))
     const height = Math.max(1, Math.round(image.height))
     const output = document.createElement('canvas')
@@ -1581,40 +2107,63 @@ const drawOnDrawingLayer = useCallback((points: EditPoint[], mode: 'pencil' | 'e
 const paintMagicRemoval = useCallback((from: EditPoint, to: EditPoint) => {
   const preview = magicCanvasRef.current
   const context = magicContextRef.current
+  const displayContext = magicDisplayContextRef.current
   const image = magicImageRef.current
   const canvas = canvasRef.current
-  if (!preview || !context || !image || !canvas) return
+  if (!preview || !context || !displayContext || !image || !canvas) return
 
-  const scaleX = preview.width / canvas.getWidth()
-  const scaleY = preview.height / canvas.getHeight()
-  const fromX = from.x * scaleX
-  const fromY = from.y * scaleY
-  const toX = to.x * scaleX
-  const toY = to.y * scaleY
+  const fromPoint = toImagePoint(image, from)
+  const toPoint = toImagePoint(image, to)
+  const scaleX = preview.width / image.width
+  const scaleY = preview.height / image.height
+  const fromX = fromPoint.x * scaleX
+  const fromY = fromPoint.y * scaleY
+  const toX = toPoint.x * scaleX
+  const toY = toPoint.y * scaleY
 
   context.save()
   context.globalCompositeOperation = 'destination-out'
   context.lineCap = 'round'
   context.lineJoin = 'round'
-  context.lineWidth = brushSizeRef.current * ((scaleX + scaleY) / 2)
+  const lineWidth = brushSizeRef.current * getImageBrushScale(image) * ((scaleX + scaleY) / 2)
+  const isDot = fromPoint.x === toPoint.x && fromPoint.y === toPoint.y
+
+  context.lineWidth = lineWidth
   context.beginPath()
   context.moveTo(fromX, fromY)
   context.lineTo(toX, toY)
   context.stroke()
-  if (from.x === to.x && from.y === to.y) {
+  if (isDot) {
     context.beginPath()
     context.arc(fromX, fromY, context.lineWidth / 2, 0, Math.PI * 2)
     context.fill()
   }
   context.restore()
 
+  displayContext.save()
+  displayContext.globalCompositeOperation = 'destination-out'
+  displayContext.lineCap = 'round'
+  displayContext.lineJoin = 'round'
+  displayContext.lineWidth = lineWidth
+  displayContext.beginPath()
+  displayContext.moveTo(fromX, fromY)
+  displayContext.lineTo(toX, toY)
+  displayContext.stroke()
+  if (isDot) {
+    displayContext.beginPath()
+    displayContext.arc(fromX, fromY, lineWidth / 2, 0, Math.PI * 2)
+    displayContext.fill()
+  }
+  displayContext.restore()
+
   image.dirty = true
-  canvas.requestRenderAll()
+  canvas.renderAll()
 }, [])
 
 const startMagicRemoval = useCallback((point: EditPoint) => {
   const canvas = canvasRef.current
   const image = imageObjectRef.current
+  if (magicRemovalInProgressRef.current) return false
   if (!canvas || !image) {
     setNotice('Upload an image before editing pixels.')
     return false
@@ -1622,16 +2171,36 @@ const startMagicRemoval = useCallback((point: EditPoint) => {
 
   const preview = createVisibleImageCanvas(image)
   const context = preview.getContext('2d')
-  if (!context) {
+  const displayPreview = document.createElement('canvas')
+  displayPreview.width = preview.width
+  displayPreview.height = preview.height
+  const displayContext = displayPreview.getContext('2d')
+  if (!context || !displayContext) {
     setNotice('Could not edit this image.')
     return false
   }
 
+  magicRemovalInProgressRef.current = true
+  displayContext.drawImage(
+    image.getElement(),
+    image.cropX || 0,
+    image.cropY || 0,
+    image.width,
+    image.height,
+    0,
+    0,
+    displayPreview.width,
+    displayPreview.height,
+  )
+  magicFiltersRef.current = image.filters
+  image.filters = []
+  image.setElement(displayPreview)
+  image.set({ cropX: 0, cropY: 0, width: displayPreview.width, height: displayPreview.height })
   magicCanvasRef.current = preview
   magicContextRef.current = context
+  magicDisplayCanvasRef.current = displayPreview
+  magicDisplayContextRef.current = displayContext
   magicImageRef.current = image
-  image.setElement(preview)
-  image.set({ cropX: 0, cropY: 0, width: preview.width, height: preview.height })
   image.dirty = true
   paintMagicRemoval(point, point)
   return true
@@ -1641,12 +2210,20 @@ const finishMagicRemoval = useCallback(async () => {
   const preview = magicCanvasRef.current
   const image = magicImageRef.current
   const canvas = canvasRef.current
+  const filters = magicFiltersRef.current
   magicCanvasRef.current = null
   magicContextRef.current = null
+  magicDisplayCanvasRef.current = null
+  magicDisplayContextRef.current = null
   magicImageRef.current = null
-  if (!preview || !image || !canvas) return
+  magicFiltersRef.current = null
+  if (!preview || !image || !canvas) {
+    magicRemovalInProgressRef.current = false
+    return
+  }
 
   try {
+    image.filters = filters || []
     await image.setSrc(preview.toDataURL('image/png'), {})
     image.setCoords()
     canvas.requestRenderAll()
@@ -1655,6 +2232,8 @@ const finishMagicRemoval = useCallback(async () => {
     setNotice('Image area removed.')
   } catch (error) {
     setNotice(error instanceof Error ? error.message : 'Could not edit this image.')
+  } finally {
+    magicRemovalInProgressRef.current = false
   }
 }, [recordHistory, syncObjects])
 
@@ -1672,13 +2251,14 @@ const applyPixelEdit = async (
 
   try {
     const source = createVisibleImageCanvas(image).toDataURL('image/png')
+    const localPoints = points.map((point) => toImagePoint(image, point))
 
     const editedSource = await editImagePixels(
       source,
-      canvas.getWidth(),
-      canvas.getHeight(),
-      points,
-      brushSizeRef.current,
+      image.width,
+      image.height,
+      localPoints,
+      brushSizeRef.current * getImageBrushScale(image),
       mode,
     )
 
@@ -1706,7 +2286,7 @@ const applyPixelEdit = async (
   }
 }
 
-const removeLassoPreview = () => {
+const removeLassoPreview = useCallback(() => {
   const canvas = canvasRef.current
   if (!canvas) return
 
@@ -1721,12 +2301,373 @@ const removeLassoPreview = () => {
   lassoPreviewObjectsRef.current = []
 
   canvas.requestRenderAll()
-}
+}, [])
+
+useEffect(() => {
+  if (activeTool === 'draw-remove' && activeDrawingMode === 'lasso') return
+
+  lassoPointsRef.current = []
+  removeLassoPreview()
+}, [activeTool, activeDrawingMode, removeLassoPreview])
 
 const clearSelection = () => {
   lassoPointsRef.current = []
   removeLassoPreview()
   setNotice('Selection cleared.')
+}
+
+const addTableCells = (
+  table: CanvasTable,
+  firstRow: number,
+  lastRow: number,
+  firstColumn: number,
+  lastColumn: number,
+  borderColor = tableBorderColor,
+) => {
+  const canvas = canvasRef.current
+  if (!canvas) return
+
+  const cells: Rect[] = []
+  const texts: Textbox[] = []
+  for (let row = firstRow; row < lastRow; row += 1) {
+    for (let column = firstColumn; column < lastColumn; column += 1) {
+      const left = table.left + tableColumnOffset(table, column)
+      const top = table.top + tableRowOffset(table, row)
+      cells.push(new Rect({
+        left,
+        top,
+        width: table.columnWidths[column],
+        height: table.rowHeights[row],
+        fill: 'rgba(255,255,255,0)',
+        stroke: borderColor,
+        strokeWidth: 2,
+        name: tableCellName(table.id, row, column),
+      }))
+      texts.push(new Textbox('', {
+        left: left + 8,
+        top: top + 7,
+        width: table.columnWidths[column] - 16,
+        fontFamily: 'Avenir Next',
+        fontSize: 15,
+        fill: '#28372f',
+        splitByGrapheme: true,
+        name: tableTextName(table.id, row, column),
+      }))
+    }
+  }
+
+  canvas.add(...cells, ...texts)
+}
+
+const selectTable = (id: number) => {
+  const table = tablesRef.current.find((candidate) => candidate.id === id)
+  if (!table) return
+
+  activeTableRef.current = table
+  setActiveTableId(table.id)
+  setTableRows(table.rows)
+  setTableColumns(table.columns)
+  setTableSelectedRow(0)
+  setTableSelectedColumn(0)
+  const text = canvasRef.current?.getObjects().find(
+    (object) => object.get('name') === tableTextName(table.id, 0, 0),
+  )
+  setTableSelectedText(text instanceof Textbox ? text.text : '')
+  const cell = canvasRef.current?.getObjects().find(
+    (object) => object.get('name') === tableCellName(table.id, 0, 0),
+  )
+  if (typeof cell?.stroke === 'string') setTableBorderColorState(cell.stroke)
+  setActiveTool('draw-remove')
+  setActiveDrawingMode('pencil')
+  setTableEditing(true)
+  canvasRef.current?.requestRenderAll()
+}
+
+const createTable = () => {
+  const canvas = canvasRef.current
+  if (!canvas) return
+
+  const bounds = getImageBounds(canvas, imageObjectRef.current)
+  const rows = 3
+  const columns = 3
+  const cellWidth = Math.min(150, (bounds.width - 32) / columns)
+  const cellHeight = Math.min(54, bounds.height / rows)
+  if (cellWidth < 32 || cellHeight < 28) {
+    setNotice('The image is too small to fit a table.')
+    return
+  }
+  const table: CanvasTable = {
+    id: nextTableIdRef.current + 1,
+    left: 0,
+    top: 0,
+    cellWidth,
+    cellHeight,
+    columnWidths: Array(columns).fill(cellWidth),
+    rowHeights: Array(rows).fill(cellHeight),
+    rows,
+    columns,
+  }
+  const horizontalSlots = Math.max(1, Math.floor((bounds.width - 12) / (tableWidth(table) + 20)))
+  const verticalSlots = Math.max(1, Math.floor((bounds.height - 12) / (tableHeight(table) + 20)))
+  let position: { left: number; top: number } | null = null
+  for (let slot = 0; slot < horizontalSlots * verticalSlots; slot += 1) {
+    const candidate = {
+      left: bounds.left + 16 + (slot % horizontalSlots) * (tableWidth(table) + 20),
+      top: bounds.top + 16 + Math.floor(slot / horizontalSlots) * (tableHeight(table) + 20),
+    }
+    const overlaps = tablesRef.current.some((existing) =>
+      candidate.left < existing.left + tableWidth(existing) &&
+      candidate.left + tableWidth(table) > existing.left &&
+      candidate.top < existing.top + tableHeight(existing) &&
+      candidate.top + tableHeight(table) > existing.top,
+    )
+    if (!overlaps) {
+      position = candidate
+      break
+    }
+  }
+  if (!position) {
+    setNotice('There is no room for another table inside the image.')
+    return
+  }
+  table.left = position.left
+  table.top = position.top
+  nextTableIdRef.current = table.id
+  tablesRef.current = [...tablesRef.current, table]
+  updateTableList(tablesRef.current)
+  activeTableRef.current = table
+  setActiveTableId(table.id)
+  addTableCells(table, 0, rows, 0, columns)
+  syncTableLayout(canvas, table)
+  setTableEditing(true)
+  setActiveDrawingMode('pencil')
+  setTableRows(rows)
+  setTableColumns(columns)
+  setTableSelectedRow(0)
+  setTableSelectedColumn(0)
+  setTableSelectedText('')
+  canvas.requestRenderAll()
+  recordHistory(true)
+}
+
+const addTableRow = () => {
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas) return
+  const bounds = getImageBounds(canvas, imageObjectRef.current)
+  if (table.top + tableHeight(table) + table.cellHeight > bounds.top + bounds.height) {
+    setNotice('There is no room for another table row inside the image.')
+    return
+  }
+  table.rowHeights.push(table.cellHeight)
+  addTableCells(table, table.rows, table.rows + 1, 0, table.columns)
+  table.rows += 1
+  syncTableLayout(canvas, table)
+  updateTableList(tablesRef.current)
+  setTableRows(table.rows)
+  setTableSelectedRow(table.rows - 1)
+  setTableSelectedText('')
+  canvasRef.current?.requestRenderAll()
+  recordHistory(true)
+}
+
+const addTableColumn = () => {
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas) return
+  const bounds = getImageBounds(canvas, imageObjectRef.current)
+  if (table.left + tableWidth(table) + table.cellWidth > bounds.left + bounds.width) {
+    setNotice('There is no room for another table column inside the image.')
+    return
+  }
+  table.columnWidths.push(table.cellWidth)
+  addTableCells(table, 0, table.rows, table.columns, table.columns + 1)
+  table.columns += 1
+  syncTableLayout(canvas, table)
+  updateTableList(tablesRef.current)
+  setTableColumns(table.columns)
+  setTableSelectedColumn(table.columns - 1)
+  setTableSelectedText('')
+  canvasRef.current?.requestRenderAll()
+  recordHistory(true)
+}
+
+const removeTableRow = () => {
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas || table.rows <= 1) return
+
+  const removedRow = tableSelectedRow
+  for (let column = 0; column < table.columns; column += 1) {
+    const cell = canvas.getObjects().find(
+      (object) => object.get('name') === tableCellName(table.id, removedRow, column),
+    )
+    const text = canvas.getObjects().find(
+      (object) => object.get('name') === tableTextName(table.id, removedRow, column),
+    )
+    if (cell) canvas.remove(cell)
+    if (text) canvas.remove(text)
+  }
+
+  for (let row = removedRow + 1; row < table.rows; row += 1) {
+    for (let column = 0; column < table.columns; column += 1) {
+      const cell = canvas.getObjects().find(
+        (object) => object.get('name') === tableCellName(table.id, row, column),
+      )
+      const text = canvas.getObjects().find(
+        (object) => object.get('name') === tableTextName(table.id, row, column),
+      )
+      cell?.set('name', tableCellName(table.id, row - 1, column))
+      text?.set('name', tableTextName(table.id, row - 1, column))
+    }
+  }
+
+  table.rowHeights.splice(removedRow, 1)
+  table.rows -= 1
+  syncTableLayout(canvas, table)
+  updateTableList(tablesRef.current)
+  const nextRow = Math.min(removedRow, table.rows - 1)
+  setTableRows(table.rows)
+  selectTableCell(nextRow, tableSelectedColumn)
+  canvas.requestRenderAll()
+  recordHistory(true)
+}
+
+const removeTableColumn = () => {
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas || table.columns <= 1) return
+
+  const removedColumn = tableSelectedColumn
+  for (let row = 0; row < table.rows; row += 1) {
+    const cell = canvas.getObjects().find(
+      (object) => object.get('name') === tableCellName(table.id, row, removedColumn),
+    )
+    const text = canvas.getObjects().find(
+      (object) => object.get('name') === tableTextName(table.id, row, removedColumn),
+    )
+    if (cell) canvas.remove(cell)
+    if (text) canvas.remove(text)
+  }
+
+  for (let column = removedColumn + 1; column < table.columns; column += 1) {
+    for (let row = 0; row < table.rows; row += 1) {
+      const cell = canvas.getObjects().find(
+        (object) => object.get('name') === tableCellName(table.id, row, column),
+      )
+      const text = canvas.getObjects().find(
+        (object) => object.get('name') === tableTextName(table.id, row, column),
+      )
+      cell?.set('name', tableCellName(table.id, row, column - 1))
+      text?.set('name', tableTextName(table.id, row, column - 1))
+    }
+  }
+
+  table.columnWidths.splice(removedColumn, 1)
+  table.columns -= 1
+  syncTableLayout(canvas, table)
+  updateTableList(tablesRef.current)
+  const nextColumn = Math.min(removedColumn, table.columns - 1)
+  setTableColumns(table.columns)
+  selectTableCell(tableSelectedRow, nextColumn)
+  canvas.requestRenderAll()
+  recordHistory(true)
+}
+
+const deleteTable = () => {
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas) return
+
+  for (let row = 0; row < table.rows; row += 1) {
+    for (let column = 0; column < table.columns; column += 1) {
+      const cell = canvas.getObjects().find(
+        (object) => object.get('name') === tableCellName(table.id, row, column),
+      )
+      const text = canvas.getObjects().find(
+        (object) => object.get('name') === tableTextName(table.id, row, column),
+      )
+      if (cell) canvas.remove(cell)
+      if (text) canvas.remove(text)
+    }
+  }
+
+  tablesRef.current = tablesRef.current.filter((candidate) => candidate.id !== table.id)
+  updateTableList(tablesRef.current)
+  activeTableRef.current = null
+  if (tablesRef.current.length > 0) {
+    selectTable(tablesRef.current.at(-1)!.id)
+  } else {
+    setActiveTableId(null)
+    setTableRows(0)
+    setTableColumns(0)
+    setTableSelectedText('')
+    setTableEditing(false)
+  }
+  setActiveDrawingMode('pencil')
+  canvas.requestRenderAll()
+  recordHistory(true)
+}
+
+const beginTableEditing = () => {
+  if (!activeTableRef.current) return
+  setActiveTool('draw-remove')
+  setTableEditing(true)
+  canvasRef.current?.requestRenderAll()
+  setActiveDrawingMode('pencil')
+}
+
+const finishTableEditing = () => {
+  setTableEditing(false)
+  canvasRef.current?.requestRenderAll()
+  setActiveDrawingMode('pencil')
+}
+
+const selectTableRow = (row: number) => {
+  setTableSelectedRow(row)
+  const table = activeTableRef.current
+  const text = canvasRef.current?.getObjects().find(
+    (object) => object.get('name') === tableTextName(table?.id ?? -1, row, tableSelectedColumn),
+  )
+  setTableSelectedText(text instanceof Textbox ? text.text : '')
+}
+
+const selectTableColumn = (column: number) => {
+  setTableSelectedColumn(column)
+  const table = activeTableRef.current
+  const text = canvasRef.current?.getObjects().find(
+    (object) => object.get('name') === tableTextName(table?.id ?? -1, tableSelectedRow, column),
+  )
+  setTableSelectedText(text instanceof Textbox ? text.text : '')
+}
+
+const selectTableCell = (row: number, column: number) => {
+  const table = activeTableRef.current
+  const text = canvasRef.current?.getObjects().find(
+    (object) => object.get('name') === tableTextName(table?.id ?? -1, row, column),
+  )
+  setTableSelectedRow(row)
+  setTableSelectedColumn(column)
+  setTableSelectedText(text instanceof Textbox ? text.text : '')
+}
+
+const updateTableBorderColor = (color: string) => {
+  setTableBorderColorState(color)
+  const table = activeTableRef.current
+  const canvas = canvasRef.current
+  if (!table || !canvas) return
+
+  for (let row = 0; row < table.rows; row += 1) {
+    for (let column = 0; column < table.columns; column += 1) {
+      const cell = canvas.getObjects().find(
+        (object) => object.get('name') === tableCellName(table.id, row, column),
+      )
+      cell?.set('stroke', color)
+      cell?.setCoords()
+    }
+  }
+  canvas.requestRenderAll()
+  recordHistory()
 }
 
 const deleteSelection = async () => {
@@ -1757,6 +2698,72 @@ const deleteSelection = async () => {
       return
     }
 
+    const table = activeTableRef.current
+    if (table && tableEditing) {
+      const relativeX = point.x - table.left
+      const relativeY = point.y - table.top
+
+      if (relativeY >= 0 && relativeY < tableHeight(table)) {
+        for (let column = 0; column < table.columns; column += 1) {
+          const dividerX = table.left + tableColumnOffset(table, column + 1)
+          if (Math.abs(point.x - dividerX) <= 6) {
+            tableGestureRef.current = {
+              mode: 'resize-column',
+              startX: point.x,
+              startY: point.y,
+              left: table.left,
+              top: table.top,
+              resizeIndex: column,
+              columnWidths: [...table.columnWidths],
+              rowHeights: [...table.rowHeights],
+              moved: false,
+            }
+            return
+          }
+        }
+      }
+
+      if (relativeX >= 0 && relativeX < tableWidth(table)) {
+        for (let row = 0; row < table.rows; row += 1) {
+          const dividerY = table.top + tableRowOffset(table, row + 1)
+          if (Math.abs(point.y - dividerY) <= 6) {
+            tableGestureRef.current = {
+              mode: 'resize-row',
+              startX: point.x,
+              startY: point.y,
+              left: table.left,
+              top: table.top,
+              resizeIndex: row,
+              columnWidths: [...table.columnWidths],
+              rowHeights: [...table.rowHeights],
+              moved: false,
+            }
+            return
+          }
+        }
+      }
+
+      if (relativeX >= 0 && relativeY >= 0 && relativeX < tableWidth(table) && relativeY < tableHeight(table)) {
+        let row = 0
+        while (row < table.rows - 1 && relativeY >= tableRowOffset(table, row + 1)) row += 1
+        let column = 0
+        while (column < table.columns - 1 && relativeX >= tableColumnOffset(table, column + 1)) column += 1
+        selectTableCell(row, column)
+        tableGestureRef.current = {
+          mode: 'move',
+          startX: point.x,
+          startY: point.y,
+          left: table.left,
+          top: table.top,
+          resizeIndex: -1,
+          columnWidths: [...table.columnWidths],
+          rowHeights: [...table.rowHeights],
+          moved: false,
+        }
+      }
+      return
+    }
+
     const mode = activeDrawingModeRef.current
 
     if (mode === 'pencil' || mode === 'eraser') {
@@ -1783,6 +2790,77 @@ const deleteSelection = async () => {
     scenePoint?: { x: number; y: number }
   }) => {
     const point = event.scenePoint
+    const tableGesture = tableGestureRef.current
+    const table = activeTableRef.current
+    const canvas = canvasRef.current
+    const bounds = canvas ? getImageBounds(canvas, imageObjectRef.current) : null
+    if (point && table && tableEditing && !tableGesture) {
+      const isOverColumnDivider = point.y >= table.top &&
+        point.y < table.top + tableHeight(table) &&
+        Array.from({ length: table.columns }, (_, column) =>
+          Math.abs(point.x - (table.left + tableColumnOffset(table, column + 1))) <= 6,
+        ).some(Boolean)
+      const isOverRowDivider = point.x >= table.left &&
+        point.x < table.left + tableWidth(table) &&
+        Array.from({ length: table.rows }, (_, row) =>
+          Math.abs(point.y - (table.top + tableRowOffset(table, row + 1))) <= 6,
+        ).some(Boolean)
+      const nextHover = isOverColumnDivider ? 'column' : isOverRowDivider ? 'row' : null
+      setTableResizeHover((current) => current === nextHover ? current : nextHover)
+    } else {
+      setTableResizeHover((current) => current === null ? current : null)
+    }
+
+    if (point && tableGesture && table && canvas) {
+      const deltaX = point.x - tableGesture.startX
+      const deltaY = point.y - tableGesture.startY
+      if (Math.abs(deltaX) + Math.abs(deltaY) > 2) tableGesture.moved = true
+      if (tableGesture.moved) {
+        if (tableGesture.mode === 'resize-row') {
+          const row = tableGesture.resizeIndex
+          const otherRowsHeight = tableGesture.rowHeights
+            .filter((_, index) => index !== row)
+            .reduce((total, height) => total + height, 0)
+          const maxRowHeight = Math.max(
+            28,
+            (bounds?.top ?? 0) + (bounds?.height ?? 0) - table.top - otherRowsHeight,
+          )
+          table.rowHeights = [...tableGesture.rowHeights]
+          table.rowHeights[row] = Math.max(
+            28,
+            Math.min(maxRowHeight, tableGesture.rowHeights[row] + deltaY),
+          )
+        } else if (tableGesture.mode === 'resize-column') {
+          table.columnWidths = [...tableGesture.columnWidths]
+          const otherColumnsWidth = tableGesture.columnWidths
+            .filter((_, index) => index !== tableGesture.resizeIndex)
+            .reduce((total, width) => total + width, 0)
+          const maxColumnWidth = Math.max(
+            32,
+            (bounds?.left ?? 0) + (bounds?.width ?? 0) - table.left - otherColumnsWidth,
+          )
+          table.columnWidths[tableGesture.resizeIndex] = Math.max(
+            32,
+            Math.min(
+              maxColumnWidth,
+              tableGesture.columnWidths[tableGesture.resizeIndex] + deltaX,
+            ),
+          )
+        } else {
+          table.left = Math.max(bounds?.left ?? 0, Math.min(
+            (bounds?.left ?? 0) + (bounds?.width ?? canvas.getWidth()) - tableWidth(table),
+            tableGesture.left + deltaX,
+          ))
+          table.top = Math.max(bounds?.top ?? 0, Math.min(
+            (bounds?.top ?? 0) + (bounds?.height ?? canvas.getHeight()) - tableHeight(table),
+            tableGesture.top + deltaY,
+          ))
+        }
+        syncTableLayout(canvas, table)
+        canvas.requestRenderAll()
+      }
+      return
+    }
     if (!point || !isGestureDrawingRef.current) return
 
     const mode = activeDrawingModeRef.current
@@ -1799,14 +2877,24 @@ const deleteSelection = async () => {
       gesturePointsRef.current.push({ x: point.x, y: point.y })
       if (previousPoint) paintMagicRemoval(previousPoint, point)
     } else if (mode === 'lasso') {
-      gesturePointsRef.current.push({
-        x: point.x,
-        y: point.y,
-      })
+      gesturePointsRef.current.push({ x: point.x, y: point.y })
     }
   }
 
   const onMouseUp = () => {
+    const tableGesture = tableGestureRef.current
+    if (tableGesture) {
+      tableGestureRef.current = null
+      if (tableGesture.moved) {
+        const table = activeTableRef.current
+        if (table) {
+          setTableRows(table.rows)
+          setTableColumns(table.columns)
+        }
+        recordHistory(true)
+      }
+      return
+    }
     if (!isGestureDrawingRef.current) return
 
     isGestureDrawingRef.current = false
@@ -1842,7 +2930,7 @@ const deleteSelection = async () => {
     canvas.off('mouse:move', onMouseMove)
     canvas.off('mouse:up', onMouseUp)
   }
-}, [activeTool, drawOnDrawingLayer, finishMagicRemoval, hasDocument, paintMagicRemoval, recordHistory, startMagicRemoval])
+}, [activeTool, drawOnDrawingLayer, finishMagicRemoval, hasDocument, paintMagicRemoval, recordHistory, startMagicRemoval, syncTableLayout, tableEditing])
   
   const selectedText = selectedObject instanceof IText ? selectedObject : null
   const selectedIsShape = Boolean(selectedObject && !selectedIsImage && !(selectedObject instanceof IText) && !cropActive)
@@ -1894,7 +2982,7 @@ const deleteSelection = async () => {
       flipVertical: () => flipImage('vertical'),
       setRotation: setImageRotation,
       apply: applyCrop,
-      cancel: cancelCrop,
+      reset: resetCrop,
     },
     resize: { width: resizeWidth, height: resizeHeight, setWidth: updateResizeWidth, setHeight: updateResizeHeight, keepRatio, setKeepRatio, scaleArtwork, setScaleArtwork, apply: applyResize },
     text: { selected: selectedText, value: textValue, fontFamily, setFontFamily, fontSize, setFontSize, color: textColor, setColor: setTextColor, background: textBackground, setBackground: setTextBackground, opacity: textOpacity, setOpacity: setTextOpacity, outline: textOutline, setOutline: setTextOutline, outlineWidth: textOutlineWidth, setOutlineWidth: setTextOutlineWidth, shadow: textShadow, setShadow: setTextShadow, add: createText, update: updateText },
@@ -1938,6 +3026,7 @@ const deleteSelection = async () => {
       remove: removeBackgroundFromImage,
       uploadBackground,
       clearBackground,
+      reset: resetBackground,
     },
     drawing: {
       activeMode: activeDrawingMode,
@@ -1948,6 +3037,29 @@ const deleteSelection = async () => {
       setBrushSize,
       clearSelection,
       deleteSelection,
+    },
+    table: {
+      tables: tableList,
+      activeId: activeTableId,
+      rows: tableRows,
+      columns: tableColumns,
+      selectedRow: tableSelectedRow,
+      selectedColumn: tableSelectedColumn,
+      borderColor: tableBorderColor,
+      editing: tableEditing,
+      resizeHover: tableResizeHover,
+      create: createTable,
+      select: selectTable,
+      beginEditing: beginTableEditing,
+      finishEditing: finishTableEditing,
+      deleteTable,
+      addRow: addTableRow,
+      addColumn: addTableColumn,
+      removeRow: removeTableRow,
+      removeColumn: removeTableColumn,
+      selectRow: selectTableRow,
+      selectColumn: selectTableColumn,
+      setBorderColor: updateTableBorderColor,
     },
     export: { open: exportOpen, setOpen: setExportOpen, format: exportFormat, setFormat: setExportFormat, scale: exportScale, setScale: setExportScale, watermark: exportWatermark, setWatermark: setExportWatermark, busy: exportBusy, download: downloadDesign },
 

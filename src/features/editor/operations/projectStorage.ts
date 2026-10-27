@@ -47,3 +47,24 @@ export async function saveProjectDraft<T>(draft: T): Promise<void> {
     }
   })
 }
+
+export async function deleteProjectDraft(): Promise<void> {
+  const database = await openDatabase()
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readwrite')
+    transaction.objectStore(STORE_NAME).delete(DRAFT_KEY)
+    transaction.oncomplete = () => {
+      database.close()
+      resolve()
+    }
+    transaction.onerror = () => {
+      database.close()
+      reject(transaction.error)
+    }
+    transaction.onabort = () => {
+      database.close()
+      reject(transaction.error)
+    }
+  })
+}

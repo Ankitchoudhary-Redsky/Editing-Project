@@ -1,7 +1,7 @@
 
-import type { DragEvent, PointerEvent } from 'react'
+import type { DragEvent } from 'react'
 import { useState } from 'react'
-import { Eraser, Paintbrush, Pencil, Upload } from 'lucide-react'
+import { Eraser, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Upload } from 'lucide-react'
 
 import { useEditor } from '../EditorContext'
 import { objectName } from '../model/objectName'
@@ -23,6 +23,7 @@ export function EditorWorkspace({
     tools,
     drawing,
     draggingFile,
+    table,
     handleDrop,
   } = useEditor()
 
@@ -38,31 +39,22 @@ export function EditorWorkspace({
   }
 
   const DrawingCursorIcon = drawingCursorIcons[drawing.activeMode]
-
-  const showDrawingCursor =
-    tools.active === 'draw-remove' && Boolean(DrawingCursorIcon)
+  const showDrawingCursor = tools.active === 'draw-remove' && Boolean(DrawingCursorIcon)
+  const resizeCursor = table.resizeHover === 'column'
+    ? MoveHorizontal
+    : table.resizeHover === 'row'
+      ? MoveVertical
+      : undefined
+  const CursorIcon = resizeCursor ?? DrawingCursorIcon
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     tools.setDraggingFile(true)
   }
 
-  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect()
-    const scale =
-      bounds.width / (event.currentTarget.offsetWidth || 1) || 1
-
-    setCursorPosition({
-      x: (event.clientX - bounds.left) / scale,
-      y: (event.clientY - bounds.top) / scale,
-    })
-  }
-
   return (
     <section
-      className={`workspace ${
-        tools.active === 'music' ? 'music-mode' : ''
-      }`}
+      className={`workspace ${tools.active === 'music' ? 'music-mode' : ''}`}
     >
       <div
         className="stage"
@@ -73,49 +65,41 @@ export function EditorWorkspace({
       >
         <div className="canvas-holder">
           <div
-            className={`canvas-surface ${tools.active === 'shapes' ? 'drawing-mode' : ''}`}
+            className="canvas-surface"
             data-drawing-cursor={showDrawingCursor}
             style={{
-              transform: `translate(-50%, -50%) scale(${
-                canvas.fitScale * canvas.zoom
-              })`,
+              transform: `translate(-50%, -50%) scale(${canvas.fitScale * canvas.zoom})`,
             }}
-            onPointerMoveCapture={handlePointerMove}
+            onPointerMoveCapture={(event) => {
+              const bounds = event.currentTarget.getBoundingClientRect()
+              const scale = bounds.width / event.currentTarget.offsetWidth || 1
+              setCursorPosition({
+                x: (event.clientX - bounds.left) / scale,
+                y: (event.clientY - bounds.top) / scale,
+              })
+            }}
             onPointerLeave={() => setCursorPosition(null)}
           >
-            {/* Only one canvas element for Fabric.js */}
             <canvas ref={setCanvasElement} />
-
-            {showDrawingCursor &&
-              cursorPosition &&
-              DrawingCursorIcon && (
-                <div
-                  className="drawing-cursor"
-                  style={{
-                    left: cursorPosition.x,
-                    top: cursorPosition.y,
-                  }}
-                  aria-hidden="true"
-                >
+            {showDrawingCursor && cursorPosition && CursorIcon && (
+              <div
+                className="drawing-cursor"
+                style={{ left: cursorPosition.x, top: cursorPosition.y }}
+                aria-hidden="true"
+              >
+                {!resizeCursor && (
                   <span
                     className="drawing-cursor-brush"
-                    style={{
-                      width: drawing.brushSize,
-                      height: drawing.brushSize,
-                    }}
+                    style={{ width: drawing.brushSize, height: drawing.brushSize }}
                   />
-
-                  <span className="drawing-cursor-icon">
-                    <DrawingCursorIcon
-                      size={17}
-                      strokeWidth={2.2}
-                    />
-                  </span>
-                </div>
-              )}
+                )}
+                <span className={resizeCursor ? 'drawing-cursor-icon table-resize-cursor' : 'drawing-cursor-icon'}>
+                  <CursorIcon size={17} strokeWidth={2.2} />
+                </span>
+              </div>
+            )}
           </div>
-
-          {!canvas.hasDocument && (
+          {!canvas.hasImage && (
             <div className="empty-prompt">
               <div className="empty-art">
                 <div className="empty-sun" />
@@ -123,24 +107,12 @@ export function EditorWorkspace({
                 <div className="empty-mountain two" />
                 <span className="empty-sparkle">✳</span>
               </div>
-
               <h1>Your next idea starts here</h1>
-
-              <p>
-                Drop an image to begin, or choose one from your computer.
-              </p>
-
-              <button
-                className="primary-button"
-                onClick={tools.openFilePicker}
-              >
-                <Upload size={16} />
-                Upload an image
+              <p>Drop an image to begin, or choose one from your computer.</p>
+              <button className="primary-button" onClick={tools.openFilePicker}>
+                <Upload size={16} /> Upload an image
               </button>
-
-              <span className="empty-format">
-                PNG · JPG · WEBP
-              </span>
+              <span className="empty-format">PNG · JPG · WEBP</span>
             </div>
           )}
         </div>
@@ -166,8 +138,7 @@ export function EditorWorkspace({
         </span>
 
         <span>
-          Local document · {canvas.dimensions.width} ×{' '}
-          {canvas.dimensions.height}
+          Local document · {canvas.dimensions.width} × {canvas.dimensions.height}
         </span>
       </div>
 

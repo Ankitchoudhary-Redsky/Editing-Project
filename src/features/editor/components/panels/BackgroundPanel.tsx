@@ -134,8 +134,19 @@ export function BackgroundPanel() {
 
       {background.removed && (
         <p className="panel-note">
-          Your original image can be restored using Undo.
+          Reset restores your original image.
         </p>
+      )}
+
+      {background.removed && (
+        <button
+          type="button"
+          className="secondary-button full-button"
+          onClick={() => void background.reset()}
+        >
+          <RotateCcw size={15} />
+          Reset
+        </button>
       )}
 
       {background.removed && (

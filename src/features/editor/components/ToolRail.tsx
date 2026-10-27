@@ -15,6 +15,7 @@ export function ToolRail() {
           className={`rail-tool ${activeCategory === id ? 'active' : ''}`}
           onClick={() => {
             tools.setActive(defaultTool)
+            if (defaultTool === 'crop') tools.beginCrop()
           }}
           title={label}
           aria-label={label}

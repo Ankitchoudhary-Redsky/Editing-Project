@@ -13,7 +13,7 @@ import { StickersPanel } from './panels/StickersPanel'
 import { LayersPanel } from './panels/LayersPanel'
 
 export function ToolPanel() {
-  const { tools } = useEditor()
+  const { canvas, tools } = useEditor()
   if (tools.active === 'music') return null
   const activeCategory = editorToolCategories.find((category) => category.tools.some(({ id }) => id === tools.active)) ?? editorToolCategories[0]
 
@@ -27,6 +27,7 @@ export function ToolPanel() {
               key={id}
               type="button"
               className={`panel-subtool ${tools.active === id ? 'active' : ''}`}
+              disabled={(id === 'crop' || id === 'resize') && !canvas.hasImage}
               aria-pressed={tools.active === id}
               onClick={() => {
                 tools.setActive(id)

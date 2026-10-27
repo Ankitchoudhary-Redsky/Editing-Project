@@ -1163,7 +1163,7 @@ export default function ImageMusicVideoExport({
                 type="button"
                 className="voice-over-button voice-over-button--record"
                 onClick={startVoiceRecording}
-                disabled={busy}
+                disabled={busy || !hasImage}
               >
                 <Mic size={14} />
                 Record voice-over

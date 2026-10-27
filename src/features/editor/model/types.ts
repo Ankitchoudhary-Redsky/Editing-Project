@@ -98,7 +98,7 @@ export interface EditorContextValue {
     flipVertical: () => void
     setRotation: (rotation: number) => void
     apply: () => void
-    cancel: () => void
+    reset: () => Promise<void>
   }
   resize: {
     width: number
@@ -197,6 +197,7 @@ export interface EditorContextValue {
     remove: () => Promise<void>
     uploadBackground: (file?: File) => Promise<void>
     clearBackground: () => void
+    reset: () => Promise<void>
   }
   drawing: {
     activeMode: DrawingMode
@@ -207,6 +208,29 @@ export interface EditorContextValue {
     setBrushSize: (size: number) => void
     clearSelection: () => void
     deleteSelection: () => void
+  }
+  table: {
+    tables: Array<{ id: number; rows: number; columns: number }>
+    activeId: number | null
+    rows: number
+    columns: number
+    selectedRow: number
+    selectedColumn: number
+    borderColor: string
+    editing: boolean
+    resizeHover: 'row' | 'column' | null
+    create: () => void
+    select: (id: number) => void
+    beginEditing: () => void
+    finishEditing: () => void
+    deleteTable: () => void
+    addRow: () => void
+    addColumn: () => void
+    removeRow: () => void
+    removeColumn: () => void
+    selectRow: (row: number) => void
+    selectColumn: (column: number) => void
+    setBorderColor: (color: string) => void
   }
   export: {
     open: boolean

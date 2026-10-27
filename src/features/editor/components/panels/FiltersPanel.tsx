@@ -41,7 +41,7 @@ export function FiltersPanel() {
             onClick={() => filterState.setFilter(preset.id)}
             title={preset.description}
           >
-            {canvas.imageThumbnail ? (
+            {canvas.hasImage && canvas.imageThumbnail ? (
               <img
                 src={canvas.imageThumbnail}
                 alt=""

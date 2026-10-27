@@ -4,13 +4,17 @@ import img1 from '../../../assets/logo.png'
 
 export function EditorHeader() {
   const { canvas, history, project, preview, export: exportState } = useEditor()
+  const finishRenaming = () => {
+    if (!project.name.trim()) project.setName('Untitled')
+    project.setIsRenaming(false)
+  }
 
   return (
     <header className="topbar">
       <div className="brand-lockup"><div className="brand-mark"><img src={img1} alt="Logo" width="35" height="35" /></div><span className="brand-name">e<span>studio</span></span></div>
       <div className="project-title">
         {project.isRenaming
-          ? <input autoFocus value={project.name} onChange={(event) => project.setName(event.target.value)} onBlur={() => project.setIsRenaming(false)} onKeyDown={(event) => { if (event.key === 'Enter') project.setIsRenaming(false) }} aria-label="Project name" />
+          ? <input autoFocus value={project.name} onChange={(event) => project.setName(event.target.value)} onBlur={finishRenaming} onKeyDown={(event) => { if (event.key === 'Enter') finishRenaming() }} aria-label="Project name" />
           : <button className="project-name" onClick={() => project.setIsRenaming(true)} title="Rename project">{project.name}<ChevronDown size={14} /></button>}
         <span className="save-status"><span /> All changes saved</span>
       </div>
@@ -19,7 +23,7 @@ export function EditorHeader() {
         <button className="icon-button" title="Redo" aria-label="Redo" disabled={!history.canRedo} onClick={history.redo}><Redo2 size={18} /></button>
         <span className="action-divider" />
         <button className="preview-button" onClick={preview.show} disabled={!canvas.hasImage} ><Eye size={16} /> Preview</button>
-        <button className="download-button" onClick={() => exportState.setOpen(true)}><Download size={16} /> Export</button>
+        <button className="download-button" onClick={() => exportState.setOpen(true)} disabled={!canvas.hasImage}><Download size={16} /> Export</button>
       </div>
     </header>
   )

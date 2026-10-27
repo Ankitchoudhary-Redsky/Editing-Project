@@ -20,7 +20,7 @@ export const editorToolCategories: {
   tools: { id: EditorTool; label: string }[]
 }[] = [
   { id: 'upload', label: 'Upload', icon: Upload, defaultTool: 'upload', tools: [{ id: 'upload', label: 'Images' }] },
-  { id: 'transform', label: 'Transform', icon: MousePointer2, defaultTool: 'select', tools: [{ id: 'select', label: 'Select' }, { id: 'crop', label: 'Crop' }, { id: 'resize', label: 'Resize' }] },
+  { id: 'transform', label: 'Transform', icon: MousePointer2, defaultTool: 'crop', tools: [{ id: 'crop', label: 'Crop' }, { id: 'resize', label: 'Resize' }] },
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal, defaultTool: 'adjust', tools: [{ id: 'adjust', label: 'Adjustments' }] },
   { id: 'effects', label: 'Effects', icon: WandSparkles, defaultTool: 'filters', tools: [{ id: 'filters', label: 'Filters' }, { id: 'background', label: 'Background' }] },
   { id: 'elements', label: 'Elements', icon: Shapes, defaultTool: 'text', tools: [{ id: 'text', label: 'Text' }, { id: 'shapes', label: 'Shapes' }, { id: 'stickers', label: 'Stickers' }] },
@@ -76,7 +76,7 @@ export function serializeCanvas(canvas: Canvas) {
     {
       width: canvas.getWidth(),
       height: canvas.getHeight(),
-      scene: canvas.toJSON(),
+      scene: canvas.toObject(['name']),
     },
     (key, value: unknown) => {
       if (
