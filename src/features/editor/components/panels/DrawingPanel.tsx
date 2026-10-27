@@ -1,16 +1,7 @@
 import { useEditor } from '../../EditorContext'
+import { drawingModeDescriptions } from '../../model/constants'
 import type { DrawingMode } from '../../model/types'
 import { Eraser, Lasso, Minus, Pencil, Trash2, WandSparkles } from 'lucide-react'
-
-const toolDescriptions: Record<
-  'pencil' | 'eraser' | 'magic-remover' | 'lasso',
-  string
-> = {
-  pencil: 'Draw freehand strokes on your image.',
-  eraser: 'Erase pencil strokes from your design.',
-  'magic-remover': 'Brush over image areas to make them transparent.',
-  lasso: 'Draw around an image area to select it.',
-}
 
 export function DrawingPanel() {
   const { canvas, drawing, table } = useEditor()
@@ -45,7 +36,7 @@ export function DrawingPanel() {
         })}
       </div>
       <p className="panel-note">
-        {table.editing ? 'Table editing' : isDisabled ? 'Upload an image to enable drawing tools.' : toolDescriptions[drawing.activeMode]}
+        {table.editing ? 'Table editing' : isDisabled ? 'Upload an image to enable drawing tools.' : drawingModeDescriptions[drawing.activeMode]}
       </p>
       {drawing.activeMode !== 'lasso' && !table.editing && (
         <>

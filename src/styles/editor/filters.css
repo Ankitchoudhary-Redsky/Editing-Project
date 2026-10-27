@@ -1,0 +1,77 @@
+.filters-content {
+  overflow-y: auto;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 8px 0 22px;
+}
+
+.filter-card {
+  min-width: 0;
+  padding: 5px;
+  border: 1px solid var(--border-color, #dedee5);
+  border-radius: 10px;
+  background: var(--panel-background, #fff);
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.filter-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.filter-card.selected {
+  border: 2px solid var(--accent-color, #7057e8);
+  padding: 4px;
+}
+
+.filter-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.filter-thumbnail {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #f0f0f3;
+}
+
+.filter-placeholder {
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+}
+
+.filter-name {
+  display: block;
+  padding: 7px 1px 3px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-intensity {
+  display: block;
+  margin-top: 16px;
+}
+
+.filter-intensity input[type="range"] {
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+

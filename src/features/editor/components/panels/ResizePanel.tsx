@@ -1,11 +1,5 @@
 import { useEditor } from '../../EditorContext'
-
-const presets = [
-  { label: 'Square', width: 1080, height: 1080 },
-  { label: 'Portrait', width: 1080, height: 1350 },
-  { label: 'Landscape', width: 1600, height: 900 },
-  { label: 'Story', width: 1080, height: 1920 },
-]
+import { resizePresets } from '../../model/constants'
 
 export function ResizePanel() {
   const { resize } = useEditor()
@@ -19,7 +13,7 @@ export function ResizePanel() {
       <label className="check-row"><input type="checkbox" checked={resize.keepRatio} onChange={(event) => resize.setKeepRatio(event.target.checked)} /> Keep aspect ratio</label>
       <label className="check-row"><input type="checkbox" checked={resize.scaleArtwork} onChange={(event) => resize.setScaleArtwork(event.target.checked)} /> Scale artwork with canvas</label>
       <div className="panel-label-row presets-heading"><span>Canvas presets</span></div>
-      <div className="preset-grid">{presets.map(({ label, width, height }) => <button key={label} className="preset-button" onClick={() => { resize.setWidth(width); resize.setHeight(height); resize.setKeepRatio(false) }}><span className={`preset-shape ${label.toLowerCase()}`} /><span>{label}</span></button>)}</div>
+      <div className="preset-grid">{resizePresets.map(({ label, width, height }) => <button key={label} className="preset-button" onClick={() => { resize.setWidth(width); resize.setHeight(height); resize.setKeepRatio(false) }}><span className={`preset-shape ${label.toLowerCase()}`} /><span>{label}</span></button>)}</div>
       <button className="primary-button full-button" onClick={resize.apply}>Apply dimensions</button>
       <p className="panel-note">Canvas size is separate from artwork scaling. Artwork is cropped by the document edges.</p>
     </div>

@@ -12,7 +12,7 @@ import {
   Sticker,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
-import type { EditorTool, ShapeKind } from './types'
+import type { DrawingMode, EditorTool, ShapeKind } from './types'
 
 export const BACKGROUND_IMAGE_NAME = '__pixel_studio_background_image__'
 
@@ -51,6 +51,21 @@ export const shapeNames: Record<ShapeKind, string> = {
   pentagon: 'Pentagon',
 }
 
+export const resizePresets = [
+  { label: 'Square', width: 1080, height: 1080 },
+  { label: 'Portrait', width: 1080, height: 1350 },
+  { label: 'Landscape', width: 1600, height: 900 },
+  { label: 'Story', width: 1080, height: 1920 },
+]
+
+export const textFontFamilies = ['Georgia', 'Arial', 'Verdana', 'Trebuchet MS', 'Courier New', 'Times New Roman']
+
+export const drawingModeDescriptions: Record<DrawingMode, string> = {
+  pencil: 'Draw freehand strokes on your image.',
+  eraser: 'Erase pencil strokes from your design.',
+  'magic-remover': 'Brush over image areas to make them transparent.',
+  lasso: 'Draw around an image area to select it.',
+}
 
 export const IMAGE_SOURCE_TOKEN = '__pixel_studio_image_source__'
 let nextSourceId = 1

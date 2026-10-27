@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Eraser, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Upload } from 'lucide-react'
 
 import { useEditor } from '../EditorContext'
+import { EditorEmptyState } from './EditorEmptyState'
 import { objectName } from '../model/objectName'
 import type { DrawingMode } from '../model/types'
 import ImageMusicVideoExport from './ImageMusicVideoExport'
@@ -120,34 +121,7 @@ export function EditorWorkspace({
               )}
           </div>
 
-          {!canvas.hasDocument && (
-            <div className="empty-prompt">
-              <div className="empty-art">
-                <div className="empty-sun" />
-                <div className="empty-mountain one" />
-                <div className="empty-mountain two" />
-                <span className="empty-sparkle">✳</span>
-              </div>
-
-              <h1>Your next idea starts here</h1>
-
-              <p>
-                Drop an image to begin, or choose one from your computer.
-              </p>
-
-              <button
-                className="primary-button"
-                onClick={tools.openFilePicker}
-              >
-                <Upload size={16} />
-                Upload an image
-              </button>
-
-              <span className="empty-format">
-                PNG · JPG · WEBP
-              </span>
-            </div>
-          )}
+          {!canvas.hasDocument && <EditorEmptyState onUpload={tools.openFilePicker} />}
           <div
             className="canvas-surface"
             data-drawing-cursor={showDrawingCursor}
@@ -181,7 +155,7 @@ export function EditorWorkspace({
               </div>
             )}
           </div>
-          {!canvas.hasDocument && <div className="empty-prompt"><div className="empty-art"><div className="empty-sun" /><div className="empty-mountain one" /><div className="empty-mountain two" /><span className="empty-sparkle">✳</span></div><h1>Your next idea starts here</h1><p>Drop an image to begin, or choose one from your computer.</p><button className="primary-button" onClick={tools.openFilePicker}><Upload size={16} /> Upload an image</button><span className="empty-format">PNG · JPG · WEBP</span></div>}
+          {!canvas.hasDocument && <EditorEmptyState onUpload={tools.openFilePicker} />}
         </div>
 
         {draggingFile && (

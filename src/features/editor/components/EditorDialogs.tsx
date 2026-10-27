@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useState } from 'react'
 import { ArrowLeft, Pause, Play, Volume2, X } from 'lucide-react'
 import { useEditor } from '../EditorContext'
+import { editorHeadings } from '../model/editorCopy'
 
 function formatPreviewTime(seconds: number) {
   const safeSeconds = Math.max(0, Math.floor(seconds))
@@ -218,7 +219,7 @@ export function PreviewDialog() {
   return (
     <div className="modal-backdrop" role="presentation" onClick={preview.close}>
       <section className={`preview-modal ${isVideoPreview ? 'video-preview-modal' : ''}`} role="dialog" aria-modal="true" aria-label={isVideoPreview ? 'Image to video preview' : 'Design preview'} onClick={(event) => event.stopPropagation()}>
-        <header><div><span className="panel-kicker">{isVideoPreview ? 'VIDEO PREVIEW' : 'PREVIEW'}</span><h2>{isVideoPreview ? 'Image to Video' : project.name}</h2></div><button className="icon-button" onClick={preview.close} aria-label="Return to editor"><X size={19} /></button></header>
+        <header><div><span className="panel-kicker">{isVideoPreview ? 'VIDEO PREVIEW' : 'PREVIEW'}</span><h2>{isVideoPreview ? editorHeadings.imageToVideo : project.name}</h2></div><button className="icon-button" onClick={preview.close} aria-label="Return to editor"><X size={19} /></button></header>
         {isVideoPreview ? (
           <div className="preview-stage video-preview-stage">
             <div className="preview-video-frame">
