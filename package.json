@@ -13,6 +13,7 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@imgly/background-removal": "^1.7.0",
+    "@lobehub/fluent-emoji-3d": "^1.1.0",
     "fabric": "^6.9.1",
     "gif.js": "^0.2.0",
     "gifuct-js": "^2.1.2",

@@ -1,4 +1,16 @@
 import { FabricImage, type Canvas } from 'fabric'
+import emojiHappy3D from '@lobehub/fluent-emoji-3d/assets/1f603.webp'
+import emojiHeartEyes3D from '@lobehub/fluent-emoji-3d/assets/1f60d.webp'
+import emojiLaughing3D from '@lobehub/fluent-emoji-3d/assets/1f602.webp'
+import emojiSad3D from '@lobehub/fluent-emoji-3d/assets/1f622.webp'
+import emojiAngry3D from '@lobehub/fluent-emoji-3d/assets/1f621.webp'
+import emojiSurprised3D from '@lobehub/fluent-emoji-3d/assets/1f62e.webp'
+import emojiPlayful3D from '@lobehub/fluent-emoji-3d/assets/1f61c.webp'
+import emojiSleepy3D from '@lobehub/fluent-emoji-3d/assets/1f634.webp'
+import emojiAngel3D from '@lobehub/fluent-emoji-3d/assets/1f607.webp'
+import emojiThinking3D from '@lobehub/fluent-emoji-3d/assets/1f914.webp'
+import emojiParty3D from '@lobehub/fluent-emoji-3d/assets/1f973.webp'
+import emojiSeeNoEvil3D from '@lobehub/fluent-emoji-3d/assets/1f648.webp'
 
 export const threeDShapeChoices = [
   { kind: 'sphere', label: 'Sphere', color: '#18a78b', group: 'Basic Objects' },
@@ -34,7 +46,8 @@ export const threeDEmojiChoices = [
   { emoji: '😍', label: 'Heart eyes', color: '#ffbf24', mood: 'heart-eyes' },
   { emoji: '😎', label: 'Cool', color: '#f7c43a', mood: 'sunglasses' },
   { emoji: '😂', label: 'Laughing', color: '#ffc928', mood: 'laugh' },
-  { emoji: '😢', label: 'Crying', color: '#76c7f2', mood: 'cry' },
+  { emoji: '😭', label: 'Crying', color: '#76c7f2', mood: 'loud-cry' },
+  { emoji: '😢', label: 'Sad', color: '#76c7f2', mood: 'cry' },
   { emoji: '😡', label: 'Angry', color: '#f35d50', mood: 'angry' },
   { emoji: '😮', label: 'Surprised', color: '#ffd34e', mood: 'surprised' },
   { emoji: '😜', label: 'Playful', color: '#ffcb35', mood: 'tongue' },
@@ -42,7 +55,23 @@ export const threeDEmojiChoices = [
   { emoji: '😇', label: 'Angel', color: '#ffd34e', mood: 'smile' },
   { emoji: '🤔', label: 'Thinking', color: '#f3bd55', mood: 'thinking' },
   { emoji: '🥳', label: 'Party', color: '#ffc928', mood: 'laugh' },
+  { emoji: '🙈', label: 'See no evil', color: '#9b5b39', mood: 'monkey' },
 ] as const
+
+const threeDEmojiAssets: Record<string, string> = {
+  '😃': emojiHappy3D,
+  '😍': emojiHeartEyes3D,
+  '😂': emojiLaughing3D,
+  '😢': emojiSad3D,
+  '😡': emojiAngry3D,
+  '😮': emojiSurprised3D,
+  '😜': emojiPlayful3D,
+  '😴': emojiSleepy3D,
+  '😇': emojiAngel3D,
+  '🤔': emojiThinking3D,
+  '🥳': emojiParty3D,
+  '🙈': emojiSeeNoEvil3D,
+}
 
 const previewSize = 512
 const latestCharacterColorRequest = new WeakMap<FabricImage, number>()
@@ -187,17 +216,18 @@ async function renderShape(kind: ThreeDShapeKind, color: string): Promise<string
   return imageUrl
 }
 
-async function addRenderedImage(canvas: Canvas, imageUrl: string, label: string, sizeMultiplier = 1, properties: Record<string, string | number> = {}) {
+async function addRenderedImage(canvas: Canvas, imageUrl: string, label: string, sizeMultiplier = 1, properties: Record<string, string | number> = {}, maxSize = 340) {
   const image = await FabricImage.fromURL(imageUrl)
-  const size = Math.min(340, Math.max(120, Math.min(canvas.getWidth(), canvas.getHeight()) * 0.42 * sizeMultiplier))
+  const size = Math.min(maxSize, Math.max(120, Math.min(canvas.getWidth(), canvas.getHeight()) * 0.42 * sizeMultiplier))
+  const imageScale = size / Math.max(image.width, image.height)
 
   image.set({
     left: canvas.getWidth() / 2,
     top: canvas.getHeight() / 2,
     originX: 'center',
     originY: 'center',
-    scaleX: size / previewSize,
-    scaleY: size / previewSize,
+    scaleX: imageScale,
+    scaleY: imageScale,
     name: `3D ${label}`,
     selectable: true,
     evented: true,
@@ -212,144 +242,351 @@ export async function addThreeDShape(canvas: Canvas, kind: ThreeDShapeKind, colo
   await addRenderedImage(canvas, await renderShape(kind, color), label)
 }
 
+type GlyphPoint = [number, number]
+
+function traceGlyphContours(imageData: ImageData): GlyphPoint[][] {
+  const { data, width, height } = imageData
+  const vertexWidth = width + 1
+  const edges: Array<{ from: number; to: number; used: boolean }> = []
+  const edgesFrom = new Map<number, number[]>()
+  const isFilled = (pixelX: number, pixelY: number) =>
+    pixelX >= 0 && pixelX < width && pixelY >= 0 && pixelY < height
+    && data[(pixelY * width + pixelX) * 4 + 3] >= 128
+  const addEdge = (fromX: number, fromY: number, toX: number, toY: number) => {
+    const from = fromY * vertexWidth + fromX
+    const to = toY * vertexWidth + toX
+    const edgeIndex = edges.length
+    edges.push({ from, to, used: false })
+    edgesFrom.set(from, [...(edgesFrom.get(from) ?? []), edgeIndex])
+  }
+
+  for (let pixelY = 0; pixelY < height; pixelY += 1) {
+    for (let pixelX = 0; pixelX < width; pixelX += 1) {
+      if (!isFilled(pixelX, pixelY)) continue
+      if (!isFilled(pixelX, pixelY - 1)) addEdge(pixelX, pixelY, pixelX + 1, pixelY)
+      if (!isFilled(pixelX + 1, pixelY)) addEdge(pixelX + 1, pixelY, pixelX + 1, pixelY + 1)
+      if (!isFilled(pixelX, pixelY + 1)) addEdge(pixelX + 1, pixelY + 1, pixelX, pixelY + 1)
+      if (!isFilled(pixelX - 1, pixelY)) addEdge(pixelX, pixelY + 1, pixelX, pixelY)
+    }
+  }
+
+  const getDirection = (edge: { from: number; to: number }) => {
+    const fromX = edge.from % vertexWidth
+    const fromY = Math.floor(edge.from / vertexWidth)
+    const toX = edge.to % vertexWidth
+    const toY = Math.floor(edge.to / vertexWidth)
+    if (toX > fromX) return 0
+    if (toY > fromY) return 1
+    if (toX < fromX) return 2
+    return 3
+  }
+  const turnPriority = [1, 0, 3, 2]
+  const contours: GlyphPoint[][] = []
+
+  for (let firstEdge = 0; firstEdge < edges.length; firstEdge += 1) {
+    if (edges[firstEdge].used) continue
+    const startVertex = edges[firstEdge].from
+    const points: GlyphPoint[] = []
+    let edgeIndex = firstEdge
+    let closed = false
+
+    for (let steps = 0; steps <= edges.length; steps += 1) {
+      const edge = edges[edgeIndex]
+      if (edge.used) break
+      edge.used = true
+      points.push([edge.from % vertexWidth, Math.floor(edge.from / vertexWidth)])
+      if (edge.to === startVertex) {
+        closed = true
+        break
+      }
+
+      const candidates = (edgesFrom.get(edge.to) ?? []).filter((candidate) => !edges[candidate].used)
+      if (candidates.length === 0) break
+      const currentDirection = getDirection(edge)
+      candidates.sort((left, right) => {
+        const leftTurn = (getDirection(edges[left]) - currentDirection + 4) % 4
+        const rightTurn = (getDirection(edges[right]) - currentDirection + 4) % 4
+        return turnPriority.indexOf(leftTurn) - turnPriority.indexOf(rightTurn)
+      })
+      edgeIndex = candidates[0]
+    }
+
+    if (closed && points.length >= 3) contours.push(points)
+  }
+
+  return contours
+}
+
+function simplifyGlyphContour(points: GlyphPoint[], tolerance: number): GlyphPoint[] {
+  const ring = [...points, points[0]]
+  const keptIndices = new Set([0, ring.length - 1])
+  const simplifyRange = (startIndex: number, endIndex: number) => {
+    const [startX, startY] = ring[startIndex]
+    const [endX, endY] = ring[endIndex]
+    const deltaX = endX - startX
+    const deltaY = endY - startY
+    const lengthSquared = deltaX * deltaX + deltaY * deltaY
+    let furthestIndex = -1
+    let furthestDistance = tolerance
+
+    for (let pointIndex = startIndex + 1; pointIndex < endIndex; pointIndex += 1) {
+      const [pointX, pointY] = ring[pointIndex]
+      const projection = lengthSquared === 0
+        ? 0
+        : Math.max(0, Math.min(1, ((pointX - startX) * deltaX + (pointY - startY) * deltaY) / lengthSquared))
+      const distance = Math.hypot(pointX - (startX + projection * deltaX), pointY - (startY + projection * deltaY))
+      if (distance > furthestDistance) {
+        furthestDistance = distance
+        furthestIndex = pointIndex
+      }
+    }
+
+    if (furthestIndex >= 0) {
+      keptIndices.add(furthestIndex)
+      simplifyRange(startIndex, furthestIndex)
+      simplifyRange(furthestIndex, endIndex)
+    }
+  }
+
+  simplifyRange(0, ring.length - 1)
+  return [...keptIndices].sort((left, right) => left - right).slice(0, -1).map((index) => ring[index])
+}
+
 async function renderThreeDCharacter(character: string, color: string): Promise<string> {
   const THREE = await import('three')
   const { scene, camera, renderer } = createRenderStage(THREE, [3.1, 2.6, 7.5])
   const size = 512
-  const font = '800 480px "Avenir Next", "Arial Black", sans-serif'
-  const makeGlyphTexture = (fillStyle: string | CanvasGradient, strokeStyle?: string) => {
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('Could not create the 3D letter texture.')
-    context.font = font
-    context.textAlign = 'center'
-    context.textBaseline = 'middle'
-    context.lineJoin = 'round'
-    const measured = context.measureText(character)
-    const glyphHeight = measured.actualBoundingBoxAscent + measured.actualBoundingBoxDescent
-    const fontScale = Math.min(1, 488 / measured.width, 488 / glyphHeight)
-    context.translate(size / 2, size / 2)
-    context.scale(fontScale, fontScale)
-    context.fillStyle = fillStyle
-    if (strokeStyle) {
-      context.strokeStyle = strokeStyle
-      context.lineWidth = 2
-      context.strokeText(character, 0, 0)
-    }
-    context.fillText(character, 0, 0)
-    const texture = new THREE.CanvasTexture(canvas)
-    texture.colorSpace = THREE.SRGBColorSpace
-    return texture
-  }
+  const glyphCanvas = document.createElement('canvas')
+  glyphCanvas.width = size
+  glyphCanvas.height = size
+  const context = glyphCanvas.getContext('2d', { willReadFrequently: true })
+  if (!context) throw new Error('Could not create the 3D letter outline.')
+  context.font = '900 480px "Arial Rounded MT Bold", "Avenir Next", "Arial Black", sans-serif'
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  context.fillStyle = '#fff'
+  const metrics = context.measureText(character)
+  const glyphHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
+  const fontScale = Math.min(1, 488 / metrics.width, 488 / glyphHeight)
+  context.translate(size / 2, size / 2)
+  context.scale(fontScale, fontScale)
+  context.fillText(character, 0, 0)
 
-  const colorValue = new THREE.Color(color)
-  const faceTexture = makeGlyphTexture(color)
-  const sideTexture = makeGlyphTexture('#fff')
-  const planeGeometry = new THREE.PlaneGeometry(2.6, 2.6)
-  const sideMaterial = new THREE.MeshBasicMaterial({ map: sideTexture, color: colorValue, transparent: true, side: THREE.DoubleSide, depthWrite: false })
-  const faceMaterial = new THREE.MeshBasicMaterial({ map: faceTexture, transparent: true, side: THREE.DoubleSide, depthWrite: false })
+  const contours = traceGlyphContours(context.getImageData(0, 0, size, size))
+    .map((contour) => simplifyGlyphContour(contour, 1.2))
+    .filter((contour) => contour.length >= 3)
+  if (contours.length === 0) throw new Error('Could not trace the 3D letter outline.')
+  const contourAreas = contours.map((contour) => Math.abs(contour.reduce((sum, point, index) => {
+    const next = contour[(index + 1) % contour.length]
+    return sum + point[0] * next[1] - next[0] * point[1]
+  }, 0)))
+  const outerContourIndex = contourAreas.reduce((largest, area, index) => area > contourAreas[largest] ? index : largest, 0)
+  const bounds = contours.flat().reduce((result, [pointX, pointY]) => ({
+    minX: Math.min(result.minX, pointX),
+    maxX: Math.max(result.maxX, pointX),
+    minY: Math.min(result.minY, pointY),
+    maxY: Math.max(result.maxY, pointY),
+  }), { minX: size, maxX: 0, minY: size, maxY: 0 })
+  const shapeScale = 3.6 / Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY)
+  const centerX = (bounds.minX + bounds.maxX) / 2
+  const centerY = (bounds.minY + bounds.maxY) / 2
+  const toShapePoint = ([pointX, pointY]: GlyphPoint): GlyphPoint => [(pointX - centerX) * shapeScale, (centerY - pointY) * shapeScale]
+  const outerPoints = contours[outerContourIndex].map(toShapePoint)
+  const shape = new THREE.Shape()
+  shape.moveTo(...outerPoints[0])
+  outerPoints.slice(1).forEach(([pointX, pointY]) => shape.lineTo(pointX, pointY))
+  shape.closePath()
+  contours.forEach((contour, index) => {
+    if (index === outerContourIndex) return
+    const holePoints = contour.map(toShapePoint)
+    const hole = new THREE.Path()
+    hole.moveTo(...holePoints[0])
+    holePoints.slice(1).forEach(([pointX, pointY]) => hole.lineTo(pointX, pointY))
+    hole.closePath()
+    shape.holes.push(hole)
+  })
 
-  const group = new THREE.Group()
-  for (let layer = 0; layer < 7; layer += 1) {
-    const side = new THREE.Mesh(planeGeometry, sideMaterial)
-    side.position.z = -0.24 + layer * 0.045
-    side.renderOrder = layer
-    group.add(side)
-  }
-  const face = new THREE.Mesh(planeGeometry, faceMaterial)
-  face.position.z = 0.09
-  face.renderOrder = 8
-  group.add(face)
-  group.rotation.set(-0.16, 0.42, 0.08)
-  scene.add(group)
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: 1.15,
+    bevelEnabled: true,
+    bevelSegments: 8,
+    steps: 1,
+    bevelSize: 0.11,
+    bevelThickness: 0.12,
+    curveSegments: 8,
+  })
+  geometry.computeBoundingBox()
+  const geometryCenter = geometry.boundingBox?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3()
+  geometry.translate(-geometryCenter.x, -geometryCenter.y, -geometryCenter.z)
+
+  const baseColor = new THREE.Color(color)
+  const sideColor = baseColor.clone().lerp(new THREE.Color('#8f3c83'), 0.58)
+  const frontMaterial = new THREE.MeshPhysicalMaterial({
+    color: baseColor,
+    roughness: 0.24,
+    metalness: 0.03,
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.18,
+  })
+  const sideMaterial = new THREE.MeshStandardMaterial({ color: sideColor, roughness: 0.32, metalness: 0.02 })
+  const letter = new THREE.Mesh(geometry, [frontMaterial, sideMaterial])
+  letter.rotation.set(-0.04, 0.04, 0.02)
+  scene.add(letter)
   renderer.render(scene, camera)
   const imageUrl = renderer.domElement.toDataURL('image/png')
-  planeGeometry.dispose()
+  geometry.dispose()
+  frontMaterial.dispose()
   sideMaterial.dispose()
-  faceMaterial.dispose()
-  sideTexture.dispose()
-  faceTexture.dispose()
   renderer.dispose()
   return imageUrl
 }
 
 type ThreeDEmoji = (typeof threeDEmojiChoices)[number]
 
-async function renderThreeDEmoji(emoji: ThreeDEmoji): Promise<string> {
+function createRoundedRectangle(THREE: ThreeModule, width: number, height: number, radius: number) {
+  const left = -width / 2
+  const right = width / 2
+  const bottom = -height / 2
+  const top = height / 2
+  const shape = new THREE.Shape()
+  shape.moveTo(left + radius, bottom)
+  shape.lineTo(right - radius, bottom)
+  shape.quadraticCurveTo(right, bottom, right, bottom + radius)
+  shape.lineTo(right, top - radius)
+  shape.quadraticCurveTo(right, top, right - radius, top)
+  shape.lineTo(left + radius, top)
+  shape.quadraticCurveTo(left, top, left, top - radius)
+  shape.lineTo(left, bottom + radius)
+  shape.quadraticCurveTo(left, bottom, left + radius, bottom)
+  return new THREE.ExtrudeGeometry(shape, {
+    depth: 0.055,
+    bevelEnabled: true,
+    bevelSegments: 4,
+    bevelSize: 0.018,
+    bevelThickness: 0.018,
+    curveSegments: 6,
+  })
+}
+
+async function renderReferenceEmoji(character: '😎' | '😭'): Promise<string> {
   const THREE = await import('three')
-  const { scene, camera, renderer } = createRenderStage(THREE, [1.4, 1.1, 7])
-  const emojiCanvas = document.createElement('canvas')
-  emojiCanvas.width = previewSize
-  emojiCanvas.height = previewSize
-  const context = emojiCanvas.getContext('2d')
-  if (!context) throw new Error('Could not create the emoji texture.')
-  context.font = '400 430px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif'
-  context.textAlign = 'center'
-  context.textBaseline = 'middle'
-  const metrics = context.measureText(emoji.emoji)
-  const emojiHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
-  const scale = Math.min(1, 460 / metrics.width, 460 / emojiHeight)
-  context.translate(previewSize / 2, previewSize / 2)
-  context.scale(scale, scale)
-  context.fillText(emoji.emoji, 0, 0)
-  const emojiTexture = new THREE.CanvasTexture(emojiCanvas)
-  emojiTexture.colorSpace = THREE.SRGBColorSpace
-
-  const silhouetteCanvas = document.createElement('canvas')
-  silhouetteCanvas.width = previewSize
-  silhouetteCanvas.height = previewSize
-  const silhouetteContext = silhouetteCanvas.getContext('2d')
-  if (!silhouetteContext) throw new Error('Could not create the 3D emoji backing.')
-  silhouetteContext.font = context.font
-  silhouetteContext.textAlign = 'center'
-  silhouetteContext.textBaseline = 'middle'
-  silhouetteContext.translate(previewSize / 2, previewSize / 2)
-  silhouetteContext.scale(scale, scale)
-  silhouetteContext.fillStyle = '#fff'
-  silhouetteContext.fillText(emoji.emoji, 0, 0)
-  const silhouetteTexture = new THREE.CanvasTexture(silhouetteCanvas)
-
-  const backingGeometry = new THREE.PlaneGeometry(2.5, 2.5)
-  const backingMaterial = new THREE.MeshBasicMaterial({
-    map: silhouetteTexture,
-    color: '#b57835',
-    transparent: true,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  })
-  const faceMaterial = new THREE.MeshBasicMaterial({
-    map: emojiTexture,
-    transparent: true,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  })
+  const { scene, camera, renderer } = createRenderStage(THREE, [0.6, 0.35, 4.4])
   const group = new THREE.Group()
-  for (let layer = 0; layer < 7; layer += 1) {
-    const side = new THREE.Mesh(backingGeometry, backingMaterial)
-    side.position.z = -0.24 + layer * 0.04
-    side.renderOrder = layer
-    group.add(side)
+  const geometries: import('three').BufferGeometry[] = []
+  const materials: import('three').Material[] = []
+  const addMesh = (
+    geometry: import('three').BufferGeometry,
+    material: import('three').Material,
+    position: [number, number, number],
+    scale: [number, number, number] = [1, 1, 1],
+  ) => {
+    geometries.push(geometry)
+    materials.push(material)
+    const mesh = new THREE.Mesh(geometry, material)
+    mesh.position.set(...position)
+    mesh.scale.set(...scale)
+    group.add(mesh)
+    return mesh
   }
-  const face = new THREE.Mesh(backingGeometry, faceMaterial)
-  face.position.z = 0.06
-  face.renderOrder = 8
-  group.add(face)
-  group.rotation.set(-0.12, 0.16, 0)
+  const addTube = (points: Array<[number, number, number]>, radius: number, color: string) => {
+    const curve = new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)))
+    const material = new THREE.MeshPhysicalMaterial({ color, roughness: 0.24, clearcoat: 0.65 })
+    return addMesh(new THREE.TubeGeometry(curve, 32, radius, 10, false), material, [0, 0, 0])
+  }
+  const faceCanvas = document.createElement('canvas')
+  faceCanvas.width = 64
+  faceCanvas.height = 256
+  const faceContext = faceCanvas.getContext('2d')
+  if (!faceContext) throw new Error('Could not create the emoji face shading.')
+  const faceGradient = faceContext.createLinearGradient(0, 0, 0, faceCanvas.height)
+  faceGradient.addColorStop(0, '#ffdc77')
+  faceGradient.addColorStop(0.52, '#f0b747')
+  faceGradient.addColorStop(1, '#d77f32')
+  faceContext.fillStyle = faceGradient
+  faceContext.fillRect(0, 0, faceCanvas.width, faceCanvas.height)
+  const faceTexture = new THREE.CanvasTexture(faceCanvas)
+  faceTexture.colorSpace = THREE.SRGBColorSpace
+  const faceMaterial = new THREE.MeshPhysicalMaterial({
+    map: faceTexture,
+    roughness: 0.28,
+    clearcoat: 0.42,
+    clearcoatRoughness: 0.2,
+  })
+  materials.push(faceMaterial)
+  addMesh(new THREE.SphereGeometry(1.04, 64, 48), faceMaterial, [0, 0, 0])
+
+  const browMaterial = new THREE.MeshPhysicalMaterial({ color: '#30251d', roughness: 0.32 })
+  materials.push(browMaterial)
+  for (const side of [-1, 1]) {
+    const browCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(side * 0.68, 0.52, 0.77),
+      new THREE.Vector3(side * 0.43, 0.68, 0.82),
+      new THREE.Vector3(side * 0.2, 0.57, 0.91),
+    ])
+    addMesh(new THREE.TubeGeometry(browCurve, 24, 0.035, 10, false), browMaterial, [0, 0, 0])
+  }
+
+  if (character === '😎') {
+    const frameMaterial = new THREE.MeshPhysicalMaterial({ color: '#100f0e', roughness: 0.2, clearcoat: 0.72 })
+    const lensMaterial = new THREE.MeshPhysicalMaterial({ color: '#191817', roughness: 0.14, clearcoat: 0.9, clearcoatRoughness: 0.12 })
+    const bridgeMaterial = new THREE.MeshPhysicalMaterial({ color: '#100f0e', roughness: 0.2, clearcoat: 0.7 })
+    materials.push(frameMaterial, lensMaterial, bridgeMaterial)
+    for (const side of [-1, 1]) {
+      const lensPosition: [number, number, number] = [side * 0.38, 0.12, 0.99]
+      addMesh(createRoundedRectangle(THREE, 0.76, 0.5, 0.14), frameMaterial, lensPosition)
+      addMesh(createRoundedRectangle(THREE, 0.67, 0.41, 0.12), lensMaterial, [lensPosition[0], lensPosition[1] - 0.005, 1.055])
+      const armCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(side * 0.73, 0.25, 0.99),
+        new THREE.Vector3(side * 0.88, 0.22, 0.88),
+        new THREE.Vector3(side * 0.98, 0.1, 0.64),
+      ])
+      addMesh(new THREE.TubeGeometry(armCurve, 20, 0.045, 10, false), frameMaterial, [0, 0, 0])
+    }
+    addMesh(new THREE.BoxGeometry(0.2, 0.075, 0.09), bridgeMaterial, [0, 0.14, 1.055])
+    addTube([[-0.2, -0.43, 0.94], [0, -0.5, 0.98], [0.2, -0.43, 0.94]], 0.026, '#a35b2d')
+  } else {
+    const tearMaterial = new THREE.MeshPhysicalMaterial({ color: '#45bfe8', roughness: 0.17, clearcoat: 0.88, clearcoatRoughness: 0.12 })
+    const mouthMaterial = new THREE.MeshPhysicalMaterial({ color: '#211711', roughness: 0.3 })
+    const toothMaterial = new THREE.MeshPhysicalMaterial({ color: '#fff3d4', roughness: 0.22, clearcoat: 0.35 })
+    const puddleMaterial = new THREE.MeshPhysicalMaterial({ color: '#51c6e7', roughness: 0.16, clearcoat: 0.9, clearcoatRoughness: 0.1 })
+    materials.push(tearMaterial, mouthMaterial, toothMaterial, puddleMaterial)
+    for (const side of [-1, 1]) {
+      const centerX = side * 0.42
+      const tearShape = new THREE.Shape()
+      tearShape.moveTo(centerX - 0.065, 0.42)
+      tearShape.bezierCurveTo(centerX - 0.15, 0.36, centerX - 0.11, 0.16, centerX - 0.11, -0.12)
+      tearShape.lineTo(centerX - 0.11, -0.77)
+      tearShape.quadraticCurveTo(centerX, -0.94, centerX + 0.11, -0.77)
+      tearShape.lineTo(centerX + 0.11, -0.12)
+      tearShape.bezierCurveTo(centerX + 0.11, 0.16, centerX + 0.15, 0.36, centerX + 0.065, 0.42)
+      tearShape.closePath()
+      const tearGeometry = new THREE.ExtrudeGeometry(tearShape, {
+        depth: 0.055,
+        bevelEnabled: true,
+        bevelSegments: 5,
+        bevelSize: 0.025,
+        bevelThickness: 0.02,
+        curveSegments: 10,
+      })
+      addMesh(tearGeometry, tearMaterial, [0, 0, 0.88])
+    }
+    addMesh(new THREE.SphereGeometry(1, 32, 24), puddleMaterial, [0, -1.02, 0.5], [1.15, 0.13, 0.32])
+    addMesh(new THREE.SphereGeometry(1, 40, 32), mouthMaterial, [0, -0.36, 0.91], [0.22, 0.29, 0.09])
+    addMesh(createRoundedRectangle(THREE, 0.27, 0.07, 0.035), toothMaterial, [0, -0.16, 1.08])
+  }
+
+  group.rotation.set(-0.04, 0.1, 0)
   scene.add(group)
   renderer.render(scene, camera)
   const imageUrl = renderer.domElement.toDataURL('image/png')
-  backingGeometry.dispose()
-  backingMaterial.dispose()
-  faceMaterial.dispose()
-  emojiTexture.dispose()
-  silhouetteTexture.dispose()
+  geometries.forEach((geometry) => geometry.dispose())
+  materials.forEach((material) => material.dispose())
+  faceTexture.dispose()
   renderer.dispose()
   return imageUrl
 }
 
-export async function addThreeDCharacter(canvas: Canvas, character: string, color = '#8968dc') {
+export async function addThreeDCharacter(canvas: Canvas, character: string, color = '#e879bf') {
   await addRenderedImage(canvas, await renderThreeDCharacter(character, color), character, 1.35, { threeDColor: color })
 }
 
@@ -371,5 +608,8 @@ export async function recolorThreeDCharacter(canvas: Canvas, image: FabricImage,
 }
 
 export async function addThreeDEmoji(canvas: Canvas, emoji: ThreeDEmoji) {
-  await addRenderedImage(canvas, await renderThreeDEmoji(emoji), `${emoji.label} emoji`)
+  const imageUrl = emoji.emoji === '😎' || emoji.emoji === '😭'
+    ? await renderReferenceEmoji(emoji.emoji)
+    : threeDEmojiAssets[emoji.emoji]
+  await addRenderedImage(canvas, imageUrl, `${emoji.label} emoji`, 1.5, {}, 900)
 }

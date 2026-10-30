@@ -267,7 +267,7 @@ function ThreeDCharacterControls({
   fabricCanvas: FabricCanvas
   setNotice: (message: string) => void
 }) {
-  const [color, setColor] = useState(String(object.get('threeDColor') ?? '#8968dc'))
+  const [color, setColor] = useState(String(object.get('threeDColor') ?? '#e879bf'))
   const character = String(object.get('name') ?? '').match(/^(?:3D )+([A-Z0-9])$/)?.[1]
 
   const updateColor = async (value: string) => {
