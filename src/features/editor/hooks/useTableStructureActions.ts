@@ -9,6 +9,10 @@ import {
 } from '../operations/tableObjects'
 import {
   getImageBounds,
+  createTableGroup,
+  findTableObject,
+  getTableGroup,
+  getTableId,
   tableCellName,
   tableHeight,
   tableTextName,
@@ -58,7 +62,9 @@ export function useTableStructureActions({
       lastColumn,
       borderColor,
     )
-    canvas.add(...cells, ...texts)
+    const group = getTableGroup(canvas, table.id)
+    if (group) group.add(...cells, ...texts)
+    else canvas.add(createTableGroup(table.id, [...cells, ...texts]))
   }
 
   const selectTable = (id: number) => {
@@ -71,13 +77,10 @@ export function useTableStructureActions({
     setTableColumns(table.columns)
     setTableSelectedRow(0)
     setTableSelectedColumn(0)
-    const text = canvasRef.current?.getObjects().find(
-      (object) => object.get('name') === tableTextName(table.id, 0, 0),
-    )
+    const canvas = canvasRef.current
+    const text = canvas ? findTableObject(canvas, tableTextName(table.id, 0, 0)) : undefined
     setTableSelectedText(text instanceof Textbox ? text.text : '')
-    const cell = canvasRef.current?.getObjects().find(
-      (object) => object.get('name') === tableCellName(table.id, 0, 0),
-    )
+    const cell = canvas ? findTableObject(canvas, tableCellName(table.id, 0, 0)) : undefined
     if (typeof cell?.stroke === 'string') setTableBorderColor(cell.stroke)
     setActiveTool('draw-remove')
     setActiveDrawingMode('pencil')
@@ -228,6 +231,30 @@ export function useTableStructureActions({
     recordHistory(true)
   }
 
+  const moveTableLayer = (id: number, direction: 'forward' | 'backward') => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const layers = canvas.getObjects().map((object) => ({
+      tableId: getTableId(object),
+      object,
+    }))
+    const layerIndex = layers.findIndex((layer) => layer.tableId === id)
+    const neighborIndex = layerIndex + (direction === 'forward' ? 1 : -1)
+    if (layerIndex < 0 || neighborIndex < 0 || neighborIndex >= layers.length) return
+    if (
+      direction === 'backward' &&
+      layers[neighborIndex].object === imageObjectRef.current
+    ) return
+
+    ;[layers[layerIndex], layers[neighborIndex]] = [layers[neighborIndex], layers[layerIndex]]
+    layers.forEach(({ object }, index) => {
+      canvas.moveObjectTo(object, index)
+    })
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
   const beginEditing = () => {
     if (!activeTableRef.current) return
     setActiveTool('draw-remove')
@@ -250,6 +277,7 @@ export function useTableStructureActions({
     removeRow,
     removeColumn,
     deleteTable,
+    moveTableLayer,
     beginEditing,
     finishEditing,
   }

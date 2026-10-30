@@ -3,7 +3,10 @@ import { Canvas, Textbox } from 'fabric'
 import type { CanvasTable, TableGesture, UseTableEditorOptions } from '../model/types'
 import { useTableInteractions } from './useTableInteractions'
 import {
+  findTableObject,
+  getCanvasObjects,
   getImageBounds,
+  groupUngroupedTables,
   syncTableGeometry,
   tableCellName,
   tableTextName,
@@ -45,7 +48,8 @@ export function useTableEditor({
   }, [imageObjectRef])
 
   const restore = useCallback((targetCanvas: Canvas) => {
-    const cells = targetCanvas.getObjects().flatMap((object) => {
+    groupUngroupedTables(targetCanvas)
+    const cells = getCanvasObjects(targetCanvas).flatMap((object) => {
       const name = object.get('name')
       const match = typeof name === 'string'
         ? /^__pixel_studio_table_cell__(\d+)__(\d+)__(\d+)$/.exec(name)
@@ -83,10 +87,11 @@ export function useTableEditor({
 
       const cellWidth = firstCell.width || 1
       const cellHeight = firstCell.height || 1
+      const firstCellPosition = firstCell.getXY()
       return [{
         id,
-        left: firstCell.left ?? 0,
-        top: firstCell.top ?? 0,
+        left: firstCellPosition.x,
+        top: firstCellPosition.y,
         cellWidth,
         cellHeight,
         columnWidths: Array.from({ length: columns }, (_, column) =>
@@ -116,14 +121,10 @@ export function useTableEditor({
     const selectedColumn = Math.min(tableSelectedColumn, table.columns - 1)
     setTableSelectedRow(selectedRow)
     setTableSelectedColumn(selectedColumn)
-    const text = targetCanvas.getObjects().find(
-      (object) => object.get('name') === tableTextName(table.id, selectedRow, selectedColumn),
-    )
+    const text = findTableObject(targetCanvas, tableTextName(table.id, selectedRow, selectedColumn))
     setTableSelectedText(text instanceof Textbox ? text.text : '')
 
-    const firstCell = targetCanvas.getObjects().find(
-      (object) => object.get('name') === tableCellName(table.id, 0, 0),
-    )
+    const firstCell = findTableObject(targetCanvas, tableCellName(table.id, 0, 0))
     if (typeof firstCell?.stroke === 'string') {
       setTableBorderColor(firstCell.stroke)
     }
@@ -145,9 +146,8 @@ export function useTableEditor({
 
   const selectTableCell = useCallback((row: number, column: number) => {
     const table = activeTableRef.current
-    const text = canvasRef.current?.getObjects().find(
-      (object) => object.get('name') === tableTextName(table?.id ?? -1, row, column),
-    )
+    const canvas = canvasRef.current
+    const text = canvas ? findTableObject(canvas, tableTextName(table?.id ?? -1, row, column)) : undefined
     setTableSelectedRow(row)
     setTableSelectedColumn(column)
     setTableSelectedText(text instanceof Textbox ? text.text : '')
@@ -182,18 +182,16 @@ export function useTableEditor({
   const selectRow = (row: number) => {
     setTableSelectedRow(row)
     const table = activeTableRef.current
-    const text = canvasRef.current?.getObjects().find(
-      (object) => object.get('name') === tableTextName(table?.id ?? -1, row, tableSelectedColumn),
-    )
+    const canvas = canvasRef.current
+    const text = canvas ? findTableObject(canvas, tableTextName(table?.id ?? -1, row, tableSelectedColumn)) : undefined
     setTableSelectedText(text instanceof Textbox ? text.text : '')
   }
 
   const selectColumn = (column: number) => {
     setTableSelectedColumn(column)
     const table = activeTableRef.current
-    const text = canvasRef.current?.getObjects().find(
-      (object) => object.get('name') === tableTextName(table?.id ?? -1, tableSelectedRow, column),
-    )
+    const canvas = canvasRef.current
+    const text = canvas ? findTableObject(canvas, tableTextName(table?.id ?? -1, tableSelectedRow, column)) : undefined
     setTableSelectedText(text instanceof Textbox ? text.text : '')
   }
 
@@ -205,9 +203,7 @@ export function useTableEditor({
 
     for (let row = 0; row < table.rows; row += 1) {
       for (let column = 0; column < table.columns; column += 1) {
-        const cell = targetCanvas.getObjects().find(
-          (object) => object.get('name') === tableCellName(table.id, row, column),
-        )
+        const cell = findTableObject(targetCanvas, tableCellName(table.id, row, column))
         cell?.set('stroke', color)
         cell?.setCoords()
       }
@@ -256,6 +252,7 @@ export function useTableEditor({
     beginEditing: structure.beginEditing,
     finishEditing: structure.finishEditing,
     deleteTable: structure.deleteTable,
+    moveLayer: structure.moveTableLayer,
     addRow: structure.addRow,
     addColumn: structure.addColumn,
     removeRow: structure.removeRow,

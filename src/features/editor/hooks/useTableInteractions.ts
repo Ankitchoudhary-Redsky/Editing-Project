@@ -3,6 +3,7 @@ import { Textbox } from 'fabric'
 import type { UseTableInteractionsOptions } from '../model/types'
 import {
   fitTableTextbox,
+  findTableObject,
   getImageBounds,
   tableColumnOffset,
   tableHeight,
@@ -52,9 +53,9 @@ export function useTableInteractions({
     setTableSelectedText(nextText)
     const table = activeTableRef.current
     const targetCanvas = canvasRef.current
-    const textbox = targetCanvas?.getObjects().find(
-      (object) => object.get('name') === tableTextName(table.id, tableSelectedRow, tableSelectedColumn),
-    )
+    const textbox = targetCanvas
+      ? findTableObject(targetCanvas, tableTextName(table.id, tableSelectedRow, tableSelectedColumn))
+      : undefined
     if (textbox instanceof Textbox && targetCanvas) {
       textbox.set('text', nextText)
       table.rowHeights[tableSelectedRow] = fitTableTextbox(

@@ -7,6 +7,9 @@ import {
   tableRowOffset,
   tableTextName,
   tableWidth,
+  findTableObject,
+  getTableGroup,
+  removeTableObject,
 } from './tableGeometry'
 
 export function createTableCellObjects(
@@ -52,24 +55,16 @@ export function createTableCellObjects(
 
 export function removeTableRow(canvas: Canvas, table: CanvasTable, rowIndex: number) {
   for (let column = 0; column < table.columns; column += 1) {
-    const cell = canvas.getObjects().find(
-      (object) => object.get('name') === tableCellName(table.id, rowIndex, column),
-    )
-    const text = canvas.getObjects().find(
-      (object) => object.get('name') === tableTextName(table.id, rowIndex, column),
-    )
-    if (cell) canvas.remove(cell)
-    if (text) canvas.remove(text)
+    const cell = findTableObject(canvas, tableCellName(table.id, rowIndex, column))
+    const text = findTableObject(canvas, tableTextName(table.id, rowIndex, column))
+    if (cell) removeTableObject(canvas, cell)
+    if (text) removeTableObject(canvas, text)
   }
 
   for (let row = rowIndex + 1; row < table.rows; row += 1) {
     for (let column = 0; column < table.columns; column += 1) {
-      const cell = canvas.getObjects().find(
-        (object) => object.get('name') === tableCellName(table.id, row, column),
-      )
-      const text = canvas.getObjects().find(
-        (object) => object.get('name') === tableTextName(table.id, row, column),
-      )
+      const cell = findTableObject(canvas, tableCellName(table.id, row, column))
+      const text = findTableObject(canvas, tableTextName(table.id, row, column))
       cell?.set('name', tableCellName(table.id, row - 1, column))
       text?.set('name', tableTextName(table.id, row - 1, column))
     }
@@ -81,24 +76,16 @@ export function removeTableRow(canvas: Canvas, table: CanvasTable, rowIndex: num
 
 export function removeTableColumn(canvas: Canvas, table: CanvasTable, columnIndex: number) {
   for (let row = 0; row < table.rows; row += 1) {
-    const cell = canvas.getObjects().find(
-      (object) => object.get('name') === tableCellName(table.id, row, columnIndex),
-    )
-    const text = canvas.getObjects().find(
-      (object) => object.get('name') === tableTextName(table.id, row, columnIndex),
-    )
-    if (cell) canvas.remove(cell)
-    if (text) canvas.remove(text)
+    const cell = findTableObject(canvas, tableCellName(table.id, row, columnIndex))
+    const text = findTableObject(canvas, tableTextName(table.id, row, columnIndex))
+    if (cell) removeTableObject(canvas, cell)
+    if (text) removeTableObject(canvas, text)
   }
 
   for (let column = columnIndex + 1; column < table.columns; column += 1) {
     for (let row = 0; row < table.rows; row += 1) {
-      const cell = canvas.getObjects().find(
-        (object) => object.get('name') === tableCellName(table.id, row, column),
-      )
-      const text = canvas.getObjects().find(
-        (object) => object.get('name') === tableTextName(table.id, row, column),
-      )
+      const cell = findTableObject(canvas, tableCellName(table.id, row, column))
+      const text = findTableObject(canvas, tableTextName(table.id, row, column))
       cell?.set('name', tableCellName(table.id, row, column - 1))
       text?.set('name', tableTextName(table.id, row, column - 1))
     }
@@ -109,16 +96,18 @@ export function removeTableColumn(canvas: Canvas, table: CanvasTable, columnInde
 }
 
 export function removeTableObjects(canvas: Canvas, table: CanvasTable) {
+  const group = getTableGroup(canvas, table.id)
+  if (group) {
+    canvas.remove(group)
+    return
+  }
+
   for (let row = 0; row < table.rows; row += 1) {
     for (let column = 0; column < table.columns; column += 1) {
-      const cell = canvas.getObjects().find(
-        (object) => object.get('name') === tableCellName(table.id, row, column),
-      )
-      const text = canvas.getObjects().find(
-        (object) => object.get('name') === tableTextName(table.id, row, column),
-      )
-      if (cell) canvas.remove(cell)
-      if (text) canvas.remove(text)
+      const cell = findTableObject(canvas, tableCellName(table.id, row, column))
+      const text = findTableObject(canvas, tableTextName(table.id, row, column))
+      if (cell) removeTableObject(canvas, cell)
+      if (text) removeTableObject(canvas, text)
     }
   }
 }

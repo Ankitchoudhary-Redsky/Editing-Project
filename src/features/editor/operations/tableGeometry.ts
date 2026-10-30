@@ -1,5 +1,9 @@
-import { Canvas, Textbox, FabricImage } from 'fabric'
+import { Canvas, FabricImage, FabricObject, Group, Point, Textbox } from 'fabric'
 import type { CanvasTable } from '../model/table'
+
+FabricObject.customProperties = Array.from(
+  new Set([...FabricObject.customProperties, 'name']),
+)
 
 export function getImageBounds(canvas: Canvas, image: FabricImage | null) {
   const bounds = image?.getBoundingRect() ?? {
@@ -26,6 +30,87 @@ export function tableCellName(tableId: number, row: number, column: number) {
 
 export function tableTextName(tableId: number, row: number, column: number) {
   return `__pixel_studio_table_text__${tableId}__${row}__${column}`
+}
+
+export function tableGroupName(tableId: number) {
+  return `__pixel_studio_table_group__${tableId}`
+}
+
+export function getTableId(object: FabricObject) {
+  const name = object.get('name')
+  const match = typeof name === 'string'
+    ? /^__pixel_studio_table_(?:group__(\d+)|(?:cell|text)__(\d+)__\d+__\d+)$/.exec(name)
+    : null
+  return match ? Number(match[1] ?? match[2]) : null
+}
+
+export function getCanvasObjects(canvas: Canvas) {
+  const objects: FabricObject[] = []
+  const visit = (object: FabricObject) => {
+    objects.push(object)
+    if (object instanceof Group) object.getObjects().forEach(visit)
+  }
+  canvas.getObjects().forEach(visit)
+  return objects
+}
+
+export function findTableObject(canvas: Canvas, name: string) {
+  return getCanvasObjects(canvas).find((object) => object.get('name') === name)
+}
+
+export function getTableGroup(canvas: Canvas, tableId: number) {
+  return canvas.getObjects().find(
+    (object) => object.get('name') === tableGroupName(tableId),
+  ) as Group | undefined
+}
+
+export function createTableGroup(tableId: number, objects: FabricObject[]) {
+  const group = new Group(objects, {
+    selectable: false,
+    evented: false,
+  })
+  group.set('name', tableGroupName(tableId))
+  return group
+}
+
+export function groupUngroupedTables(canvas: Canvas) {
+  const roots = canvas.getObjects()
+  const legacyTables = new Map<number, { objects: FabricObject[]; lastIndex: number }>()
+
+  roots.forEach((object, index) => {
+    const tableId = getTableId(object)
+    if (tableId === null || object instanceof Group) return
+    const table = legacyTables.get(tableId) ?? { objects: [], lastIndex: index }
+    table.objects.push(object)
+    table.lastIndex = index
+    legacyTables.set(tableId, table)
+  })
+
+  if (!legacyTables.size) return
+
+  const groupedTables = new Map<number, Group>()
+  for (const [tableId, table] of legacyTables) {
+    groupedTables.set(tableId, createTableGroup(tableId, table.objects))
+  }
+
+  const groupedRootObjects = new Set(
+    [...legacyTables.values()].flatMap((table) => table.objects),
+  )
+  const orderedObjects = roots.flatMap((object, index) => {
+    if (!groupedRootObjects.has(object)) return [object]
+    const tableId = getTableId(object)
+    const table = tableId === null ? undefined : legacyTables.get(tableId)
+    return table?.lastIndex === index && tableId !== null
+      ? [groupedTables.get(tableId)!]
+      : []
+  })
+  canvas.remove(...roots)
+  canvas.add(...orderedObjects)
+}
+
+export function removeTableObject(canvas: Canvas, object: FabricObject) {
+  if (object.group instanceof Group) object.group.remove(object)
+  else canvas.remove(object)
 }
 
 export function tableColumnOffset(table: CanvasTable, column: number) {
@@ -64,9 +149,7 @@ export function syncTableGeometry(
     )
     let requiredRowHeight = Math.min(table.rowHeights[row] || table.cellHeight, maxRowHeight)
     for (let column = 0; column < table.columns; column += 1) {
-      const text = canvas.getObjects().find(
-        (object) => object.get('name') === tableTextName(table.id, row, column),
-      )
+      const text = findTableObject(canvas, tableTextName(table.id, row, column))
       if (text instanceof Textbox) {
         requiredRowHeight = Math.max(
           requiredRowHeight,
@@ -84,16 +167,13 @@ export function syncTableGeometry(
     for (let column = 0; column < table.columns; column += 1) {
       const left = table.left + tableColumnOffset(table, column)
       const top = table.top + tableRowOffset(table, row)
-      const cell = canvas.getObjects().find(
-        (object) => object.get('name') === tableCellName(table.id, row, column),
-      )
-      const text = canvas.getObjects().find(
-        (object) => object.get('name') === tableTextName(table.id, row, column),
-      )
-      cell?.set({ left, top, width: table.columnWidths[column], height: table.rowHeights[row] })
+      const cell = findTableObject(canvas, tableCellName(table.id, row, column))
+      const text = findTableObject(canvas, tableTextName(table.id, row, column))
+      cell?.set({ width: table.columnWidths[column], height: table.rowHeights[row] })
+      cell?.setXY(new Point(left, top))
       cell?.setCoords()
       if (text instanceof Textbox) {
-        text.set({ left: left + 8, top: top + 7 })
+        text.setXY(new Point(left + 8, top + 7))
         fitTableTextbox(text, table.columnWidths[column], table.rowHeights[row])
       }
     }

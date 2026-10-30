@@ -360,6 +360,7 @@ export interface EditorContextValue {
     beginEditing: () => void
     finishEditing: () => void
     deleteTable: () => void
+    moveLayer: (id: number, direction: 'forward' | 'backward') => void
     addRow: () => void
     addColumn: () => void
     removeRow: () => void
