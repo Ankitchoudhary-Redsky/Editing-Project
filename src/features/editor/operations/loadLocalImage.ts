@@ -1,12 +1,5 @@
 import { FabricImage } from 'fabric'
-import type { Dimensions } from '../model/types'
-
-export type LoadedLocalImage = {
-  image: FabricImage
-  source: string
-  dimensions: Dimensions
-  thumbnail: string
-}
+import type { LoadedLocalImage } from '../model/types'
 
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {

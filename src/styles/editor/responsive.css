@@ -1,0 +1,177 @@
+@media (max-width: 900px) {
+  .tool-panel {
+    flex-basis: 245px;
+  }
+  .brand-lockup {
+    min-width: 160px;
+  }
+  .project-title {
+    padding-left: 8px;
+  }
+  .dimension-label {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .topbar { flex-basis: 58px; padding: 0 12px; }
+  .brand-lockup { min-width: auto; gap: 7px; }
+  .brand-name { font-size: 15px; }
+  .brand-mark { width: 23px; height: 23px; }
+  .project-title { display: none; }
+  .top-actions { gap: 3px; }
+  .icon-button { width: 30px; height: 30px; }
+  .preview-button { width: 33px; padding: 0; overflow: hidden; font-size: 0;}
+  .preview-button svg { flex: 0 0 auto; }
+  .download-button { height: 32px; padding: 0 9px; font-size: 10px; }
+  .action-divider { margin: 0 2px; }
+  .editor-body { position: relative; flex-direction: column; }
+  .tool-rail { order: 2; flex: 0 0 59px; flex-direction: row; justify-content: flex-start; gap: 2px; padding: 4px 7px; overflow-x: auto; border-top: 1px solid var(--line); border-right: 0; }
+  .rail-tool { width: 52px; height: 50px; flex: 0 0 52px; }
+  .rail-spacer { display: none; }
+  .tool-panel { position: absolute; z-index: 5; bottom: 59px; left: 0; width: min(350px, 100%); max-height: min(68vh, 560px); border-top: 1px solid var(--line); border-right: 1px solid var(--line); border-radius: 0 9px 0 0; box-shadow: 8px -8px 24px #30423718; }
+  .panel-heading { padding: 14px 15px 12px; }
+  .panel-content { gap: 13px; padding: 13px 15px 18px; }
+  .workspace { order: 1; }
+  .workspace-toolbar { flex-basis: 42px; padding: 0 10px; }
+  .workspace-actions { gap: 4px; }
+  .workspace-footer { flex-basis: 26px; padding: 0 9px; }
+  .workspace-footer > span:last-child { display: none; }
+  .stage { background-size: 15px 15px; }
+  .empty-prompt h1 { font-size: 19px; }
+  .topbar {
+    flex-basis: 58px;
+    padding: 0 12px;
+  }
+  .brand-lockup {
+    min-width: auto;
+    gap: 7px;
+  }
+  .brand-name {
+    font-size: 15px;
+  }
+  .brand-mark {
+    width: 23px;
+    height: 23px;
+  }
+  .project-title {
+    display: none;
+  }
+  .top-actions {
+    gap: 3px;
+  }
+  .icon-button {
+    width: 30px;
+    height: 30px;
+  }
+  .preview-button {
+    width: 33px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+  .preview-button svg {
+    flex: 0 0 auto;
+  }
+  .download-button {
+    height: 32px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+  .action-divider {
+    margin: 0 2px;
+  }
+  .editor-body {
+    position: relative;
+    flex-direction: column;
+  }
+  .tool-rail {
+    order: 2;
+    flex: 0 0 59px;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 4px 7px;
+    overflow-x: auto;
+    border-top: 1px solid var(--line);
+    border-right: 0;
+  }
+  .rail-tool {
+    width: 46px;
+    height: 50px;
+    flex: 0 0 46px;
+  }
+  .rail-spacer {
+    display: none;
+  }
+  .tool-panel {
+    position: absolute;
+    z-index: 5;
+    bottom: 59px;
+    left: 0;
+    width: min(350px, 100%);
+    max-height: min(68vh, 560px);
+    border-top: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    border-radius: 0 9px 0 0;
+    box-shadow: 8px -8px 24px #30423718;
+  }
+  .panel-heading {
+    padding: 14px 15px 12px;
+  }
+  .panel-content {
+    gap: 13px;
+    padding: 13px 15px 18px;
+  }
+  .workspace {
+    order: 1;
+  }
+  .workspace-toolbar {
+    flex-basis: 42px;
+    padding: 0 10px;
+  }
+  .workspace-actions {
+    gap: 4px;
+  }
+  .workspace-footer {
+    flex-basis: 26px;
+    padding: 0 9px;
+  }
+  .workspace-footer > span:last-child {
+    display: none;
+  }
+  .stage {
+    background-size: 15px 15px;
+  }
+  .empty-prompt h1 {
+    font-size: 19px;
+  }
+}
+
+@media (max-width: 390px) {
+  .brand-name {
+    font-size: 14px;
+  }
+  .topbar {
+    padding: 0 8px;
+  }
+  .top-actions {
+    gap: 1px;
+  }
+  .download-button {
+    padding: 0 7px;
+  }
+  .zoom-value {
+    min-width: 32px;
+    text-align: center;
+  }
+  .workspace-toolbar {
+    padding: 0 7px;
+  }
+  .document-breadcrumb {
+    gap: 4px;
+    font-size: 10px;
+  }
+}
+
+

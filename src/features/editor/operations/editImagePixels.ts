@@ -1,43 +1,29 @@
-export type EditPoint = {
-  x: number
-  y: number
+import type { EditPoint, PixelEditMode } from '../model/types'
+
+function validatePixelEdit(points: EditPoint[], mode: PixelEditMode) {
+  if (points.length === 0) {
+    throw new Error('Draw an area to edit first.')
+  }
+  if (mode === 'lasso' && points.length < 3) {
+    throw new Error('Draw a larger closed selection first.')
+  }
 }
 
-export type PixelEditMode = 'brush' | 'lasso'
-
-export async function editImagePixels(
-  source: string,
+export function editImagePixelsInCanvas(
+  output: HTMLCanvasElement,
   canvasWidth: number,
   canvasHeight: number,
   points: EditPoint[],
   brushSize: number,
   mode: PixelEditMode,
-): Promise<string> {
-  if (points.length === 0) {
-    throw new Error('Draw an area to edit first.')
-  }
+): HTMLCanvasElement {
+  validatePixelEdit(points, mode)
 
-  const image = new Image()
-  image.src = source
-  await image.decode()
-
-  const output = document.createElement('canvas')
-  output.width = image.naturalWidth
-  output.height = image.naturalHeight
-
-  const context = output.getContext('2d', {
-    willReadFrequently: true,
-  })
-
-  if (!context) {
-    throw new Error('Could not edit this image.')
-  }
-
-  context.drawImage(image, 0, 0)
+  const context = output.getContext('2d')
+  if (!context) throw new Error('Could not edit this image.')
 
   const scaleX = output.width / canvasWidth
   const scaleY = output.height / canvasHeight
-
   context.save()
   context.globalCompositeOperation = 'destination-out'
   context.lineCap = 'round'
@@ -50,7 +36,8 @@ export async function editImagePixels(
     context.beginPath()
     context.moveTo(points[0].x * scaleX, points[0].y * scaleY)
 
-    for (const point of points.slice(1)) {
+    for (let index = 1; index < points.length; index += 1) {
+      const point = points[index]
       context.lineTo(point.x * scaleX, point.y * scaleY)
     }
 
@@ -67,15 +54,11 @@ export async function editImagePixels(
       context.stroke()
     }
   } else {
-    if (points.length < 3) {
-      context.restore()
-      throw new Error('Draw a larger closed selection first.')
-    }
-
     context.beginPath()
     context.moveTo(points[0].x * scaleX, points[0].y * scaleY)
 
-    for (const point of points.slice(1)) {
+    for (let index = 1; index < points.length; index += 1) {
+      const point = points[index]
       context.lineTo(point.x * scaleX, point.y * scaleY)
     }
 
@@ -84,5 +67,30 @@ export async function editImagePixels(
   }
 
   context.restore()
+  return output
+}
+
+export async function editImagePixels(
+  source: string,
+  canvasWidth: number,
+  canvasHeight: number,
+  points: EditPoint[],
+  brushSize: number,
+  mode: PixelEditMode,
+): Promise<string> {
+  validatePixelEdit(points, mode)
+
+  const image = new Image()
+  image.src = source
+  await image.decode()
+
+  const output = document.createElement('canvas')
+  output.width = image.naturalWidth
+  output.height = image.naturalHeight
+
+  const context = output.getContext('2d')
+  if (!context) throw new Error('Could not edit this image.')
+  context.drawImage(image, 0, 0)
+  editImagePixelsInCanvas(output, canvasWidth, canvasHeight, points, brushSize, mode)
   return output.toDataURL('image/png')
 }

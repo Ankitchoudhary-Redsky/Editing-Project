@@ -1,5 +1,6 @@
 import { ImagePlus, Music2, RotateCcw, Trash } from 'lucide-react'
 import { useEditor } from '../../../editor/EditorContext'
+import { editorCopy } from '../../model/editorCopy'
 
 export function UploadPanel() {
   const { canvas, tools } = useEditor()
@@ -7,7 +8,7 @@ export function UploadPanel() {
     <div className="panel-content">
       <button className="upload-drop" onClick={tools.openFilePicker}>
         <span className="upload-icon"><ImagePlus size={21} /></span>
-        <strong>Upload an image</strong>
+        <strong>{editorCopy.uploadImage}</strong>
         <span>PNG, JPG or WebP · up to 30 MB</span>
         <span className="browse-button">Choose a file</span>
       </button>

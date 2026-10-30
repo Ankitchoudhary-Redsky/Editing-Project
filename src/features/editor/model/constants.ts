@@ -8,7 +8,7 @@ import {
   Layers3,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
-import type { EditorTool, ShapeKind } from './types'
+import type { DrawingMode, EditorTool, ShapeKind } from './types'
 
 export const BACKGROUND_IMAGE_NAME = '__pixel_studio_background_image__'
 
@@ -48,6 +48,21 @@ export const shapeNames: Record<ShapeKind, string> = {
   pentagon: 'Pentagon',
 }
 
+export const resizePresets = [
+  { label: 'Square', width: 1080, height: 1080 },
+  { label: 'Portrait', width: 1080, height: 1350 },
+  { label: 'Landscape', width: 1600, height: 900 },
+  { label: 'Story', width: 1080, height: 1920 },
+]
+
+export const textFontFamilies = ['Georgia', 'Arial', 'Verdana', 'Trebuchet MS', 'Courier New', 'Times New Roman']
+
+export const drawingModeDescriptions: Record<DrawingMode, string> = {
+  pencil: 'Draw freehand strokes on your image.',
+  eraser: 'Erase pencil strokes from your design.',
+  'magic-remover': 'Brush over image areas to make them transparent.',
+  lasso: 'Draw around an image area to select it.',
+}
 
 export const IMAGE_SOURCE_TOKEN = '__pixel_studio_image_source__'
 let nextSourceId = 1
@@ -72,22 +87,27 @@ export function resolveImageSourceToken(token: string) {
 }
 
 export function serializeCanvas(canvas: Canvas) {
-  return JSON.stringify(
-    {
-      width: canvas.getWidth(),
-      height: canvas.getHeight(),
-      scene: canvas.toObject(['name']),
-    },
-    (key, value: unknown) => {
-      if (
-        key === 'src' &&
-        typeof value === 'string' &&
-        value.startsWith('data:image/')
-      ) {
-        return getImageSourceToken(value)
-      }
+  const scene = canvas.toObject(['name']) as Record<string, unknown>
+  const replaceImageSources = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(replaceImageSources)
+      return
+    }
+    if (!value || typeof value !== 'object') return
 
-      return value
-    },
-  )
+    for (const [key, child] of Object.entries(value)) {
+      if (key === 'src' && typeof child === 'string' && child.startsWith('data:image/')) {
+        ;(value as Record<string, unknown>)[key] = getImageSourceToken(child)
+      } else {
+        replaceImageSources(child)
+      }
+    }
+  }
+  replaceImageSources(scene)
+
+  return {
+    width: canvas.getWidth(),
+    height: canvas.getHeight(),
+    scene,
+  }
 }

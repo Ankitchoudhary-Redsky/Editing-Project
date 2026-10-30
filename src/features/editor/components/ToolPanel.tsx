@@ -1,5 +1,7 @@
 import { useEditor } from '../EditorContext'
 import { editorToolCategories } from '../model/constants'
+import { editorHeadings } from '../model/editorCopy'
+import { X } from 'lucide-react'
 import { AdjustmentsPanel } from './panels/AdjustmentsPanel'
 import { UploadPanel } from './panels/UploadPanel'
 import { CropPanel } from './panels/CropPanel'
@@ -16,10 +18,11 @@ export function ToolPanel() {
   const { canvas, tools } = useEditor()
   if (tools.active === 'music') return null
   const activeCategory = editorToolCategories.find((category) => category.tools.some(({ id }) => id === tools.active)) ?? editorToolCategories[0]
+  const panelHeading = editorHeadings.toolPanels[tools.active as keyof typeof editorHeadings.toolPanels] ?? activeCategory.label
 
   return (
     <aside className="tool-panel">
-      <div className="panel-heading"><div><h3 className="panel-kicker">{activeCategory.label}</h3></div></div>
+      <div className="panel-heading"><div><h3 className="panel-kicker">{panelHeading}</h3></div><button className="panel-close" onClick={() => tools.setActive('select')} aria-label="Close tool panel"><X size={17} /></button></div>
       {activeCategory.tools.length > 1 && (
         <nav className="panel-subtools" aria-label={`${activeCategory.label} tools`}>
           {activeCategory.tools.map(({ id, label }) => (

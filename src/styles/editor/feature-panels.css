@@ -1,0 +1,346 @@
+/* Background removal panel */
+.background-content {
+  overflow-y: auto;
+}
+
+.background-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.background-intro strong {
+  color: #34483c;
+  font-size: 13px;
+}
+
+.background-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--accent);
+  background: var(--accent-pale);
+}
+
+.background-content input[type='color'] {
+  width: 100%;
+  height: 40px;
+  padding: 3px;
+  border: 1px solid #dfe4e0;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.background-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 11px;
+  border: 1px solid #dce9df;
+  border-radius: 6px;
+  color: #496452;
+  background: #f5faf6;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.background-progress p {
+  margin: 0;
+  color: #7c8980;
+  line-height: 1.5;
+}
+
+.background-spinner {
+  animation: background-spin 1s linear infinite;
+}
+
+@keyframes background-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.background-content .panel-separator {
+  margin: 3px 0;
+}
+
+.drawing-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.drawing-content strong {
+  color: #34483c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.drawing-content input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.drawing-content input[type='color'] {
+  width: 100%;
+  height: 40px;
+  padding: 3px;
+  border: 1px solid #dfe4e0;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.drawing-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.drawing-mode-button {
+  padding: 10px 8px;
+  border: 1px solid #dfe4e0;
+  border-radius: 8px;
+  background: #fff;
+  color: #34483c;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.drawing-mode-button.active {
+  border-color: var(--accent);
+  background: #edf5ef;
+  font-weight: 600;
+}
+
+.drawing-mode-button:disabled,
+.drawing-mode-button.active:disabled {
+  border-color: #e6e9e6;
+  background: #f6f7f6;
+  color: #929a95;
+  cursor: not-allowed;
+  font-weight: 400;
+}
+
+.sticker-panel-content {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sticker-upload-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 15px 12px;
+  border-bottom: 1px solid #eef0ed;
+}
+
+.sticker-upload-row h4,
+.sticker-collection-heading h4 {
+  margin: 0;
+  color: #353d39;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sticker-upload-row p {
+  margin: 4px 0 0;
+  color: #89918d;
+  font-size: 10px;
+}
+
+.sticker-upload-button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border: 1px solid #dfe8e1;
+  border-radius: 7px;
+  color: #32745d;
+  background: #f3f8f4;
+  cursor: pointer;
+}
+
+.sticker-upload-button:hover:not(:disabled) {
+  border-color: #a8c8b3;
+  background: #eaf4ed;
+}
+
+.sticker-upload-button:disabled {
+  cursor: progress;
+  opacity: .65;
+}
+
+.sticker-loading {
+  animation: background-spin 1s linear infinite;
+}
+
+.sticker-empty-note {
+  margin: 10px 15px 0;
+  padding: 8px 9px;
+  border-radius: 5px;
+  color: #65746a;
+  background: #f4f7f4;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.sticker-collections {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #d9dfdb transparent;
+  scrollbar-width: thin;
+}
+
+.sticker-collection {
+  padding: 13px 12px 2px;
+}
+
+.sticker-collection-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 0 2px 9px;
+}
+
+.sticker-collection-heading button {
+  padding: 3px 0 3px 5px;
+  border: 0;
+  color: #56615b;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sticker-collection-heading button:hover {
+  color: #32745d;
+}
+
+.sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.sticker-tile {
+  display: flex;
+  min-width: 0;
+  min-height: 78px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 4px 2px 5px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #3b4540;
+  cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease;
+}
+
+.sticker-tile:hover {
+  transform: translateY(-2px);
+  border-color: #cad8ce;
+}
+
+.sticker-tile:active {
+  transform: scale(.97);
+}
+
+.tone-rose { background: #fff0f1; }
+.tone-lilac { background: #f4efff; }
+.tone-mint { background: #edf7f1; }
+.tone-gold { background: #fff6e7; }
+.tone-blue { background: #edf5fb; }
+
+.sticker-preview {
+  display: grid;
+  width: 48px;
+  height: 49px;
+  flex: 0 0 49px;
+  place-items: center;
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+  font-size: 34px;
+  line-height: 1;
+  transform-origin: center;
+}
+
+.sticker-tile-name {
+  width: 100%;
+  overflow: hidden;
+  color: #66716b;
+  font-size: 9px;
+  line-height: 1.25;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-bounce { animation: sticker-bounce 1.1s ease-in-out infinite; }
+.motion-pulse { animation: sticker-pulse 1.3s ease-in-out infinite; }
+.motion-spin { animation: sticker-spin 3.4s linear infinite; }
+.motion-wiggle { animation: sticker-wiggle 1.3s ease-in-out infinite; }
+
+@keyframes sticker-bounce {
+  0%, 100% { transform: translateY(2px); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes sticker-pulse {
+  0%, 100% { transform: scale(.92); }
+  50% { transform: scale(1.06); }
+}
+
+@keyframes sticker-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes sticker-wiggle {
+  0%, 100% { transform: rotate(-7deg); }
+  50% { transform: rotate(7deg); }
+}
+
+.sticker-panel-footer {
+  display: flex;
+  min-height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  border-top: 1px solid #eef0ed;
+  color: #89918d;
+  background: #fff;
+  font-size: 9px;
+}
+
+.sticker-panel-footer svg {
+  flex: 0 0 auto;
+  color: #6b9d7d;
+}
+
+@media (max-width: 700px) {
+  .sticker-upload-row { padding: 11px 14px; }
+  .sticker-collection { padding: 12px 13px 2px; }
+  .sticker-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .sticker-tile { min-height: 76px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sticker-preview { animation: none; }
+  .sticker-tile { transition: none; }
+}

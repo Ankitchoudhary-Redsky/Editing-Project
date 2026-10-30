@@ -1,9 +1,8 @@
-import { removeBackground as imglyRemoveBackground } from '@imgly/background-removal'
-
 export async function removeImageBackground(
   source: string,
   onProgress?: (message: string) => void,
 ): Promise<string> {
+  const { removeBackground: imglyRemoveBackground } = await import('@imgly/background-removal')
   const result = await imglyRemoveBackground(source, {
     progress: (key, current, total) => {
       const percent = total > 0

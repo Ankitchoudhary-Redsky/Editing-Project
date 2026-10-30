@@ -1,15 +1,5 @@
 import { Canvas, IText, Shadow } from 'fabric'
-
-export type NewTextOptions = {
-  value: string
-  fontFamily: string
-  fontSize: number
-  color: string
-  opacity: number
-  outline: string
-  outlineWidth: number
-  shadow: string
-}
+import type { NewTextOptions } from '../model/types'
 
 export function createTextObject(canvas: Canvas, options: NewTextOptions) {
   const text = new IText(options.value || 'Your text here', {

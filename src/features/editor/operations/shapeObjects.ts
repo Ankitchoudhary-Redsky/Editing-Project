@@ -1,23 +1,52 @@
-import { Canvas, Circle, Ellipse, Line, Path, Polygon, Rect, Triangle, type FabricObject } from 'fabric'
-import type { ShapeKind } from '../model/types'
+import { Canvas, Circle, Ellipse, FabricImage, Line, Path, Polygon, Rect, Triangle, type FabricObject } from 'fabric'
+import { shapeNames } from '../model/constants'
+import type { NewShapeOptions, ShapeBounds } from '../model/types'
+import { getImageBounds } from './tableGeometry'
 
-export type NewShapeOptions = {
-  kind: ShapeKind
-  fill: string
-  transparentFill: boolean
-  stroke: string
-  strokeWidth: number
-  opacity: number
-  name: string
+export function constrainShapeToImage(canvas: Canvas, image: FabricImage | null, object: FabricObject) {
+  const bounds = getImageBounds(canvas, image)
+  if (!bounds.width || !bounds.height) return
+
+  object.setCoords()
+  let objectBounds = object.getBoundingRect()
+  const scale = Math.min(
+    1,
+    bounds.width / Math.max(1, objectBounds.width),
+    bounds.height / Math.max(1, objectBounds.height),
+  )
+  if (scale < 1) {
+    object.set({
+      scaleX: (object.scaleX ?? 1) * scale,
+      scaleY: (object.scaleY ?? 1) * scale,
+    })
+    object.setCoords()
+    objectBounds = object.getBoundingRect()
+  }
+
+  const right = bounds.left + bounds.width
+  const bottom = bounds.top + bounds.height
+  const offsetX = objectBounds.left < bounds.left
+    ? bounds.left - objectBounds.left
+    : objectBounds.left + objectBounds.width > right
+      ? right - objectBounds.left - objectBounds.width
+      : 0
+  const offsetY = objectBounds.top < bounds.top
+    ? bounds.top - objectBounds.top
+    : objectBounds.top + objectBounds.height > bottom
+      ? bottom - objectBounds.top - objectBounds.height
+      : 0
+  object.set({
+    left: (object.left ?? 0) + offsetX,
+    top: (object.top ?? 0) + offsetY,
+  })
+  object.setCoords()
 }
 
-export type ShapeBounds = {
-  left: number
-  top: number
-  width: number
-  height: number
-  directionX?: -1 | 1
-  directionY?: -1 | 1
+export function isShapeObject(object: FabricObject) {
+  const name = String(object.get('name') ?? '')
+  return Object.values(shapeNames).some(
+    (shapeName) => name === shapeName || name.startsWith(`${shapeName} copy`),
+  )
 }
 
 export function buildShapeObject(options: NewShapeOptions, bounds: ShapeBounds): FabricObject {
@@ -98,6 +127,8 @@ export function buildShapeObject(options: NewShapeOptions, bounds: ShapeBounds):
 
 export function createShapeObject(canvas: Canvas, options: NewShapeOptions): FabricObject {
   const shape = buildShapeObject(options, { left: canvas.getWidth() / 2 - 90, top: canvas.getHeight() / 2 - 60, width: 180, height: 120 })
+  const image = canvas.getObjects().find((object) => object instanceof FabricImage && object.get('name') !== '__pixel_studio_background_image__')
+  constrainShapeToImage(canvas, image instanceof FabricImage ? image : null, shape)
   canvas.add(shape)
   canvas.setActiveObject(shape)
   canvas.requestRenderAll()

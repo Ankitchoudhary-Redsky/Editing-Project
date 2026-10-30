@@ -1,13 +1,4 @@
-import type { Canvas } from 'fabric'
-
-type ImageMusicVideoExportProps = {
-  fabricCanvas: Canvas
-  hasImage: boolean
-  imagePreviewUrl: string
-  imageDimensions: { width: number; height: number }
-  isActive?: boolean
-  onBack: () => void
-}
+import type { ImageMusicVideoExportProps } from '../model/types'
 
 export default function ImageMusicVideoExport(
   props: ImageMusicVideoExportProps,
