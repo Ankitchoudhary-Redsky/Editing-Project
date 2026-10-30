@@ -30,7 +30,5 @@ export function createTextObject(canvas: Canvas, options: NewTextOptions) {
   canvas.add(text)
   canvas.setActiveObject(text)
   canvas.requestRenderAll()
-  text.enterEditing()
-  text.selectAll()
   return text
 }

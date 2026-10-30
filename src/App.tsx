@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Canvas,
@@ -44,9 +43,11 @@ import { restartAnimatedStickers } from './features/editor/operations/animatedSt
 import './App.css'
 import { buildShapeObject, createShapeObject } from './features/editor/operations/shapeObjects'
 import { createTextObject } from './features/editor/operations/textObjects'
+import { STICKY_NOTE_MIN_HEIGHT } from './features/editor/operations/overlayObjects'
 import { objectName } from './features/editor/model/objectName'
 import { deleteProjectDraft, loadProjectDraft, saveProjectDraft } from './features/editor/operations/projectStorage'
 import { drawProjectWatermark } from './features/editor/operations/projectWatermark'
+import { cropImageToCell, getGridCells, loadImageElement, type GridLayoutId } from './features/editor/operations/gridLayout'
 
 type EditorSnapshot = {
   width: number
@@ -83,6 +84,7 @@ type TableGesture = {
   rowHeights: number[]
   moved: boolean
 }
+
 
 function getImageBounds(canvas: Canvas, image: FabricImage | null) {
   const bounds = image?.getBoundingRect() ?? {
@@ -161,6 +163,55 @@ function tableCellName(tableId: number, row: number, column: number) {
 
 function tableTextName(tableId: number, row: number, column: number) {
   return `__pixel_studio_table_text__${tableId}__${row}__${column}`
+}
+
+function updateImageFrame(canvas: Canvas, image: FabricImage) {
+  const frameId = String(image.get('frameId') ?? image.get('gridCellId') ?? image.get('name'))
+  const frame = canvas.getObjects().find((object) => object.get('frameTarget') === frameId)
+  if (!frame) return
+
+  const inset = Number(frame.get('framePadding') ?? 0)
+  const imageWidth = (image.width ?? 0) * (image.scaleX ?? 1)
+  const imageHeight = (image.height ?? 0) * (image.scaleY ?? 1)
+  frame.set({
+    left: (image.left ?? 0) - inset,
+    top: (image.top ?? 0) - inset,
+    width: Math.max(1, imageWidth + inset * 2),
+    height: Math.max(1, imageHeight + inset * 2),
+    angle: image.angle,
+    selectable: false,
+    evented: false,
+    objectCaching: false,
+    dirty: true,
+  })
+  frame.setCoords()
+}
+
+function restoreImageFrames(canvas: Canvas) {
+  ;[...canvas.getObjects()].forEach((object) => {
+    if (object.get('name') !== 'Image frame') return
+    const targetName = object.get('frameTarget')
+    const image = canvas.getObjects().find(
+      (candidate) => candidate instanceof FabricImage &&
+        (candidate.get('frameId') ?? candidate.get('gridCellId') ?? candidate.get('name')) === targetName,
+    )
+    if (image instanceof FabricImage) {
+      object.set({ selectable: false, evented: false, objectCaching: false })
+      const imageIndex = canvas.getObjects().indexOf(image)
+      const frameIndex = canvas.getObjects().indexOf(object)
+      if (frameIndex > imageIndex) canvas.moveObjectTo(object, Math.max(0, imageIndex))
+      updateImageFrame(canvas, image)
+    }
+    else canvas.remove(object)
+  })
+}
+
+function hasDesignContent(canvas: Canvas) {
+  return canvas.getObjects().some((object) =>
+    (object instanceof FabricImage && object.get('name') !== BACKGROUND_IMAGE_NAME) ||
+    object.get('gridSlot') === true ||
+    object.get('frameSlot') === true,
+  )
 }
 
 function tableColumnOffset(table: CanvasTable, column: number) {
@@ -291,6 +342,7 @@ function App() {
   const canvasElementRef = useRef<HTMLCanvasElement>(null)
   const stageElementRef = useRef<HTMLDivElement>(null)
   const uploadInputRef = useRef<HTMLInputElement>(null)
+  const pendingFrameSlotIdRef = useRef<string | null>(null)
 
   const canvasRef = useRef<Canvas | null>(null)
   const historyRef = useRef<string[]>([])
@@ -362,11 +414,15 @@ function App() {
   const [hasDocument, setHasDocument] = useState(false)
   const [selectedObject, setSelectedObject] = useState<FabricObject | null>(null)
   const [objects, setObjects] = useState<FabricObject[]>([])
+  const [gridCells, setGridCells] = useState<Array<{ id: string; index: number; hasImage: boolean; thumbnail: string }>>([])
+  const [selectedGridCellId, setSelectedGridCellId] = useState<string | null>(null)
   const [historyVersion, setHistoryVersion] = useState(0)
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
   const [hasImage, setHasImage] = useState(false)
   const [selectedIsImage, setSelectedIsImage] = useState(false)
+  const [imageResizeLocked, setImageResizeLocked] = useState(false)
+  const imageResizeLockedRef = useRef(false)
   const [imageThumbnail, setImageThumbnail] = useState('')
   const [zoom, setZoom] = useState(1)
   const [fitScale, setFitScale] = useState(1)
@@ -456,19 +512,49 @@ function App() {
     if (!canvas) return
 
     const canvasObjects = canvas.getObjects()
-    const image = canvasObjects.find((item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME)
-    image?.set({ selectable: false, evented: false, lockMovementX: true, lockMovementY: true, lockScalingX: true, lockScalingY: true, lockRotation: true })
+    const image = canvasObjects.find((item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME && !item.get('gridCellId'))
+    const gridSlots = canvasObjects.filter((item) => item.get('gridSlot') === true)
+    const frameSlots = canvasObjects.filter((item) => item.get('frameSlot') === true)
+    const nextGridCells = gridSlots.map((slot) => {
+      const id = String(slot.get('gridCellId'))
+      const cellImage = canvasObjects.find((item) => item instanceof FabricImage && item.get('gridCellId') === id)
+      return {
+        id,
+        index: Number(slot.get('gridCellIndex') ?? 0),
+        hasImage: cellImage instanceof FabricImage,
+        thumbnail: cellImage instanceof FabricImage ? cellImage.getSrc() : '',
+      }
+    })
+    setGridCells(nextGridCells)
+    image?.set({
+      selectable: true,
+      evented: true,
+      lockMovementX: imageResizeLockedRef.current,
+      lockMovementY: imageResizeLockedRef.current,
+      lockScalingX: imageResizeLockedRef.current,
+      lockScalingY: imageResizeLockedRef.current,
+      lockUniScaling: true,
+      lockRotation: imageResizeLockedRef.current,
+      cornerStyle: 'circle',
+      cornerColor: '#32745d',
+      cornerStrokeColor: '#255843',
+      cornerSize: 12,
+      transparentCorners: false,
+    })
     imageObjectRef.current = image instanceof FabricImage ? image : null
     setCropRotation(image instanceof FabricImage ? Math.round(image.angle || 0) : 0)
 
     setHasImage(Boolean(image))
+    setHasDocument(Boolean(image) || gridSlots.length > 0 || frameSlots.length > 0)
     setObjects(
       canvasObjects.filter((item) => item !== cropObjectRef.current),
     )
 
     const active = canvas.getActiveObject() ?? null
     setSelectedObject(active)
-    setSelectedIsImage(active === imageObjectRef.current)
+    setSelectedIsImage(active instanceof FabricImage && active.get('name') !== BACKGROUND_IMAGE_NAME)
+    const selectedCell = active?.get('gridCellId') ?? (active?.get('gridSlot') ? active.get('gridCellId') : null)
+    setSelectedGridCellId(typeof selectedCell === 'string' ? selectedCell : null)
   }, [])
 
   const serializeEditorSnapshot = useCallback((canvas: Canvas) => {
@@ -593,11 +679,14 @@ function App() {
         canvas.setDimensions({ width: draft.width, height: draft.height })
         await canvas.loadFromJSON(draft.scene)
         if (disposed) return
+        restoreImageFrames(canvas)
 
         let mainImage = canvas.getObjects().find(
-          (item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME,
+          (item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME && !item.get('gridCellId'),
         )
-        if (!(mainImage instanceof FabricImage)) {
+        const hasSavedGrid = canvas.getObjects().some((item) => item.get('gridSlot') === true)
+        const hasSavedFrameSlot = canvas.getObjects().some((item) => item.get('frameSlot') === true)
+        if (!(mainImage instanceof FabricImage) && !hasSavedGrid && !hasSavedFrameSlot) {
           canvas.clear()
           canvas.setDimensions({ width: 1200, height: 800 })
           canvas.backgroundColor = 'rgba(0,0,0,0)'
@@ -615,8 +704,8 @@ function App() {
         setDimensions(imageObjectRef.current
           ? { width: draft.width, height: draft.height }
           : { width: 1200, height: 800 })
-        setHasDocument(Boolean(imageObjectRef.current))
-        setImageThumbnail(imageObjectRef.current
+        setHasDocument(Boolean(imageObjectRef.current) || hasSavedGrid || hasSavedFrameSlot)
+        setImageThumbnail(imageObjectRef.current || hasSavedGrid
           ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
           : '')
         setProjectName(draft.projectName)
@@ -691,12 +780,21 @@ function App() {
       recordHistory()
     }
 
+    const enforceStickyNoteHeight = (event: { target?: FabricObject }) => {
+      const target = event.target
+      if (target?.get('name') !== 'Sticky note' || target.height >= STICKY_NOTE_MIN_HEIGHT) return
+      target.set({ height: STICKY_NOTE_MIN_HEIGHT })
+      target.setCoords()
+      canvas.requestRenderAll()
+    }
+
     canvas.on('selection:created', syncObjects)
     canvas.on('selection:updated', syncObjects)
     canvas.on('selection:cleared', syncObjects)
     canvas.on('object:added', changed)
     canvas.on('object:modified', changed)
     canvas.on('object:removed', changed)
+    canvas.on('text:changed', enforceStickyNoteHeight)
     canvas.on('text:changed', changed)
     const constrainShape = (event: { target?: FabricObject }) => {
       const target = event.target
@@ -704,9 +802,27 @@ function App() {
         constrainShapeToImage(canvas, imageObjectRef.current, target)
       }
     }
+    const syncImageFrame = (event: { target?: FabricObject }) => {
+      const target = event.target
+      if (!(target instanceof FabricImage)) return
+      updateImageFrame(canvas, target)
+    }
+    const openFrameSlotOnClick = (event: { target?: FabricObject }) => {
+      const target = event.target
+      if (!target?.get('frameSlot')) return
+      const slotId = target.get('frameId')
+      if (typeof slotId !== 'string') return
+      pendingFrameSlotIdRef.current = slotId
+      uploadInputRef.current?.click()
+    }
     canvas.on('object:moving', constrainShape)
     canvas.on('object:scaling', constrainShape)
     canvas.on('object:rotating', constrainShape)
+    canvas.on('object:moving', syncImageFrame)
+    canvas.on('object:scaling', syncImageFrame)
+    canvas.on('object:rotating', syncImageFrame)
+    canvas.on('object:modified', syncImageFrame)
+    canvas.on('mouse:down', openFrameSlotOnClick)
     canvas.on('path:created', (event) => {
       if (activeToolRef.current !== 'draw-remove') return
 
@@ -744,6 +860,12 @@ function App() {
       canvas.off('object:moving', constrainShape)
       canvas.off('object:scaling', constrainShape)
       canvas.off('object:rotating', constrainShape)
+      canvas.off('object:moving', syncImageFrame)
+      canvas.off('object:scaling', syncImageFrame)
+      canvas.off('object:rotating', syncImageFrame)
+      canvas.off('object:modified', syncImageFrame)
+      canvas.off('mouse:down', openFrameSlotOnClick)
+      canvas.off('text:changed', enforceStickyNoteHeight)
 
       if (historyTimerRef.current) {
         clearTimeout(historyTimerRef.current)
@@ -766,7 +888,7 @@ function App() {
       const draft: PersistedEditorDraft = {
         width: canvas.getWidth(),
         height: canvas.getHeight(),
-        scene: canvas.toJSON(),
+        scene: canvas.toObject(['name', 'frameTarget', 'frameStyle', 'framePadding', 'frameId', 'frameSlot', 'frameColor', 'gridCellId', 'gridCellIndex', 'gridSlot']),
         projectName,
         activeTool,
         zoom,
@@ -1115,6 +1237,318 @@ function App() {
     })
   }
 
+  const applyModernFrame = (style: 'none' | 'clean' | 'matte' | 'soft-shadow' | 'bold', color: string) => {
+    const canvas = canvasRef.current
+    const image = canvas?.getActiveObject()
+    if (!canvas || !(image instanceof FabricImage)) return
+
+    const imageId = String(image.get('frameId') ?? image.get('gridCellId') ?? `frame-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
+    const existing = canvas.getObjects().find((object) => object.get('frameTarget') === imageId)
+    if (style === 'none') {
+      if (existing) {
+        image.set({
+          left: existing.left,
+          top: existing.top,
+          scaleX: (existing.width ?? image.width ?? 1) / Math.max(1, image.width ?? 1),
+          scaleY: (existing.height ?? image.height ?? 1) / Math.max(1, image.height ?? 1),
+          angle: existing.angle ?? image.angle,
+        })
+        canvas.remove(existing)
+      }
+      image.set({ frameId: undefined, frameStyle: undefined, shadow: undefined })
+    } else {
+      const paddingByStyle = { clean: 8, matte: 28, 'soft-shadow': 14, bold: 18 }
+      const padding = paddingByStyle[style]
+      const outerLeft = existing?.left ?? image.left ?? 0
+      const outerTop = existing?.top ?? image.top ?? 0
+      const outerWidth = existing?.width ?? (image.width ?? 1) * (image.scaleX ?? 1)
+      const outerHeight = existing?.height ?? (image.height ?? 1) * (image.scaleY ?? 1)
+      const frame = existing ?? new Rect({
+        name: 'Image frame',
+        frameTarget: imageId,
+        left: outerLeft,
+        top: outerTop,
+        width: outerWidth,
+        height: outerHeight,
+        selectable: false,
+        evented: false,
+        objectCaching: false,
+      })
+      frame.set({
+        name: 'Image frame',
+        frameTarget: imageId,
+        frameStyle: style,
+        framePadding: padding,
+        left: outerLeft,
+        top: outerTop,
+        width: outerWidth,
+        height: outerHeight,
+        angle: image.angle,
+        rx: style === 'matte' ? 3 : style === 'soft-shadow' ? 10 : 2,
+        ry: style === 'matte' ? 3 : style === 'soft-shadow' ? 10 : 2,
+        fill: color,
+        stroke: 'rgba(0,0,0,0)',
+        strokeWidth: 0,
+        selectable: false,
+        evented: false,
+        objectCaching: false,
+      })
+      if (!existing) {
+        canvas.add(frame)
+        canvas.moveObjectTo(frame, Math.max(0, canvas.getObjects().indexOf(image)))
+      }
+      image.set({
+        frameId: imageId,
+        frameStyle: style,
+        left: outerLeft + padding,
+        top: outerTop + padding,
+        scaleX: Math.max(1, outerWidth - padding * 2) / Math.max(1, image.width ?? 1),
+        scaleY: Math.max(1, outerHeight - padding * 2) / Math.max(1, image.height ?? 1),
+        shadow: style === 'soft-shadow'
+          ? new Shadow({ color: `${color}88`, blur: 18, offsetX: 0, offsetY: 8 })
+          : undefined,
+      })
+      updateImageFrame(canvas, image)
+    }
+    image.setCoords()
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const createCanvasFrame = (style: 'none' | 'clean' | 'matte' | 'soft-shadow' | 'bold', color: string) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const width = canvas.getWidth()
+    const height = canvas.getHeight()
+    const frameStyle = style === 'none' ? 'clean' : style
+    const paddingByStyle = { clean: 8, matte: 28, 'soft-shadow': 14, bold: 18 }
+    const padding = paddingByStyle[frameStyle]
+    const outerWidth = Math.min(820, width * 0.82)
+    const outerHeight = Math.min(620, height * 0.82)
+    const frameId = `canvas-frame-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+    const slot = new Rect({
+      name: 'Canvas photo frame slot',
+      frameSlot: true,
+      frameId,
+      frameStyle,
+      frameColor: color,
+      framePadding: padding,
+      left: (width - outerWidth) / 2,
+      top: (height - outerHeight) / 2,
+      width: outerWidth,
+      height: outerHeight,
+      fill: '#e5ebe7',
+      stroke: color,
+      strokeWidth: Math.max(12, padding),
+      rx: 12,
+      ry: 12,
+      shadow: frameStyle === 'soft-shadow'
+        ? new Shadow({ color: `${color}66`, blur: 26, offsetX: 0, offsetY: 12 })
+        : undefined,
+      selectable: false,
+      evented: true,
+      objectCaching: false,
+    })
+    canvas.add(slot)
+    canvas.bringObjectToFront(slot)
+    canvas.requestRenderAll()
+    setDimensions({ width, height })
+    setResizeWidth(width)
+    setResizeHeight(height)
+    setHasDocument(true)
+    setImageThumbnail(canvas.toDataURL({ format: 'png', multiplier: 0.12 }))
+    resizeDisplay()
+    syncObjects()
+    recordHistory(true)
+    setNotice('Blank frame created. Click it to choose a photo, or drop an image onto it.')
+  }
+
+  const fillCanvasFrame = async (frameId: string, file?: File) => {
+    const canvas = canvasRef.current
+    const slot = canvas?.getObjects().find((object) => object.get('frameSlot') === true && object.get('frameId') === frameId)
+    if (!canvas || !slot || !file) return
+    try {
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Choose a PNG, JPG, or WebP image.')
+      if (file.size > 30 * 1024 * 1024) throw new Error('Images must be smaller than 30 MB.')
+      const loaded = await loadLocalImage(file)
+      const padding = Number(slot.get('framePadding') ?? 12)
+      const innerWidth = Math.max(1, (slot.width ?? 1) - padding * 2)
+      const innerHeight = Math.max(1, (slot.height ?? 1) - padding * 2)
+      const source = cropImageToCell(loaded.image.getElement(), loaded.dimensions.width, loaded.dimensions.height, innerWidth, innerHeight)
+      const image = await FabricImage.fromURL(source)
+      const left = (slot.left ?? 0) + padding
+      const top = (slot.top ?? 0) + padding
+      const frameStyle = slot.get('frameStyle')
+      const frameColor = String(slot.get('frameColor') ?? '#ffffff')
+      slot.set({
+        name: 'Image frame',
+        frameSlot: undefined,
+        frameTarget: frameId,
+        fill: frameColor,
+        stroke: 'rgba(0,0,0,0)',
+        strokeWidth: 0,
+        selectable: false,
+        evented: false,
+      })
+      image.set({
+        name: file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Framed image',
+        frameId,
+        frameStyle,
+        left,
+        top,
+        originX: 'left',
+        originY: 'top',
+        selectable: true,
+        evented: true,
+        lockUniScaling: true,
+        shadow: frameStyle === 'soft-shadow'
+          ? new Shadow({ color: `${frameColor}88`, blur: 18, offsetX: 0, offsetY: 8 })
+          : undefined,
+      })
+      canvas.add(image)
+      canvas.setActiveObject(image)
+      updateImageFrame(canvas, image)
+      canvas.requestRenderAll()
+      imageObjectRef.current = image
+      imageSourceRef.current = source
+      setImageThumbnail(canvas.toDataURL({ format: 'png', multiplier: 0.12 }))
+      setHasImage(true)
+      setHasDocument(true)
+      syncObjects()
+      recordHistory(true)
+      setNotice('Photo added to the frame. Drag it to reposition.')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'The image could not be added to this frame.')
+    }
+  }
+
+  const applyGridLayout = (layout: GridLayoutId, gap: number, background: string) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const width = 1200
+    const height = 900
+    const cells = getGridCells(layout, width, height, gap)
+
+    canvas.clear()
+    canvas.setDimensions({ width, height })
+    canvas.backgroundColor = background
+    cells.forEach(({ id, index, left, top, width: cellWidth, height: cellHeight }) => {
+      canvas.add(new Rect({
+        name: `Grid cell ${index}`,
+        gridSlot: true,
+        gridCellId: id,
+        gridCellIndex: index,
+        left,
+        top,
+        width: cellWidth,
+        height: cellHeight,
+        fill: '#e8eeeb',
+        stroke: 'rgba(0,0,0,0)',
+        strokeWidth: 0,
+        selectable: true,
+        evented: true,
+        objectCaching: false,
+      }))
+    })
+    cropObjectRef.current = null
+    cropOriginalSnapshotRef.current = null
+    imageObjectRef.current = null
+    imageSourceRef.current = ''
+    setDimensions({ width, height })
+    setResizeWidth(width)
+    setResizeHeight(height)
+    setHasImage(false)
+    setHasDocument(true)
+    setImageThumbnail(canvas.toDataURL({ format: 'png', multiplier: 0.12 }))
+    setCropActive(false)
+    canvas.discardActiveObject()
+    canvas.requestRenderAll()
+    resizeDisplay()
+    syncObjects()
+    recordHistory(true)
+    setNotice('Grid layout added. Choose a cell, then add its photo.')
+  }
+
+  const addGridCellImage = async (cellId: string, file?: File, imageUrl?: string) => {
+    const canvas = canvasRef.current
+    const slot = canvas?.getObjects().find((object) => object.get('gridSlot') === true && object.get('gridCellId') === cellId)
+    if (!canvas || !slot) return
+    try {
+      let sourceImage: CanvasImageSource
+      let sourceWidth: number
+      let sourceHeight: number
+      if (file) {
+        if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Choose a PNG, JPG, or WebP image.')
+        if (file.size > 30 * 1024 * 1024) throw new Error('Images must be smaller than 30 MB.')
+        const loaded = await loadLocalImage(file)
+        sourceImage = loaded.image.getElement()
+        sourceWidth = loaded.dimensions.width
+        sourceHeight = loaded.dimensions.height
+      } else {
+        if (!imageUrl) return
+        const parsed = new URL(imageUrl)
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error('Use an HTTP or HTTPS image URL.')
+        const loaded = await loadImageElement(parsed.href, true)
+        sourceImage = loaded
+        sourceWidth = loaded.naturalWidth
+        sourceHeight = loaded.naturalHeight
+      }
+
+      const bounds = slot.getBoundingRect()
+      const croppedSource = cropImageToCell(sourceImage, sourceWidth, sourceHeight, bounds.width, bounds.height)
+      const image = await FabricImage.fromURL(croppedSource)
+      canvas.getObjects().filter((object) => object instanceof FabricImage && object.get('gridCellId') === cellId).forEach((object) => canvas.remove(object))
+      image.set({
+        name: `Grid photo ${slot.get('gridCellIndex')}`,
+        gridCellId: cellId,
+        gridCellIndex: slot.get('gridCellIndex'),
+        left: bounds.left,
+        top: bounds.top,
+        originX: 'left',
+        originY: 'top',
+        selectable: true,
+        evented: true,
+        lockMovementX: true,
+        lockMovementY: true,
+        lockScalingX: true,
+        lockScalingY: true,
+        hasControls: false,
+        objectCaching: true,
+      })
+      canvas.add(image)
+      canvas.setActiveObject(image)
+      canvas.requestRenderAll()
+      syncObjects()
+      recordHistory(true)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'The image could not be added to this cell.')
+    }
+  }
+
+  const removeGridCellImage = (cellId: string) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.getObjects().filter((object) => object instanceof FabricImage && object.get('gridCellId') === cellId).forEach((object) => canvas.remove(object))
+    canvas.getObjects().filter((object) => object.get('frameTarget') === cellId).forEach((object) => canvas.remove(object))
+    const slot = canvas.getObjects().find((object) => object.get('gridSlot') === true && object.get('gridCellId') === cellId)
+    if (slot) canvas.setActiveObject(slot)
+    canvas.requestRenderAll()
+    syncObjects()
+    recordHistory(true)
+  }
+
+  const selectGridCell = (cellId: string) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const object = canvas.getObjects().find((item) => item instanceof FabricImage && item.get('gridCellId') === cellId)
+      ?? canvas.getObjects().find((item) => item.get('gridSlot') === true && item.get('gridCellId') === cellId)
+    if (object) {
+      canvas.setActiveObject(object)
+      canvas.requestRenderAll()
+      syncObjects()
+    }
+  }
+
   const undo = useCallback(async () => {
     if (historyTimerRef.current) recordHistory(true)
     if (historyIndexRef.current <= 0) return
@@ -1137,6 +1571,7 @@ function App() {
       })
 
       await canvas.loadFromJSON(restoreScene(snapshot))
+      restoreImageFrames(canvas)
       restoreTableState(canvas)
       restartAnimatedStickers(canvas)
       canvas.requestRenderAll()
@@ -1163,7 +1598,7 @@ function App() {
       setImageThumbnail(imageObjectRef.current
         ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
         : '')
-      setHasDocument(Boolean(imageObjectRef.current))
+      setHasDocument(hasDesignContent(canvas))
       syncHistoryControls()
       setHistoryVersion((value) => value + 1)
     } finally {
@@ -1193,6 +1628,7 @@ function App() {
       })
 
       await canvas.loadFromJSON(restoreScene(snapshot))
+      restoreImageFrames(canvas)
       restoreTableState(canvas)
       restartAnimatedStickers(canvas)
       canvas.requestRenderAll()
@@ -1219,7 +1655,7 @@ function App() {
       setImageThumbnail(imageObjectRef.current
         ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
         : '')
-      setHasDocument(Boolean(imageObjectRef.current))
+      setHasDocument(hasDesignContent(canvas))
       syncHistoryControls()
       setHistoryVersion((value) => value + 1)
     } finally {
@@ -1283,7 +1719,7 @@ function App() {
 
       canvas.setDimensions({ width, height })
       canvas.backgroundColor = 'rgba(0,0,0,0)'
-      image.set({ left: 0, top: 0, originX: 'left', originY: 'top', selectable: false, evented: false, lockMovementX: true, lockMovementY: true, lockScalingX: true, lockScalingY: true, lockRotation: true })
+      image.set({ left: 0, top: 0, originX: 'left', originY: 'top', selectable: true, evented: true, lockMovementX: false, lockMovementY: false, lockScalingX: false, lockScalingY: false, lockUniScaling: true, lockRotation: true, cornerStyle: 'circle', cornerColor: '#32745d', cornerStrokeColor: '#255843', cornerSize: 12, transparentCorners: false })
       image.set('name', file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Image')
       canvas.add(image)
       canvas.sendObjectToBack(image)
@@ -1330,6 +1766,51 @@ function App() {
     createTextObject(canvas, { value: textValue, fontFamily, fontSize, color: textColor, opacity: textOpacity, outline: textOutline, outlineWidth: textOutlineWidth, shadow: textShadow })
     recordHistory(true)
     setActiveTool('text')
+  }
+
+  const addSignatureImage = async (file: File) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setNotice('Choose a PNG, JPG, or WebP signature image.')
+      return
+    }
+
+    const source = URL.createObjectURL(file)
+    try {
+      const signature = await FabricImage.fromURL(source)
+      const width = signature.width ?? 0
+      const height = signature.height ?? 0
+      if (!width || !height) throw new Error('The signature image has invalid dimensions.')
+
+      const scale = Math.min(
+        (canvas.getWidth() * 0.42) / width,
+        (canvas.getHeight() * 0.22) / height,
+        1,
+      )
+      signature.set({
+        name: 'Signature',
+        left: (canvas.getWidth() - width * scale) / 2,
+        top: (canvas.getHeight() - height * scale) / 2,
+        originX: 'left',
+        originY: 'top',
+        scaleX: scale,
+        scaleY: scale,
+        selectable: true,
+        evented: true,
+        lockUniScaling: true,
+      })
+      canvas.add(signature)
+      canvas.setActiveObject(signature)
+      canvas.requestRenderAll()
+      recordHistory(true)
+      setActiveTool('signature')
+      setNotice('Signature image added. Drag it to position or resize it from a corner.')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'The signature image could not be opened.')
+    } finally {
+      URL.revokeObjectURL(source)
+    }
   }
 
   const addShape = () => {
@@ -1456,6 +1937,7 @@ function App() {
     try {
       canvas.setDimensions({ width: snapshot.width, height: snapshot.height })
       await canvas.loadFromJSON(restoreScene(snapshot))
+      restoreImageFrames(canvas)
       restoreTableState(canvas)
       restartAnimatedStickers(canvas)
       canvas.requestRenderAll()
@@ -1483,7 +1965,7 @@ function App() {
 
       resizeDisplay()
       syncObjects()
-      setHasDocument(Boolean(imageObjectRef.current))
+      setHasDocument(hasDesignContent(canvas))
       cropOriginalSnapshotRef.current = null
     } finally {
       suppressHistoryRef.current = false
@@ -1537,6 +2019,15 @@ function App() {
     canvasRef.current?.requestRenderAll()
     recordHistory()
     if (property === 'text') setTextValue(String(value))
+  }
+
+  const updateSignatureStyle = (fontFamily: string, fontStyle: string, fontWeight: string) => {
+    const active = canvasRef.current?.getActiveObject()
+    if (!(active instanceof IText) || active.get('name') !== 'Signature') return
+    active.set({ fontFamily, fontStyle, fontWeight })
+    active.setCoords()
+    canvasRef.current?.requestRenderAll()
+    recordHistory()
   }
 
   const setActiveEditorTool = useCallback((tool: EditorTool) => {
@@ -1997,7 +2488,20 @@ const resetBackground = async () => {
     event.stopPropagation()
 
     setDraggingFile(false)
-    void uploadFile(event.dataTransfer.files[0])
+    const file = event.dataTransfer.files[0]
+    const canvas = canvasRef.current
+    if (canvas && file) {
+      const pointer = canvas.getPointer(event.nativeEvent)
+      const targetSlot = canvas.getObjects().find((object) =>
+        object.get('frameSlot') === true && object.containsPoint(new Point(pointer.x, pointer.y)),
+      )
+      const frameId = targetSlot?.get('frameId')
+      if (typeof frameId === 'string') {
+        void fillCanvasFrame(frameId, file)
+        return
+      }
+    }
+    void uploadFile(file)
   }
 
   const openFilePicker = () => {
@@ -2369,6 +2873,7 @@ const selectTable = (id: number) => {
   setTableColumns(table.columns)
   setTableSelectedRow(0)
   setTableSelectedColumn(0)
+  
   const text = canvasRef.current?.getObjects().find(
     (object) => object.get('name') === tableTextName(table.id, 0, 0),
   )
@@ -2934,6 +3439,19 @@ const deleteSelection = async () => {
   
   const selectedText = selectedObject instanceof IText ? selectedObject : null
   const selectedIsShape = Boolean(selectedObject && !selectedIsImage && !(selectedObject instanceof IText) && !cropActive)
+  const toggleImageResizeLock = () => {
+    const nextLocked = !imageResizeLockedRef.current
+    imageResizeLockedRef.current = nextLocked
+    setImageResizeLocked(nextLocked)
+    imageObjectRef.current?.set({
+      lockMovementX: nextLocked,
+      lockMovementY: nextLocked,
+      lockScalingX: nextLocked,
+      lockScalingY: nextLocked,
+      lockUniScaling: true,
+    })
+    fabricCanvas?.requestRenderAll()
+  }
 
   const contextValue: EditorContextValue = {
     fabricCanvas,
@@ -2945,6 +3463,8 @@ const deleteSelection = async () => {
       selected: selectedObject,
       objects,
       selectedIsImage,
+      imageResizeLocked,
+      toggleImageResizeLock,
       zoom,
       setZoom,
       fitScale,
@@ -2967,10 +3487,21 @@ const deleteSelection = async () => {
       setActive: setActiveEditorTool,
       openFilePicker,
       uploadFile, beginCrop,
+      addSignatureImage,
       setDraggingFile,
       notice,
       setNotice,
       deleteImage,
+    },
+    framesLayout: {
+      applyFrame: applyModernFrame,
+      createCanvasFrame,
+      applyLayout: applyGridLayout,
+      addCellImage: addGridCellImage,
+      removeCellImage: removeGridCellImage,
+      selectCell: selectGridCell,
+      cells: gridCells,
+      selectedCellId: selectedGridCellId,
     },
     crop: {
       active: cropActive,
@@ -2985,7 +3516,7 @@ const deleteSelection = async () => {
       reset: resetCrop,
     },
     resize: { width: resizeWidth, height: resizeHeight, setWidth: updateResizeWidth, setHeight: updateResizeHeight, keepRatio, setKeepRatio, scaleArtwork, setScaleArtwork, apply: applyResize },
-    text: { selected: selectedText, value: textValue, fontFamily, setFontFamily, fontSize, setFontSize, color: textColor, setColor: setTextColor, background: textBackground, setBackground: setTextBackground, opacity: textOpacity, setOpacity: setTextOpacity, outline: textOutline, setOutline: setTextOutline, outlineWidth: textOutlineWidth, setOutlineWidth: setTextOutlineWidth, shadow: textShadow, setShadow: setTextShadow, add: createText, update: updateText },
+    text: { selected: selectedText, value: textValue, fontFamily, setFontFamily, fontSize, setFontSize, color: textColor, setColor: setTextColor, background: textBackground, setBackground: setTextBackground, opacity: textOpacity, setOpacity: setTextOpacity, outline: textOutline, setOutline: setTextOutline, outlineWidth: textOutlineWidth, setOutlineWidth: setTextOutlineWidth, shadow: textShadow, setShadow: setTextShadow, add: createText, update: updateText, updateSignatureStyle },
     shapes: { selected: selectedObject, isSelectedShape: selectedIsShape, kind: shapeKind, setKind: setShapeKind, fill: fillColor, setFill: setFillColor, transparentFill, setTransparentFill, stroke: strokeColor, setStroke: setStrokeColor, strokeWidth, setStrokeWidth, opacity: shapeOpacity, setOpacity: setShapeOpacity, add: addShape, duplicate: duplicateSelected, delete: deleteSelected, updateAppearance: updateShapeAppearance, moveLayer, selectLayer },
     adjustments: {
       brightness,
@@ -3088,7 +3619,11 @@ const deleteSelection = async () => {
           accept="image/png,image/jpeg,image/webp"
           hidden
           onChange={(event) => {
-            void uploadFile(event.target.files?.[0])
+            const file = event.target.files?.[0]
+            const frameId = pendingFrameSlotIdRef.current
+            pendingFrameSlotIdRef.current = null
+            if (frameId && file) void fillCanvasFrame(frameId, file)
+            else void uploadFile(file)
             event.currentTarget.value = ''
           }}
         />

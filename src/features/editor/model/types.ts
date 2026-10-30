@@ -1,7 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Canvas, FabricObject, IText } from 'fabric'
+import type { GridLayoutId } from '../operations/gridLayout'
 
-export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers'
+export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'signature' | 'sticky-note' | 'layers' | 'frames-layout'
 export type DrawingMode = 'pencil' | 'eraser' | 'magic-remover' | 'lasso'
 export type ShapeKind = 'rect' | 'roundRect' | 'circle' | 'ellipse' | 'line' | 'arrow' | 'triangle' | 'star' | 'pentagon'
 
@@ -57,6 +58,8 @@ export interface EditorContextValue {
     selected: FabricObject | null
     objects: FabricObject[]
     selectedIsImage: boolean
+    imageResizeLocked: boolean
+    toggleImageResizeLock: () => void
     zoom: number
     setZoom: Dispatch<SetStateAction<number>>
     fitScale: number
@@ -82,11 +85,22 @@ export interface EditorContextValue {
     setActive: (tool: EditorTool) => void
     openFilePicker: () => void
     uploadFile: (file?: File) => Promise<void>
+    addSignatureImage: (file: File) => Promise<void>
     setDraggingFile: Dispatch<SetStateAction<boolean>>
     notice: string
     beginCrop: () => void
     setNotice: Dispatch<SetStateAction<string>>
     deleteImage: () => void
+  }
+  framesLayout: {
+    applyFrame: (style: 'none' | 'clean' | 'matte' | 'soft-shadow' | 'bold', color: string) => void
+    createCanvasFrame: (style: 'none' | 'clean' | 'matte' | 'soft-shadow' | 'bold', color: string) => void
+    applyLayout: (layout: GridLayoutId, gap: number, background: string) => void
+    addCellImage: (cellId: string, file?: File, imageUrl?: string) => Promise<void>
+    removeCellImage: (cellId: string) => void
+    selectCell: (cellId: string) => void
+    cells: Array<{ id: string; index: number; hasImage: boolean; thumbnail: string }>
+    selectedCellId: string | null
   }
   crop: {
     active: boolean
@@ -132,6 +146,7 @@ export interface EditorContextValue {
     setShadow: Dispatch<SetStateAction<string>>
     add: () => void
     update: (property: TextProperty, value: string | number) => void
+    updateSignatureStyle: (fontFamily: string, fontStyle: string, fontWeight: string) => void
   }
   shapes: {
     selected: FabricObject | null

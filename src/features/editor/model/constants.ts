@@ -6,6 +6,7 @@ import {
   WandSparkles,
   Pencil,
   Layers3,
+  PanelsTopLeft,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
 import type { EditorTool, ShapeKind } from './types'
@@ -23,9 +24,10 @@ export const editorToolCategories: {
   { id: 'transform', label: 'Transform', icon: MousePointer2, defaultTool: 'crop', tools: [{ id: 'crop', label: 'Crop' }, { id: 'resize', label: 'Resize' }] },
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal, defaultTool: 'adjust', tools: [{ id: 'adjust', label: 'Adjustments' }] },
   { id: 'effects', label: 'Effects', icon: WandSparkles, defaultTool: 'filters', tools: [{ id: 'filters', label: 'Filters' }, { id: 'background', label: 'Background' }] },
-  { id: 'elements', label: 'Elements', icon: Shapes, defaultTool: 'text', tools: [{ id: 'text', label: 'Text' }, { id: 'shapes', label: 'Shapes' }, { id: 'stickers', label: 'Stickers' }] },
+  { id: 'elements', label: 'Elements', icon: Shapes, defaultTool: 'text', tools: [{ id: 'text', label: 'Text' }, { id: 'shapes', label: 'Shapes' }, { id: 'stickers', label: 'Stickers' }, { id: 'signature', label: 'Signature' }, { id: 'sticky-note', label: 'Sticky note' }] },
   { id: 'retouch', label: 'Retouch', icon: Pencil, defaultTool: 'draw-remove', tools: [{ id: 'draw-remove', label: 'Retouch' }] },
   { id: 'layers', label: 'Layers', icon: Layers3, defaultTool: 'layers', tools: [{ id: 'layers', label: 'Layers' }] },
+  { id: 'frames-layout', label: 'Frames & layout', icon: PanelsTopLeft, defaultTool: 'frames-layout', tools: [{ id: 'frames-layout', label: 'Frames & layout' }] },
 ]
 
 export const cropRatios: Record<string, number | null> = {
@@ -76,7 +78,7 @@ export function serializeCanvas(canvas: Canvas) {
     {
       width: canvas.getWidth(),
       height: canvas.getHeight(),
-      scene: canvas.toObject(['name']),
+      scene: canvas.toObject(['name', 'frameTarget', 'frameStyle', 'framePadding', 'frameId', 'frameSlot', 'frameColor', 'gridCellId', 'gridCellIndex', 'gridSlot']),
     },
     (key, value: unknown) => {
       if (

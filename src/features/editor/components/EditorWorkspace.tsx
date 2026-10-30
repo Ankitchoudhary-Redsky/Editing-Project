@@ -1,7 +1,7 @@
 
 import type { DragEvent } from 'react'
-import { useState } from 'react'
-import { Eraser, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Upload } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Eraser, Fullscreen, LockKeyhole, Minimize2, MoveHorizontal, MoveVertical, Paintbrush, Pencil, UnlockKeyhole, Upload } from 'lucide-react'
 
 import { useEditor } from '../EditorContext'
 import { objectName } from '../model/objectName'
@@ -27,6 +27,8 @@ export function EditorWorkspace({
     handleDrop,
   } = useEditor()
 
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [showFullScreen, setShowFullScreen] = useState(false);
   const [cursorPosition, setCursorPosition] = useState<{
     x: number
     y: number
@@ -44,17 +46,66 @@ export function EditorWorkspace({
     ? MoveHorizontal
     : table.resizeHover === 'row'
       ? MoveVertical
-      : undefined
-  const CursorIcon = resizeCursor ?? DrawingCursorIcon
+      : undefined;
+
+  const CursorIcon = resizeCursor ?? DrawingCursorIcon;
+  const displayScale = canvas.fitScale * canvas.zoom;
+  const currentZoom = canvas.zoom;
+  const setZoom = canvas.setZoom;
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     tools.setDraggingFile(true)
   }
 
+  useEffect(() => {
+    if (!showFullScreen) return
+
+    fabricCanvas?.discardActiveObject()
+    fabricCanvas?.requestRenderAll()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowFullScreen(false)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [fabricCanvas, showFullScreen])
+
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    const handleWheel = (event: globalThis.WheelEvent) => {
+      // Only intercept pinch-to-zoom / modified wheel gestures.
+      if (!event.ctrlKey && !event.metaKey) return
+
+      if (event.cancelable) {
+        event.preventDefault()
+      }
+
+      const zoomFactor = Math.exp(-event.deltaY * 0.01)
+      const nextZoom = Math.min(
+        3,
+        Math.max(0.1, currentZoom * zoomFactor),
+      )
+
+      setZoom(nextZoom)
+    }
+
+    viewport.addEventListener('wheel', handleWheel, {
+      passive: false,
+    })
+
+    return () => {
+      viewport.removeEventListener('wheel', handleWheel)
+    }
+  }, [currentZoom, setZoom])
+
+
   return (
     <section
-      className={`workspace ${tools.active === 'music' ? 'music-mode' : ''}`}
+      className={`workspace${tools.active === 'music' ? ' music-mode' : ''}${showFullScreen ? ' focus-mode' : ''}`}
     >
       <div
         className="stage"
@@ -65,41 +116,48 @@ export function EditorWorkspace({
       >
         <div className="canvas-holder">
           <div
-            className="canvas-surface"
-            data-drawing-cursor={showDrawingCursor}
+            className="canvas-spacer"
             style={{
-              transform: `translate(-50%, -50%) scale(${canvas.fitScale * canvas.zoom})`,
+              width: canvas.dimensions.width * displayScale,
+              height: canvas.dimensions.height * displayScale,
             }}
-            onPointerMoveCapture={(event) => {
-              const bounds = event.currentTarget.getBoundingClientRect()
-              const scale = bounds.width / event.currentTarget.offsetWidth || 1
-              setCursorPosition({
-                x: (event.clientX - bounds.left) / scale,
-                y: (event.clientY - bounds.top) / scale,
-              })
-            }}
-            onPointerLeave={() => setCursorPosition(null)}
           >
-            <canvas ref={setCanvasElement} />
-            {showDrawingCursor && cursorPosition && CursorIcon && (
-              <div
-                className="drawing-cursor"
-                style={{ left: cursorPosition.x, top: cursorPosition.y }}
-                aria-hidden="true"
-              >
-                {!resizeCursor && (
-                  <span
-                    className="drawing-cursor-brush"
-                    style={{ width: drawing.brushSize, height: drawing.brushSize }}
-                  />
-                )}
-                <span className={resizeCursor ? 'drawing-cursor-icon table-resize-cursor' : 'drawing-cursor-icon'}>
-                  <CursorIcon size={17} strokeWidth={2.2} />
-                </span>
-              </div>
-            )}
+            <div
+              className="canvas-surface"
+              ref={viewportRef}
+              data-drawing-cursor={showDrawingCursor}
+              style={{ transform: `scale(${displayScale})` }}
+              onPointerMoveCapture={(event) => {
+                const bounds = event.currentTarget.getBoundingClientRect()
+                const scale = bounds.width / event.currentTarget.offsetWidth || 1
+                setCursorPosition({
+                  x: (event.clientX - bounds.left) / scale,
+                  y: (event.clientY - bounds.top) / scale,
+                })
+              }}
+              onPointerLeave={() => setCursorPosition(null)}
+            >
+              <canvas ref={setCanvasElement} />
+              {showDrawingCursor && cursorPosition && CursorIcon && (
+                <div
+                  className="drawing-cursor"
+                  style={{ left: cursorPosition.x, top: cursorPosition.y }}
+                  aria-hidden="true"
+                >
+                  {!resizeCursor && (
+                    <span
+                      className="drawing-cursor-brush"
+                      style={{ width: drawing.brushSize, height: drawing.brushSize }}
+                    />
+                  )}
+                  <span className={resizeCursor ? 'drawing-cursor-icon table-resize-cursor' : 'drawing-cursor-icon'}>
+                    <CursorIcon size={17} strokeWidth={2.2} />
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-          {!canvas.hasImage && (
+          {!canvas.hasDocument && (
             <div className="empty-prompt">
               <div className="empty-art">
                 <div className="empty-sun" />
@@ -137,9 +195,74 @@ export function EditorWorkspace({
               : 'No image selected'}
         </span>
 
-        <span>
+        <div className="footer-zoom">
+          <button
+            className={`zoom-button image-resize-lock${canvas.imageResizeLocked ? ' active' : ''}`}
+            onClick={canvas.toggleImageResizeLock}
+            aria-label={canvas.imageResizeLocked ? 'Unlock image movement and resizing' : 'Lock image movement and resizing'}
+            title={canvas.imageResizeLocked ? 'Unlock image movement and resizing' : 'Lock image movement and resizing'}
+            disabled={!canvas.hasImage}
+          >
+            {canvas.imageResizeLocked ? <LockKeyhole size={15} /> : <UnlockKeyhole size={15} />}
+          </button>
+
+          <button
+            className="zoom-button"
+            onClick={() =>
+              canvas.setZoom(Math.max(0.1, canvas.zoom - 0.1))
+            }
+            aria-label="Zoom out"
+            disabled={canvas.zoom <= 0.1}
+          >
+            −
+          </button>
+
+          <input
+            className="zoom-slider"
+            type="range"
+            min="0.1"
+            max="3"
+            step="0.05"
+            value={canvas.zoom}
+            onChange={(event) =>
+              canvas.setZoom(Number(event.target.value))
+            }
+            aria-label="Canvas zoom"
+          />
+
+          <button
+            className="zoom-button"
+            onClick={() =>
+              canvas.setZoom(Math.min(3, canvas.zoom + 0.1))
+            }
+            aria-label="Zoom in"
+            disabled={canvas.zoom >= 3}
+          >
+            +
+          </button>
+
+          <button
+            className="zoom-percentage"
+            onClick={() => canvas.setZoom(1)}
+            title="Reset zoom to 100%"
+          >
+            {Math.round(canvas.zoom * 100)}%
+          </button>
+        </div>
+
+        <span className="workspace-document-status">
           Local document · {canvas.dimensions.width} × {canvas.dimensions.height}
         </span>
+        <button
+          className="zoom-button fullscreen-toggle"
+          type="button"
+          onClick={() => setShowFullScreen((current) => !current)}
+          aria-label={showFullScreen ? 'Exit canvas focus mode' : 'Enter canvas focus mode'}
+          aria-pressed={showFullScreen}
+          title={showFullScreen ? 'Exit canvas focus mode (Esc)' : 'Expand canvas'}
+        >
+          {showFullScreen ? <Minimize2 size={16} /> : <Fullscreen size={16} />}
+        </button>
       </div>
 
       {fabricCanvas && (
@@ -155,6 +278,8 @@ export function EditorWorkspace({
           onBack={() => tools.setActive('adjust')}
         />
       )}
+
+      
     </section>
   )
 }

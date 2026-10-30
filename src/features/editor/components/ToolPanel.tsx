@@ -11,6 +11,9 @@ import { BackgroundPanel } from './panels/BackgroundPanel'
 import { DrawingPanel } from './panels/DrawingPanel'
 import { StickersPanel } from './panels/StickersPanel'
 import { LayersPanel } from './panels/LayersPanel'
+import { SignaturePanel } from './panels/SignaturePanel'
+import { StickyNotePanel } from './panels/StickyNotePanel'
+import { FramesLayoutPanel } from './panels/FramesLayoutPanel'
 
 export function ToolPanel() {
   const { canvas, tools } = useEditor()
@@ -49,7 +52,10 @@ export function ToolPanel() {
       {tools.active === 'background' && <BackgroundPanel />}
       {tools.active === 'draw-remove' && <DrawingPanel />}
       {tools.active === 'stickers' && <StickersPanel />}
+      {tools.active === 'signature' && <SignaturePanel />}
+      {tools.active === 'sticky-note' && <StickyNotePanel />}
       {tools.active === 'layers' && <LayersPanel />}
+      {tools.active === 'frames-layout' && <FramesLayoutPanel />}
     </aside>
   )
 }
