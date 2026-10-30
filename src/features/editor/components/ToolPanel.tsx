@@ -10,7 +10,11 @@ import { FiltersPanel } from './panels/FiltersPanel'
 import { BackgroundPanel } from './panels/BackgroundPanel'
 import { DrawingPanel } from './panels/DrawingPanel'
 import { StickersPanel } from './panels/StickersPanel'
+import { VideoUploadPanel } from './panels/VideoUploadPanel'
+import { VideoTrimPanel } from './panels/VideoTrimPanel'
+
 import { LayersPanel } from './panels/LayersPanel'
+import { ShadowPanel } from './panels/ShadowPanel'
 
 export function ToolPanel() {
   const { canvas, tools } = useEditor()
@@ -49,7 +53,10 @@ export function ToolPanel() {
       {tools.active === 'background' && <BackgroundPanel />}
       {tools.active === 'draw-remove' && <DrawingPanel />}
       {tools.active === 'stickers' && <StickersPanel />}
+      {tools.active === 'video-upload' && <VideoUploadPanel />}
+      {tools.active === 'video-trim' && <VideoTrimPanel />}
       {tools.active === 'layers' && <LayersPanel />}
+      {tools.active === 'shadows' && <ShadowPanel />}
     </aside>
   )
 }

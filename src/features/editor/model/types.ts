@@ -1,11 +1,14 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { Canvas, FabricObject, IText } from 'fabric'
+import type { Canvas, FabricObject, IText, Shadow } from 'fabric'
 
-export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers'
+export type EditorMode = 'image' | 'video'
+export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers' | 'shadows' | 'video-upload' | 'video-trim'
 export type DrawingMode = 'pencil' | 'eraser' | 'magic-remover' | 'lasso'
 export type ShapeKind = 'rect' | 'roundRect' | 'circle' | 'ellipse' | 'line' | 'arrow' | 'triangle' | 'star' | 'pentagon'
+export type LineStyle = 'straight' | 'curve-up' | 'curve-down'
 
 export type ExportFormat = 'png' | 'jpeg'
+export type TextAnimation = 'none' | 'fade' | 'pulse' | 'bounce' | 'typewriter' | 'from-top' | 'from-bottom' | 'from-left' | 'from-right'
 
 
 export type VideoPreviewData = {
@@ -39,13 +42,50 @@ export type VideoAudioDraft = {
   voiceVolume: number
 }
 
+export type VideoClipDraft = {
+  file: File | null
+  url: string
+  duration: number
+  trimStart: number
+  trimEnd: number
+}
+
 export type EditorCanvas = Canvas
 export type FilterId = 'original' | 'grayscale' | 'blackWhite' | 'sepia' | 'vintage' |'retro' | 'warm' | 'cool' | 'vivid' | 'cinematic' | 'dramatic' | 'fade' | 'pastel' | 'noir' | 'dreamy'
 export type FilterSettings = { id: FilterId; intensity: number }
 export type Dimensions = { width: number; height: number }
-export type TextProperty = 'text' | 'fontFamily' | 'fontSize' | 'fill' | 'backgroundColor' | 'opacity' | 'fontWeight' | 'fontStyle' | 'textAlign' | 'stroke' | 'strokeWidth' | 'shadow'
+export type TextProperty = 'text' | 'fontFamily' | 'fontSize' | 'fill' | 'backgroundColor' | 'opacity' | 'fontWeight' | 'fontStyle' | 'textAlign' | 'stroke' | 'strokeWidth' | 'shadow' | 'textAnimation'
+export type TextDesignOptions = {
+  value?: string
+  fontFamily?: string
+  fontSize?: number
+  color?: string
+  opacity?: number
+  outline?: string
+  outlineWidth?: number
+  shadow?: string
+  fontWeight?: string
+  fontStyle?: string
+  backgroundColor?: string
+  textAlign?: 'left' | 'center' | 'right'
+}
 
 export interface EditorContextValue {
+  editorMode: {
+    active: EditorMode
+    setActive: (mode: EditorMode) => void
+  }
+
+  videoClip: VideoClipDraft & {
+    isTrimming: boolean
+    setTrimming: (isTrimming: boolean) => void
+    setFile: (file: File) => void
+    clear: () => void
+    setDuration: (duration: number) => void
+    setTrimStart: (time: number) => void
+    setTrimEnd: (time: number) => void
+  }
+
   /** Actual Fabric.js Canvas instance used for image editing. */
   fabricCanvas: EditorCanvas | null
 
@@ -130,7 +170,7 @@ export interface EditorContextValue {
     setOutlineWidth: Dispatch<SetStateAction<number>>
     shadow: string
     setShadow: Dispatch<SetStateAction<string>>
-    add: () => void
+    add: (design?: TextDesignOptions) => void
     update: (property: TextProperty, value: string | number) => void
   }
   shapes: {
@@ -138,6 +178,8 @@ export interface EditorContextValue {
     isSelectedShape: boolean
     kind: ShapeKind
     setKind: Dispatch<SetStateAction<ShapeKind>>
+    lineStyle: LineStyle
+    setLineStyle: Dispatch<SetStateAction<LineStyle>>
     fill: string
     setFill: Dispatch<SetStateAction<string>>
     transparentFill: boolean
@@ -149,11 +191,15 @@ export interface EditorContextValue {
     opacity: number
     setOpacity: Dispatch<SetStateAction<number>>
     add: () => void
+    addText: () => void
     duplicate: () => Promise<void>
     delete: () => void
     updateAppearance: (property: 'fill' | 'stroke' | 'strokeWidth' | 'opacity', value: string | number) => void
     moveLayer: (object: FabricObject, direction: 'forward' | 'backward') => void
     selectLayer: (object: FabricObject) => void
+  }
+  shadows: {
+    update: (shadow: Shadow | null, target?: FabricObject | null, size?: number, imageSize?: number) => void
   }
   adjustments: {
     brightness: number

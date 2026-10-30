@@ -1,9 +1,10 @@
 import { ArrowRight, ChevronDown,Download,Eye, Redo2, Undo2 } from 'lucide-react'
 import { useEditor } from '../EditorContext'
 import img1 from '../../../assets/logo.png'
+import { Image as ImageIcon, Video } from 'lucide-react'
 
 export function EditorHeader() {
-  const { canvas, history, project, preview, export: exportState } = useEditor()
+  const { canvas, history, project, preview, editorMode, export: exportState } = useEditor()
   const finishRenaming = () => {
     if (!project.name.trim()) project.setName('Untitled')
     project.setIsRenaming(false)
@@ -17,6 +18,14 @@ export function EditorHeader() {
           ? <input autoFocus value={project.name} onChange={(event) => project.setName(event.target.value)} onBlur={finishRenaming} onKeyDown={(event) => { if (event.key === 'Enter') finishRenaming() }} aria-label="Project name" />
           : <button className="project-name" onClick={() => project.setIsRenaming(true)} title="Rename project">{project.name}<ChevronDown size={14} /></button>}
         <span className="save-status"><span /> All changes saved</span>
+      </div>
+      <div className="mode-switch" role="group" aria-label="Editor mode">
+        <button type="button" className={editorMode.active === 'image' ? 'active' : ''} aria-pressed={editorMode.active === 'image'} onClick={() => editorMode.setActive('image')}>
+          <ImageIcon size={14} /><span>Image</span>
+        </button>
+        <button type="button" className={editorMode.active === 'video' ? 'active' : ''} aria-pressed={editorMode.active === 'video'} onClick={() => editorMode.setActive('video')}>
+          <Video size={14} /><span>Video</span>
+        </button>
       </div>
       <div className="top-actions">
         <button className="icon-button" title="Undo" aria-label="Undo" disabled={!history.canUndo} onClick={history.undo}><Undo2 size={18} /></button>

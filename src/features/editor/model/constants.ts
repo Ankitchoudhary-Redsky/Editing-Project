@@ -5,7 +5,10 @@ import {
   Upload,
   WandSparkles,
   Pencil,
+  Video,
+  Scissors,
   Layers3,
+  Moon,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
 import type { EditorTool, ShapeKind } from './types'
@@ -26,6 +29,12 @@ export const editorToolCategories: {
   { id: 'elements', label: 'Elements', icon: Shapes, defaultTool: 'text', tools: [{ id: 'text', label: 'Text' }, { id: 'shapes', label: 'Shapes' }, { id: 'stickers', label: 'Stickers' }] },
   { id: 'retouch', label: 'Retouch', icon: Pencil, defaultTool: 'draw-remove', tools: [{ id: 'draw-remove', label: 'Retouch' }] },
   { id: 'layers', label: 'Layers', icon: Layers3, defaultTool: 'layers', tools: [{ id: 'layers', label: 'Layers' }] },
+  { id: 'shadows', label: 'Shadows', icon: Moon, defaultTool: 'shadows', tools: [{ id: 'shadows', label: 'Shadows' }] },
+]
+
+export const videoTools: { id: EditorTool; label: string; icon: typeof Upload }[] = [
+  { id: 'video-upload', label: 'Upload video', icon: Video },
+  { id: 'video-trim', label: 'Trim video', icon: Scissors },
 ]
 
 export const cropRatios: Record<string, number | null> = {
@@ -76,7 +85,7 @@ export function serializeCanvas(canvas: Canvas) {
     {
       width: canvas.getWidth(),
       height: canvas.getHeight(),
-      scene: canvas.toObject(['name']),
+      scene: canvas.toObject(['name', 'textAnimation', 'shapeId', 'textParentId', 'textParentWidth', 'textParentHeight', 'textParentFontSize', 'shadowSize', 'shadowArtworkSize', 'shadowArtworkBaseScaleX', 'shadowArtworkBaseScaleY']),
     },
     (key, value: unknown) => {
       if (

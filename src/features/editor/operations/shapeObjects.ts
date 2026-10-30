@@ -1,5 +1,5 @@
 import { Canvas, Circle, Ellipse, Line, Path, Polygon, Rect, Triangle, type FabricObject } from 'fabric'
-import type { ShapeKind } from '../model/types'
+import type { LineStyle, ShapeKind } from '../model/types'
 
 export type NewShapeOptions = {
   kind: ShapeKind
@@ -9,6 +9,7 @@ export type NewShapeOptions = {
   strokeWidth: number
   opacity: number
   name: string
+  lineStyle?: LineStyle
 }
 
 export type ShapeBounds = {
@@ -86,11 +87,43 @@ export function buildShapeObject(options: NewShapeOptions, bounds: ShapeBounds):
   } else if (options.kind === 'line') {
     const startX = bounds.directionX === -1 ? width : 0
     const startY = bounds.directionY === -1 ? height : 0
-    shape = new Line([startX, startY, width - startX, height - startY], {
-      ...common,
-      strokeWidth: Math.max(2, options.strokeWidth),
-      strokeLineCap: 'round',
-    })
+    const endX = width - startX
+    const endY = height - startY
+    const lineStyle = options.lineStyle ?? 'straight'
+    if (lineStyle === 'straight') {
+      shape = new Line([startX, startY, endX, endY], {
+        ...common,
+        strokeWidth: Math.max(2, options.strokeWidth),
+        strokeLineCap: 'round',
+      })
+    } else {
+      const direction = lineStyle === 'curve-up' ? -1 : 1
+      const deltaX = endX - startX
+      const deltaY = endY - startY
+      const length = Math.max(1, Math.hypot(deltaX, deltaY))
+      let normalX = -deltaY / length
+      let normalY = deltaX / length
+      if (normalY < 0 || (normalY === 0 && normalX < 0)) {
+        normalX *= -1
+        normalY *= -1
+      }
+      const bend = Math.max(4, Math.min(96, length * 0.22))
+      const controlX = (startX + endX) / 2
+      const controlY = (startY + endY) / 2
+      const controlPointX = controlX + normalX * direction * bend * 2
+      const controlPointY = controlY + normalY * direction * bend * 2
+      const minX = Math.min(startX, endX, controlPointX)
+      const minY = Math.min(startY, endY, controlPointY)
+      const path = `M ${startX - minX} ${startY - minY} Q ${controlPointX - minX} ${controlPointY - minY} ${endX - minX} ${endY - minY}`
+      shape = new Path(path, {
+        ...common,
+        left: left + minX,
+        top: top + minY,
+        strokeWidth: Math.max(2, options.strokeWidth),
+        strokeLineCap: 'round',
+        strokeLineJoin: 'round',
+      })
+    }
   } else shape = new Rect({ ...common, width, height, rx: options.kind === 'roundRect' ? Math.min(width, height) * 0.16 : 0, ry: options.kind === 'roundRect' ? Math.min(width, height) * 0.16 : 0 })
 
   return shape

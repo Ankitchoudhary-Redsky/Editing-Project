@@ -33,9 +33,9 @@ import { applyCanvasCrop, createCropFrame, updateCropRatio } from './features/ed
 import { loadLocalImage } from './features/editor/operations/loadLocalImage'
 import type { DrawingMode,
   EditorContextValue,
-  EditorTool, ShapeKind, TextProperty, FilterId,
-  VideoAudioDraft, VideoPreviewData,
-  ExportFormat,
+  EditorMode, EditorTool, ShapeKind, LineStyle, TextProperty, FilterId,
+  VideoAudioDraft, VideoClipDraft, VideoPreviewData,
+  ExportFormat, TextAnimation, TextDesignOptions,
 } from './features/editor/model/types'
 import { hasTransparentPixels, removeImageBackground } from './features/editor/operations/removeImageBackground'
 import { editImagePixels, type EditPoint } from './features/editor/operations/editImagePixels'
@@ -43,7 +43,7 @@ import { restartAnimatedStickers } from './features/editor/operations/animatedSt
 
 import './App.css'
 import { buildShapeObject, createShapeObject } from './features/editor/operations/shapeObjects'
-import { createTextObject } from './features/editor/operations/textObjects'
+import { createTextInsideShape, createTextObject, syncParentShapeForText, syncTextWithShape, updateLinkedTextFontSize } from './features/editor/operations/textObjects'
 import { objectName } from './features/editor/model/objectName'
 import { deleteProjectDraft, loadProjectDraft, saveProjectDraft } from './features/editor/operations/projectStorage'
 import { drawProjectWatermark } from './features/editor/operations/projectWatermark'
@@ -277,6 +277,7 @@ type PersistedEditorDraft = EditorSnapshot & {
   textOutlineWidth: number
   textShadow: string
   shapeKind: ShapeKind
+  lineStyle?: LineStyle
   fillColor: string
   transparentFill: boolean
   strokeColor: string
@@ -334,6 +335,8 @@ function App() {
 
   // Actual Fabric.js canvas exposed through EditorContext.
   const [fabricCanvas, setFabricCanvas] = useState<Canvas | null>(null)
+  const [textAnimationVersion, setTextAnimationVersion] = useState(0)
+  const textAnimationStartTimesRef = useRef(new WeakMap<IText, number>())
 
   const setCanvasElement = useCallback(
     (element: HTMLCanvasElement | null) => {
@@ -357,7 +360,16 @@ function App() {
   )
 
   const [activeTool, setActiveTool] = useState<EditorTool>('upload')
-  const [projectName, setProjectName] = useState('Untitled')
+  const [activeEditorMode, setActiveEditorMode] = useState<EditorMode>('image')
+  const [videoClip, setVideoClip] = useState<VideoClipDraft>({
+    file: null,
+    url: '',
+    duration: 0,
+    trimStart: 0,
+    trimEnd: 0,
+  })
+  const [isTrimmingVideo, setIsTrimmingVideo] = useState(false)
+  const [projectName, setProjectName] = useState('Untitled design')
   const [isRenaming, setIsRenaming] = useState(false)
   const [hasDocument, setHasDocument] = useState(false)
   const [selectedObject, setSelectedObject] = useState<FabricObject | null>(null)
@@ -389,6 +401,7 @@ function App() {
   const [textOutlineWidth, setTextOutlineWidth] = useState(0)
   const [textShadow, setTextShadow] = useState('none')
   const [shapeKind, setShapeKind] = useState<ShapeKind>('rect')
+  const [lineStyle, setLineStyle] = useState<LineStyle>('straight')
   const [fillColor, setFillColor] = useState('#b9e4d1')
   const [transparentFill, setTransparentFill] = useState(false)
   const [strokeColor, setStrokeColor] = useState('#27332f')
@@ -467,6 +480,15 @@ function App() {
     )
 
     const active = canvas.getActiveObject() ?? null
+    if (active && active.get('name') !== 'Crop area') {
+      active.set({
+        borderColor: 'rgba(0,0,0,0)',
+        cornerColor: '#ffffff',
+        cornerStrokeColor: '#3e705a',
+        cornerSize: 10,
+        transparentCorners: false,
+      })
+    }
     setSelectedObject(active)
     setSelectedIsImage(active === imageObjectRef.current)
   }, [])
@@ -620,7 +642,7 @@ function App() {
           ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
           : '')
         setProjectName(draft.projectName)
-        setActiveTool(draft.activeTool === 'select' ? 'crop' : draft.activeTool)
+        setActiveTool(String(draft.activeTool) === 'shadow' ? 'shadows' : draft.activeTool === 'select' ? 'crop' : draft.activeTool)
         setZoom(draft.zoom)
         setSelectedFilter(draft.selectedFilter)
         selectedFilterRef.current = draft.selectedFilter
@@ -650,6 +672,7 @@ function App() {
         setTextOutlineWidth(draft.textOutlineWidth)
         setTextShadow(draft.textShadow)
         setShapeKind(draft.shapeKind)
+        setLineStyle(draft.lineStyle ?? 'straight')
         setFillColor(draft.fillColor)
         setTransparentFill(draft.transparentFill)
         setStrokeColor(draft.strokeColor)
@@ -697,11 +720,15 @@ function App() {
     canvas.on('object:added', changed)
     canvas.on('object:modified', changed)
     canvas.on('object:removed', changed)
-    canvas.on('text:changed', changed)
+    canvas.on('text:changed', (event) => {
+      if (event.target instanceof IText) syncParentShapeForText(canvas, event.target)
+      changed()
+    })
     const constrainShape = (event: { target?: FabricObject }) => {
       const target = event.target
       if (target && isShapeObject(target)) {
         constrainShapeToImage(canvas, imageObjectRef.current, target)
+        syncTextWithShape(canvas, target)
       }
     }
     canvas.on('object:moving', constrainShape)
@@ -759,6 +786,128 @@ function App() {
   }, [recordHistory, serializeEditorSnapshot, syncHistoryControls, syncObjects])
 
   useEffect(() => {
+    if (!fabricCanvas) return
+
+    const baseValues = new WeakMap<IText, {
+      left: number
+      top: number
+      opacity: number
+      scaleX: number
+      scaleY: number
+      text: string
+    }>()
+    let frameId = 0
+
+    const renderAnimatedText = (time: number) => {
+      const animatedObjects: Array<{
+        object: IText
+        base: { left: number; top: number; opacity: number; scaleX: number; scaleY: number; text: string }
+      }> = []
+      let shouldContinue = false
+
+      for (const object of fabricCanvas.getObjects()) {
+        if (!(object instanceof IText)) continue
+
+        const animation = object.get('textAnimation') as TextAnimation | undefined
+        if (!animation || animation === 'none') continue
+
+        let base = baseValues.get(object)
+        if (!base) {
+          base = {
+            left: object.left ?? 0,
+            top: object.top ?? 0,
+            opacity: object.opacity,
+            scaleX: object.scaleX,
+            scaleY: object.scaleY,
+            text: object.text,
+          }
+          baseValues.set(object, base)
+        } else if (
+          object.left !== base.left ||
+          object.top !== base.top ||
+          object.opacity !== base.opacity ||
+          object.scaleX !== base.scaleX ||
+          object.scaleY !== base.scaleY ||
+          object.text !== base.text
+        ) {
+          base = {
+            left: object.left ?? 0,
+            top: object.top ?? 0,
+            opacity: object.opacity,
+            scaleX: object.scaleX,
+            scaleY: object.scaleY,
+            text: object.text,
+          }
+          baseValues.set(object, base)
+        }
+
+        const startTime = textAnimationStartTimesRef.current.get(object) ?? time
+        textAnimationStartTimesRef.current.set(object, startTime)
+        const elapsed = Math.max(0, time - startTime)
+        const isLooping = animation === 'fade' || animation === 'pulse' || animation === 'bounce'
+        const isEntrance = animation === 'from-top' || animation === 'from-bottom' || animation === 'from-left' || animation === 'from-right'
+        const duration = animation === 'typewriter'
+          ? Math.max(500, Math.min(1800, Array.from(base.text).length * 45))
+          : isEntrance ? 1100 : 850
+        const progress = Math.min(1, elapsed / duration)
+        const easedProgress = 1 - Math.pow(1 - progress, 4)
+        const phase = time / 1000
+
+        if (animation === 'fade') {
+          object.set('opacity', base.opacity * (0.7 + Math.sin(phase * 2.4) * 0.3))
+        } else if (animation === 'pulse') {
+          const scale = 1 + Math.sin(phase * 3.2) * 0.06
+          object.set({ scaleX: base.scaleX * scale, scaleY: base.scaleY * scale })
+        } else if (animation === 'bounce') {
+          object.set('top', base.top - (1 - Math.cos(phase * 3.2)) * 8)
+        } else if (animation === 'typewriter') {
+          const characters = Array.from(base.text)
+          object.set('text', characters.slice(0, Math.ceil(characters.length * easedProgress)).join(''))
+        } else {
+          const bounds = object.getBoundingRect()
+          const margin = Math.max(24, Math.min(fabricCanvas.getWidth(), fabricCanvas.getHeight()) * 0.03)
+          let offsetX = 0
+          let offsetY = 0
+          if (animation === 'from-top') offsetY = -bounds.top - bounds.height - margin
+          if (animation === 'from-bottom') offsetY = fabricCanvas.getHeight() - bounds.top + margin
+          if (animation === 'from-left') offsetX = -bounds.left - bounds.width - margin
+          if (animation === 'from-right') offsetX = fabricCanvas.getWidth() - bounds.left + margin
+          object.set({
+            left: base.left + offsetX * (1 - easedProgress),
+            top: base.top + offsetY * (1 - easedProgress),
+            opacity: base.opacity * Math.min(1, progress * 2.2),
+          })
+        }
+
+        shouldContinue ||= isLooping || progress < 1
+        animatedObjects.push({ object, base })
+      }
+
+      if (animatedObjects.length === 0) return
+
+      try {
+        fabricCanvas.renderAll()
+      } finally {
+        for (const { object, base } of animatedObjects) {
+          object.set({
+            left: base.left,
+            top: base.top,
+            opacity: base.opacity,
+            scaleX: base.scaleX,
+            scaleY: base.scaleY,
+              text: base.text,
+          })
+        }
+      }
+
+      if (shouldContinue) frameId = requestAnimationFrame(renderAnimatedText)
+    }
+
+    frameId = requestAnimationFrame(renderAnimatedText)
+    return () => cancelAnimationFrame(frameId)
+  }, [draftReady, fabricCanvas, historyVersion, textAnimationVersion])
+
+  useEffect(() => {
     const canvas = canvasRef.current
     if (!draftReady || !canvas || !hasDocument) return
 
@@ -766,7 +915,7 @@ function App() {
       const draft: PersistedEditorDraft = {
         width: canvas.getWidth(),
         height: canvas.getHeight(),
-        scene: canvas.toJSON(),
+        scene: canvas.toObject(['name', 'textAnimation', 'shapeId', 'textParentId', 'textParentWidth', 'textParentHeight', 'textParentFontSize']),
         projectName,
         activeTool,
         zoom,
@@ -799,6 +948,7 @@ function App() {
         textOutlineWidth,
         textShadow,
         shapeKind,
+        lineStyle,
         fillColor,
         transparentFill,
         strokeColor,
@@ -840,6 +990,7 @@ function App() {
     resizeWidth,
     scaleArtwork,
     shapeKind,
+    lineStyle,
     saturation,
     selectedFilter,
     shapeOpacity,
@@ -878,7 +1029,7 @@ function App() {
       }
       shapeDrawingRef.current = { start, preview: null }
       suppressHistoryRef.current = true
-      const preview = buildShapeObject({ kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, { left: start.x, top: start.y, width: 1, height: 1 })
+      const preview = buildShapeObject({ kind: shapeKind, lineStyle, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, { left: start.x, top: start.y, width: 1, height: 1 })
       shapeDrawingRef.current.preview = preview
       canvas.add(preview)
       canvas.requestRenderAll()
@@ -897,7 +1048,7 @@ function App() {
       const width = Math.max(1, Math.abs(point.x - drawingState.start.x))
       const height = Math.max(1, Math.abs(point.y - drawingState.start.y))
       if (drawingState.preview) canvas.remove(drawingState.preview)
-      const preview = buildShapeObject({ kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, {
+      const preview = buildShapeObject({ kind: shapeKind, lineStyle, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, {
         left,
         top,
         width,
@@ -942,7 +1093,7 @@ function App() {
       canvas.skipTargetFind = false
       canvas.selection = true
     }
-  }, [activeTool, fillColor, hasDocument, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, syncObjects, transparentFill])
+  }, [activeTool, fillColor, hasDocument, lineStyle, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, syncObjects, transparentFill])
 
   useEffect(() => {
     const timer = setTimeout(() => setNotice(''), 3200)
@@ -1324,10 +1475,10 @@ function App() {
     }
   }
 
-  const createText = () => {
+  const createText = (design: TextDesignOptions = {}) => {
     const canvas = canvasRef.current
     if (!canvas) return
-    createTextObject(canvas, { value: textValue, fontFamily, fontSize, color: textColor, opacity: textOpacity, outline: textOutline, outlineWidth: textOutlineWidth, shadow: textShadow })
+    createTextObject(canvas, { value: textValue, fontFamily, fontSize, color: textColor, opacity: textOpacity, outline: textOutline, outlineWidth: textOutlineWidth, shadow: textShadow, ...design })
     recordHistory(true)
     setActiveTool('text')
   }
@@ -1335,8 +1486,17 @@ function App() {
   const addShape = () => {
     const canvas = canvasRef.current
     if (!canvas) return
-    createShapeObject(canvas, { kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] })
+    createShapeObject(canvas, { kind: shapeKind, lineStyle, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] })
     recordHistory(true)
+  }
+
+  const addTextInsideSelectedShape = () => {
+    const canvas = canvasRef.current
+    const shape = canvas?.getActiveObject()
+    if (!canvas || !shape || !isShapeObject(shape)) return
+    createTextInsideShape(canvas, shape, { value: textValue, fontFamily, fontSize, color: textColor, opacity: textOpacity, outline: textOutline, outlineWidth: textOutlineWidth, shadow: textShadow })
+    recordHistory(true)
+    setActiveTool('text')
   }
 
 
@@ -1529,10 +1689,17 @@ function App() {
   const updateText = (property: TextProperty, value: string | number) => {
     const active = canvasRef.current?.getActiveObject()
     if (!(active instanceof IText)) return
+    const canvas = canvasRef.current
     if (property === 'shadow') {
       const shadow = value === 'none' ? null : new Shadow({ color: 'rgba(12, 20, 17, 0.48)', blur: value === 'soft' ? 12 : 3, offsetX: 2, offsetY: value === 'soft' ? 5 : 3 })
       active.set('shadow', shadow)
     } else active.set(property, value)
+    if (canvas && property === 'fontSize' && typeof value === 'number') updateLinkedTextFontSize(canvas, active, value)
+    else if (canvas) syncParentShapeForText(canvas, active)
+    if (property === 'textAnimation') {
+      textAnimationStartTimesRef.current.set(active, performance.now())
+      setTextAnimationVersion((version) => version + 1)
+    }
     active.setCoords()
     canvasRef.current?.requestRenderAll()
     recordHistory()
@@ -1546,6 +1713,42 @@ function App() {
     }
     setActiveTool(tool)
   }, [activeTool, cancelCrop])
+
+  const changeEditorMode = useCallback((mode: EditorMode) => {
+    setActiveEditorMode(mode)
+    setActiveEditorTool(mode === 'image' ? 'upload' : 'video-upload')
+  }, [setActiveEditorTool])
+
+  const uploadVideoFile = useCallback((file: File) => {
+    if (!file.type.startsWith('video/')) {
+      setNotice('Choose a video file to continue.')
+      return
+    }
+
+    if (file.size > 500 * 1024 * 1024) {
+      setNotice('Videos must be smaller than 500 MB.')
+      return
+    }
+
+    setNotice('')
+    setVideoClip({
+      file,
+      url: URL.createObjectURL(file),
+      duration: 0,
+      trimStart: 0,
+      trimEnd: 0,
+    })
+  }, [])
+
+  const clearVideoFile = useCallback(() => {
+    setVideoClip({ file: null, url: '', duration: 0, trimStart: 0, trimEnd: 0 })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (videoClip.url) URL.revokeObjectURL(videoClip.url)
+    }
+  }, [videoClip.url])
 
   const applyAdjustments = (
     nextBrightness = brightness,
@@ -1812,6 +2015,11 @@ const resetBackground = async () => {
       imageObjectRef.current = null
     }
 
+    const shapeId = active.get('shapeId')
+    if (shapeId) {
+      const linkedText = canvas.getObjects().filter((object) => object.get('textParentId') === shapeId)
+      canvas.remove(...linkedText)
+    }
     canvas.remove(active)
     canvas.discardActiveObject()
     canvas.requestRenderAll()
@@ -1852,6 +2060,40 @@ const resetBackground = async () => {
     if (!selectedObject || selectedIsImage || selectedObject instanceof IText || selectedObject === cropObjectRef.current) return
     selectedObject.set(property, value)
     canvasRef.current?.requestRenderAll()
+    recordHistory()
+  }
+
+  const updateSelectedShadow = (shadow: Shadow | null, target?: FabricObject | null, size?: number, imageSize?: number) => {
+    const canvas = canvasRef.current
+    const active = target ?? selectedObject
+    if (!canvas || !active || active === cropObjectRef.current) return
+    const name = active.get('name')
+    if (name === '__pixel_studio_drawing_layer__' || name === BACKGROUND_IMAGE_NAME) return
+    active.set('shadow', shadow)
+    if (size !== undefined) active.set('shadowSize', size)
+    if (imageSize !== undefined && active instanceof FabricImage) {
+      const currentScaleX = active.scaleX ?? 1
+      const currentScaleY = active.scaleY ?? 1
+      const baseScaleX = Number(active.get('shadowArtworkBaseScaleX') ?? currentScaleX)
+      const baseScaleY = Number(active.get('shadowArtworkBaseScaleY') ?? currentScaleY)
+      const center = active.getCenterPoint()
+      const scale = imageSize / 100
+      active.set({
+        scaleX: baseScaleX * scale,
+        scaleY: baseScaleY * scale,
+        shadowArtworkSize: imageSize,
+        shadowArtworkBaseScaleX: baseScaleX,
+        shadowArtworkBaseScaleY: baseScaleY,
+      })
+      active.setPositionByOrigin(center, 'center', 'center')
+    }
+    active.setCoords()
+    if (canvas.getActiveObject() !== active) {
+      canvas.setActiveObject(active)
+      setSelectedObject(active)
+      setSelectedIsImage(active === imageObjectRef.current)
+    }
+    canvas.requestRenderAll()
     recordHistory()
   }
 
@@ -1997,7 +2239,9 @@ const resetBackground = async () => {
     event.stopPropagation()
 
     setDraggingFile(false)
-    void uploadFile(event.dataTransfer.files[0])
+    const file = event.dataTransfer.files[0]
+    if (activeEditorMode === 'video') uploadVideoFile(file)
+    else void uploadFile(file)
   }
 
   const openFilePicker = () => {
@@ -2937,6 +3181,30 @@ const deleteSelection = async () => {
 
   const contextValue: EditorContextValue = {
     fabricCanvas,
+
+    editorMode: {
+      active: activeEditorMode,
+      setActive: changeEditorMode,
+    },
+
+    videoClip: {
+      ...videoClip,
+      isTrimming: isTrimmingVideo,
+      setTrimming: setIsTrimmingVideo,
+      setFile: uploadVideoFile,
+      clear: clearVideoFile,
+      setDuration: (duration) => {
+        if (!Number.isFinite(duration) || duration <= 0) return
+        setVideoClip((current) => ({
+          ...current,
+          duration,
+          trimEnd: current.trimEnd <= 0 || current.trimEnd > duration ? duration : current.trimEnd,
+        }))
+      },
+      setTrimStart: (trimStart) => setVideoClip((current) => ({ ...current, trimStart })),
+      setTrimEnd: (trimEnd) => setVideoClip((current) => ({ ...current, trimEnd })),
+    },
+
     canvas: {
       dimensions,
       hasDocument,
@@ -2986,7 +3254,8 @@ const deleteSelection = async () => {
     },
     resize: { width: resizeWidth, height: resizeHeight, setWidth: updateResizeWidth, setHeight: updateResizeHeight, keepRatio, setKeepRatio, scaleArtwork, setScaleArtwork, apply: applyResize },
     text: { selected: selectedText, value: textValue, fontFamily, setFontFamily, fontSize, setFontSize, color: textColor, setColor: setTextColor, background: textBackground, setBackground: setTextBackground, opacity: textOpacity, setOpacity: setTextOpacity, outline: textOutline, setOutline: setTextOutline, outlineWidth: textOutlineWidth, setOutlineWidth: setTextOutlineWidth, shadow: textShadow, setShadow: setTextShadow, add: createText, update: updateText },
-    shapes: { selected: selectedObject, isSelectedShape: selectedIsShape, kind: shapeKind, setKind: setShapeKind, fill: fillColor, setFill: setFillColor, transparentFill, setTransparentFill, stroke: strokeColor, setStroke: setStrokeColor, strokeWidth, setStrokeWidth, opacity: shapeOpacity, setOpacity: setShapeOpacity, add: addShape, duplicate: duplicateSelected, delete: deleteSelected, updateAppearance: updateShapeAppearance, moveLayer, selectLayer },
+    shapes: { selected: selectedObject, isSelectedShape: selectedIsShape, kind: shapeKind, setKind: setShapeKind, lineStyle, setLineStyle, fill: fillColor, setFill: setFillColor, transparentFill, setTransparentFill, stroke: strokeColor, setStroke: setStrokeColor, strokeWidth, setStrokeWidth, opacity: shapeOpacity, setOpacity: setShapeOpacity, add: addShape, addText: addTextInsideSelectedShape, duplicate: duplicateSelected, delete: deleteSelected, updateAppearance: updateShapeAppearance, moveLayer, selectLayer },
+    shadows: { update: updateSelectedShadow },
     adjustments: {
       brightness,
       setBrightness,
