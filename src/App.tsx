@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Canvas,
@@ -33,20 +32,22 @@ import { applyCanvasCrop, createCropFrame, updateCropRatio } from './features/ed
 import { loadLocalImage } from './features/editor/operations/loadLocalImage'
 import type { DrawingMode,
   EditorContextValue,
-  EditorTool, ShapeKind, TextProperty, FilterId,
-  VideoAudioDraft, VideoPreviewData,
-  ExportFormat,
+  EditorMode, EditorTool, ShapeKind, LineStyle, TextProperty, FilterId,
+  VideoAudioDraft, VideoClipDraft, VideoPreviewData,
+  ExportFormat, TextAnimation, TextDesignOptions,
 } from './features/editor/model/types'
 import { hasTransparentPixels, removeImageBackground } from './features/editor/operations/removeImageBackground'
 import { editImagePixels, type EditPoint } from './features/editor/operations/editImagePixels'
 import { restartAnimatedStickers } from './features/editor/operations/animatedSticker'
 
 import './App.css'
-import { buildShapeObject, createShapeObject } from './features/editor/operations/shapeObjects'
-import { createTextObject } from './features/editor/operations/textObjects'
+import { addImageInsideShape, buildShapeObject, createShapeObject, syncImageWithShape } from './features/editor/operations/shapeObjects'
+import { createTextInsideShape, createTextObject, syncParentShapeForText, syncTextWithShape, updateLinkedTextFontSize } from './features/editor/operations/textObjects'
 import { objectName } from './features/editor/model/objectName'
 import { deleteProjectDraft, loadProjectDraft, saveProjectDraft } from './features/editor/operations/projectStorage'
 import { drawProjectWatermark } from './features/editor/operations/projectWatermark'
+import { exportAnimatedCanvas } from './features/editor/operations/animatedExport'
+import { attachDeleteControl } from './features/editor/operations/objectDeleteControl'
 
 type EditorSnapshot = {
   width: number
@@ -277,6 +278,7 @@ type PersistedEditorDraft = EditorSnapshot & {
   textOutlineWidth: number
   textShadow: string
   shapeKind: ShapeKind
+  lineStyle?: LineStyle
   fillColor: string
   transparentFill: boolean
   strokeColor: string
@@ -302,6 +304,9 @@ function App() {
   const imageObjectRef = useRef<FabricImage | null>(null)
   const drawingLayerCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const drawingLayerImageRef = useRef<FabricImage | null>(null)
+  const drawingPreviewCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const drawingPreviewImageRef = useRef<FabricImage | null>(null)
+  const drawingPreviewFrameRef = useRef<number | null>(null)
   const imageSourceRef = useRef('')
   const cropTransformChangedRef = useRef(false)
   const shapeDrawingRef = useRef<{ start: { x: number; y: number }; preview: FabricObject | null } | null>(null)
@@ -334,6 +339,8 @@ function App() {
 
   // Actual Fabric.js canvas exposed through EditorContext.
   const [fabricCanvas, setFabricCanvas] = useState<Canvas | null>(null)
+  const [textAnimationVersion, setTextAnimationVersion] = useState(0)
+  const textAnimationStartTimesRef = useRef(new WeakMap<FabricObject, number>())
 
   const setCanvasElement = useCallback(
     (element: HTMLCanvasElement | null) => {
@@ -357,7 +364,16 @@ function App() {
   )
 
   const [activeTool, setActiveTool] = useState<EditorTool>('upload')
-  const [projectName, setProjectName] = useState('Untitled')
+  const [activeEditorMode, setActiveEditorMode] = useState<EditorMode>('image')
+  const [videoClip, setVideoClip] = useState<VideoClipDraft>({
+    file: null,
+    url: '',
+    duration: 0,
+    trimStart: 0,
+    trimEnd: 0,
+  })
+  const [isTrimmingVideo, setIsTrimmingVideo] = useState(false)
+  const [projectName, setProjectName] = useState('Untitled design')
   const [isRenaming, setIsRenaming] = useState(false)
   const [hasDocument, setHasDocument] = useState(false)
   const [selectedObject, setSelectedObject] = useState<FabricObject | null>(null)
@@ -389,6 +405,7 @@ function App() {
   const [textOutlineWidth, setTextOutlineWidth] = useState(0)
   const [textShadow, setTextShadow] = useState('none')
   const [shapeKind, setShapeKind] = useState<ShapeKind>('rect')
+  const [lineStyle, setLineStyle] = useState<LineStyle>('straight')
   const [fillColor, setFillColor] = useState('#b9e4d1')
   const [transparentFill, setTransparentFill] = useState(false)
   const [strokeColor, setStrokeColor] = useState('#27332f')
@@ -448,6 +465,7 @@ function App() {
   const [exportScale, setExportScale] = useState(1)
   const [exportWatermark, setExportWatermark] = useState(true)
   const [exportBusy, setExportBusy] = useState(false)
+  const [shareBusy, setShareBusy] = useState(false)
 
   
 
@@ -456,6 +474,9 @@ function App() {
     if (!canvas) return
 
     const canvasObjects = canvas.getObjects()
+    canvasObjects.forEach((object) => {
+      if (object instanceof IText || isShapeObject(object)) attachDeleteControl(object)
+    })
     const image = canvasObjects.find((item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME)
     image?.set({ selectable: false, evented: false, lockMovementX: true, lockMovementY: true, lockScalingX: true, lockScalingY: true, lockRotation: true })
     imageObjectRef.current = image instanceof FabricImage ? image : null
@@ -650,6 +671,7 @@ function App() {
         setTextOutlineWidth(draft.textOutlineWidth)
         setTextShadow(draft.textShadow)
         setShapeKind(draft.shapeKind)
+        setLineStyle(draft.lineStyle ?? 'straight')
         setFillColor(draft.fillColor)
         setTransparentFill(draft.transparentFill)
         setStrokeColor(draft.strokeColor)
@@ -697,11 +719,17 @@ function App() {
     canvas.on('object:added', changed)
     canvas.on('object:modified', changed)
     canvas.on('object:removed', changed)
-    canvas.on('text:changed', changed)
+    canvas.on('text:changed', (event) => {
+      if (event.target instanceof IText) syncParentShapeForText(canvas, event.target)
+      changed()
+    })
     const constrainShape = (event: { target?: FabricObject }) => {
       const target = event.target
       if (target && isShapeObject(target)) {
         constrainShapeToImage(canvas, imageObjectRef.current, target)
+        syncTextWithShape(canvas, target)
+        syncTextWithShape(canvas, target)
+        syncImageWithShape(canvas, target)
       }
     }
     canvas.on('object:moving', constrainShape)
@@ -759,6 +787,163 @@ function App() {
   }, [recordHistory, serializeEditorSnapshot, syncHistoryControls, syncObjects])
 
   useEffect(() => {
+    if (!fabricCanvas) return
+
+    const baseValues = new WeakMap<FabricObject, {
+      left: number
+      top: number
+      opacity: number
+      scaleX: number
+      scaleY: number
+      angle: number
+      shadow: FabricObject['shadow']
+      text?: string
+    }>()
+    let frameId = 0
+
+    const renderAnimatedText = (time: number) => {
+      const animatedObjects: Array<{
+        object: FabricObject
+        base: { left: number; top: number; opacity: number; scaleX: number; scaleY: number; angle: number; shadow: FabricObject['shadow']; text?: string }
+      }> = []
+      let shouldContinue = false
+
+      for (const object of fabricCanvas.getObjects()) {
+        const animation = object.get('textAnimation') as TextAnimation | undefined
+        if (!animation || animation === 'none') continue
+
+        let base = baseValues.get(object)
+        if (!base) {
+          base = {
+            left: object.left ?? 0,
+            top: object.top ?? 0,
+            opacity: object.opacity,
+            scaleX: object.scaleX,
+            scaleY: object.scaleY,
+            angle: object.angle,
+            shadow: object.shadow,
+            text: object instanceof IText ? object.text : undefined,
+          }
+          baseValues.set(object, base)
+        } else if (
+          object.left !== base.left ||
+          object.top !== base.top ||
+          object.opacity !== base.opacity ||
+          object.scaleX !== base.scaleX ||
+          object.scaleY !== base.scaleY ||
+          object.angle !== base.angle ||
+          object.shadow !== base.shadow ||
+          (object instanceof IText && object.text !== base.text)
+        ) {
+          base = {
+            left: object.left ?? 0,
+            top: object.top ?? 0,
+            opacity: object.opacity,
+            scaleX: object.scaleX,
+            scaleY: object.scaleY,
+            angle: object.angle,
+            shadow: object.shadow,
+            text: object instanceof IText ? object.text : undefined,
+          }
+          baseValues.set(object, base)
+        }
+
+        const startTime = textAnimationStartTimesRef.current.get(object) ?? time
+        textAnimationStartTimesRef.current.set(object, startTime)
+        const elapsed = Math.max(0, time - startTime)
+        const isLooping = ['fade', 'pulse', 'bounce', 'breathe', 'drift', 'tectonic', 'neon'].includes(animation)
+        const isEntrance = ['from-top', 'from-bottom', 'from-left', 'from-right', 'pop', 'wipe', 'blur', 'succession', 'baseline', 'tumble', 'scrapbook', 'stomp'].includes(animation)
+        const duration = animation === 'typewriter' && object instanceof IText
+          ? Math.max(500, Math.min(1800, Array.from(base.text ?? '').length * 45))
+          : isEntrance ? 1100 : 850
+        const progress = Math.min(1, elapsed / duration)
+        const effectProgress = animation === 'succession' ? Math.min(1, Math.max(0, elapsed - 140) / duration) : progress
+        const easedProgress = 1 - Math.pow(1 - effectProgress, 4)
+        const phase = time / 1000
+
+        if (animation === 'fade') {
+          object.set('opacity', base.opacity * (0.7 + Math.sin(phase * 2.4) * 0.3))
+        } else if (animation === 'pulse') {
+          const scale = 1 + Math.sin(phase * 3.2) * 0.06
+          object.set({ scaleX: base.scaleX * scale, scaleY: base.scaleY * scale })
+        } else if (animation === 'bounce') {
+          object.set('top', base.top - (1 - Math.cos(phase * 3.2)) * 8)
+        } else if (animation === 'breathe') {
+          const scale = 1 + Math.sin(phase * 2.4) * 0.045
+          object.set({ scaleX: base.scaleX * scale, scaleY: base.scaleY * scale })
+        } else if (animation === 'drift') {
+          object.set('left', base.left + Math.sin(phase * 1.8) * 10)
+        } else if (animation === 'tectonic') {
+          object.set('angle', base.angle + Math.sin(phase * 18) * 2.5)
+        } else if (animation === 'neon') {
+          const glow = 8 + (Math.sin(phase * 4) + 1) * 8
+          object.set({ opacity: base.opacity * (0.82 + Math.sin(phase * 4) * 0.18), shadow: new Shadow({ color: '#b04dff', blur: glow, offsetX: 0, offsetY: 0 }) })
+        } else if (animation === 'typewriter' && object instanceof IText) {
+          const characters = Array.from(base.text ?? object.text)
+          object.set('text', characters.slice(0, Math.ceil(characters.length * easedProgress)).join(''))
+        } else if (animation === 'pop' || animation === 'succession') {
+          const scale = 0.35 + easedProgress * 0.65
+          object.set({ scaleX: base.scaleX * scale, scaleY: base.scaleY * scale, opacity: base.opacity * Math.min(1, effectProgress * 2) })
+        } else if (animation === 'wipe') {
+          object.set({ scaleX: base.scaleX * Math.max(0.02, easedProgress), opacity: base.opacity * Math.min(1, effectProgress * 2) })
+        } else if (animation === 'blur') {
+          object.set({ opacity: base.opacity * easedProgress, shadow: new Shadow({ color: 'rgba(36, 45, 59, .25)', blur: (1 - easedProgress) * 18, offsetX: 0, offsetY: 0 }) })
+        } else if (animation === 'baseline') {
+          object.set({ top: base.top + 14 * (1 - easedProgress), opacity: base.opacity * Math.min(1, effectProgress * 2) })
+        } else if (animation === 'tumble') {
+          object.set({ angle: base.angle + 360 * easedProgress, opacity: base.opacity * Math.min(1, effectProgress * 2) })
+        } else if (animation === 'scrapbook') {
+          object.set({ angle: base.angle + 8 * Math.sin(easedProgress * Math.PI), scaleX: base.scaleX * (0.84 + easedProgress * 0.16), scaleY: base.scaleY * (0.84 + easedProgress * 0.16), opacity: base.opacity * Math.min(1, effectProgress * 2) })
+        } else if (animation === 'stomp') {
+          const scale = 1 + Math.sin(effectProgress * Math.PI * 3) * (1 - effectProgress) * 0.35
+          object.set({ scaleX: base.scaleX * scale, scaleY: base.scaleY * scale, opacity: base.opacity * Math.min(1, effectProgress * 3) })
+        } else {
+          const bounds = object.getBoundingRect()
+          const margin = Math.max(24, Math.min(fabricCanvas.getWidth(), fabricCanvas.getHeight()) * 0.03)
+          let offsetX = 0
+          let offsetY = 0
+          if (animation === 'from-top') offsetY = -bounds.top - bounds.height - margin
+          if (animation === 'from-bottom') offsetY = fabricCanvas.getHeight() - bounds.top + margin
+          if (animation === 'from-left') offsetX = -bounds.left - bounds.width - margin
+          if (animation === 'from-right') offsetX = fabricCanvas.getWidth() - bounds.left + margin
+          object.set({
+            left: base.left + offsetX * (1 - easedProgress),
+            top: base.top + offsetY * (1 - easedProgress),
+            opacity: base.opacity * Math.min(1, progress * 2.2),
+          })
+        }
+
+        shouldContinue ||= isLooping || progress < 1
+        animatedObjects.push({ object, base })
+      }
+
+      if (animatedObjects.length === 0) return
+
+      try {
+        fabricCanvas.renderAll()
+      } finally {
+        for (const { object, base } of animatedObjects) {
+          object.set({
+            left: base.left,
+            top: base.top,
+            opacity: base.opacity,
+            scaleX: base.scaleX,
+            scaleY: base.scaleY,
+            angle: base.angle,
+            shadow: base.shadow,
+            ...(object instanceof IText && base.text !== undefined ? { text: base.text } : {}),
+          })
+        }
+      }
+
+      if (shouldContinue) frameId = requestAnimationFrame(renderAnimatedText)
+    }
+
+    frameId = requestAnimationFrame(renderAnimatedText)
+    return () => cancelAnimationFrame(frameId)
+  }, [draftReady, fabricCanvas, historyVersion, textAnimationVersion])
+
+  useEffect(() => {
     const canvas = canvasRef.current
     if (!draftReady || !canvas || !hasDocument) return
 
@@ -766,7 +951,7 @@ function App() {
       const draft: PersistedEditorDraft = {
         width: canvas.getWidth(),
         height: canvas.getHeight(),
-        scene: canvas.toJSON(),
+        scene: canvas.toObject(['name', 'textAnimation', 'shapeId', 'textParentId', 'textParentWidth', 'textParentHeight', 'textParentFontSize', 'imageParentId']),
         projectName,
         activeTool,
         zoom,
@@ -799,6 +984,7 @@ function App() {
         textOutlineWidth,
         textShadow,
         shapeKind,
+        lineStyle,
         fillColor,
         transparentFill,
         strokeColor,
@@ -840,6 +1026,7 @@ function App() {
     resizeWidth,
     scaleArtwork,
     shapeKind,
+    lineStyle,
     saturation,
     selectedFilter,
     shapeOpacity,
@@ -878,7 +1065,7 @@ function App() {
       }
       shapeDrawingRef.current = { start, preview: null }
       suppressHistoryRef.current = true
-      const preview = buildShapeObject({ kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, { left: start.x, top: start.y, width: 1, height: 1 })
+      const preview = buildShapeObject({ kind: shapeKind, lineStyle, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, { left: start.x, top: start.y, width: 1, height: 1 })
       shapeDrawingRef.current.preview = preview
       canvas.add(preview)
       canvas.requestRenderAll()
@@ -897,7 +1084,7 @@ function App() {
       const width = Math.max(1, Math.abs(point.x - drawingState.start.x))
       const height = Math.max(1, Math.abs(point.y - drawingState.start.y))
       if (drawingState.preview) canvas.remove(drawingState.preview)
-      const preview = buildShapeObject({ kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, {
+      const preview = buildShapeObject({ kind: shapeKind, lineStyle, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, {
         left,
         top,
         width,
@@ -942,7 +1129,7 @@ function App() {
       canvas.skipTargetFind = false
       canvas.selection = true
     }
-  }, [activeTool, fillColor, hasDocument, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, syncObjects, transparentFill])
+  }, [activeTool, fillColor, hasDocument, lineStyle, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, syncObjects, transparentFill])
 
   useEffect(() => {
     const timer = setTimeout(() => setNotice(''), 3200)
@@ -1324,10 +1511,10 @@ function App() {
     }
   }
 
-  const createText = () => {
+  const createText = (design: TextDesignOptions = {}) => {
     const canvas = canvasRef.current
     if (!canvas) return
-    createTextObject(canvas, { value: textValue, fontFamily, fontSize, color: textColor, opacity: textOpacity, outline: textOutline, outlineWidth: textOutlineWidth, shadow: textShadow })
+    createTextObject(canvas, { value: textValue, fontFamily, fontSize, color: textColor, opacity: textOpacity, outline: textOutline, outlineWidth: textOutlineWidth, shadow: textShadow, ...design })
     recordHistory(true)
     setActiveTool('text')
   }
@@ -1335,8 +1522,33 @@ function App() {
   const addShape = () => {
     const canvas = canvasRef.current
     if (!canvas) return
-    createShapeObject(canvas, { kind: shapeKind, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] })
+    createShapeObject(canvas, { kind: shapeKind, lineStyle, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] })
     recordHistory(true)
+  }
+
+  const addTextInsideSelectedShape = () => {
+    const canvas = canvasRef.current
+    const shape = canvas?.getActiveObject()
+    if (!canvas || !shape || !isShapeObject(shape)) return
+    createTextInsideShape(canvas, shape, { value: textValue, fontFamily, fontSize, color: textColor, opacity: textOpacity, outline: textOutline, outlineWidth: textOutlineWidth, shadow: textShadow })
+    recordHistory(true)
+    setActiveTool('text')
+  }
+
+  const addImageInsideSelectedShape = async (file: File) => {
+    const canvas = canvasRef.current
+    const shape = canvas?.getActiveObject()
+    const shapeName = String(shape?.get('name') ?? '')
+    if (!canvas || !shape || !isShapeObject(shape) || /^line|^arrow/i.test(shapeName)) return
+    try {
+      await addImageInsideShape(canvas, shape, file)
+      canvas.setActiveObject(shape)
+      syncObjects()
+      recordHistory(true)
+      setActiveTool('shapes')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not add that image to the shape.')
+    }
   }
 
 
@@ -1529,10 +1741,17 @@ function App() {
   const updateText = (property: TextProperty, value: string | number) => {
     const active = canvasRef.current?.getActiveObject()
     if (!(active instanceof IText)) return
+    const canvas = canvasRef.current
     if (property === 'shadow') {
       const shadow = value === 'none' ? null : new Shadow({ color: 'rgba(12, 20, 17, 0.48)', blur: value === 'soft' ? 12 : 3, offsetX: 2, offsetY: value === 'soft' ? 5 : 3 })
       active.set('shadow', shadow)
     } else active.set(property, value)
+    if (canvas && property === 'fontSize' && typeof value === 'number') updateLinkedTextFontSize(canvas, active, value)
+    else if (canvas) syncParentShapeForText(canvas, active)
+    if (property === 'textAnimation') {
+      textAnimationStartTimesRef.current.set(active, performance.now())
+      setTextAnimationVersion((version) => version + 1)
+    }
     active.setCoords()
     canvasRef.current?.requestRenderAll()
     recordHistory()
@@ -1546,6 +1765,42 @@ function App() {
     }
     setActiveTool(tool)
   }, [activeTool, cancelCrop])
+
+  const changeEditorMode = useCallback((mode: EditorMode) => {
+    setActiveEditorMode(mode)
+    setActiveEditorTool(mode === 'image' ? 'upload' : 'video-upload')
+  }, [setActiveEditorTool])
+
+  const uploadVideoFile = useCallback((file: File) => {
+    if (!file.type.startsWith('video/')) {
+      setNotice('Choose a video file to continue.')
+      return
+    }
+
+    if (file.size > 500 * 1024 * 1024) {
+      setNotice('Videos must be smaller than 500 MB.')
+      return
+    }
+
+    setNotice('')
+    setVideoClip({
+      file,
+      url: URL.createObjectURL(file),
+      duration: 0,
+      trimStart: 0,
+      trimEnd: 0,
+    })
+  }, [])
+
+  const clearVideoFile = useCallback(() => {
+    setVideoClip({ file: null, url: '', duration: 0, trimStart: 0, trimEnd: 0 })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (videoClip.url) URL.revokeObjectURL(videoClip.url)
+    }
+  }, [videoClip.url])
 
   const applyAdjustments = (
     nextBrightness = brightness,
@@ -1812,6 +2067,11 @@ const resetBackground = async () => {
       imageObjectRef.current = null
     }
 
+    const shapeId = active.get('shapeId')
+    if (shapeId) {
+      const linkedObjects = canvas.getObjects().filter((object) => object.get('textParentId') === shapeId || object.get('imageParentId') === shapeId)
+      canvas.remove(...linkedObjects)
+    }
     canvas.remove(active)
     canvas.discardActiveObject()
     canvas.requestRenderAll()
@@ -1966,6 +2226,27 @@ const resetBackground = async () => {
     if (!canvas) return
     setExportBusy(true)
     try {
+      if (exportFormat === 'gif' || exportFormat === 'mp4') {
+        const startTime = performance.now()
+        for (const object of canvas.getObjects()) {
+          if (object.get('textAnimation') && object.get('textAnimation') !== 'none') {
+            textAnimationStartTimesRef.current.set(object, startTime)
+          }
+        }
+        setTextAnimationVersion((version) => version + 1)
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        const blob = await exportAnimatedCanvas(canvas, exportFormat, exportScale, exportWatermark)
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        const safeName = projectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'pixel-studio-design'
+        link.href = url
+        link.download = `${safeName}.${exportFormat}`
+        link.click()
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+        setExportOpen(false)
+        return
+      }
+
       const output = canvas.toCanvasElement(exportScale)
       const context = output.getContext('2d')
       if (!context) throw new Error('Could not prepare the export image.')
@@ -1991,13 +2272,51 @@ const resetBackground = async () => {
     }
   }
 
+  const shareDesign = async () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    setShareBusy(true)
+    try {
+      const output = canvas.toCanvasElement(exportScale)
+      if (exportWatermark) await drawProjectWatermark(output)
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        output.toBlob((result) => {
+          if (result) resolve(result)
+          else reject(new Error('Could not prepare the image for sharing.'))
+        }, 'image/png')
+      })
+      const safeName = projectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'pixel-studio-design'
+      const file = new File([blob], `${safeName}.png`, { type: 'image/png' })
+
+      if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] }) !== false) {
+        await navigator.share({ files: [file], title: projectName })
+      } else {
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = file.name
+        link.click()
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+        setNotice('Image sharing is not available in this browser. The PNG was downloaded instead.')
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return
+      setNotice('Could not share the image. Please try exporting it instead.')
+    } finally {
+      setShareBusy(false)
+    }
+  }
+
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.stopPropagation()
 
     setDraggingFile(false)
-    void uploadFile(event.dataTransfer.files[0])
+    const file = event.dataTransfer.files[0]
+    if (activeEditorMode === 'video') uploadVideoFile(file)
+    else void uploadFile(file)
   }
 
   const openFilePicker = () => {
@@ -2073,25 +2392,54 @@ const resetBackground = async () => {
   return { canvas: layerCanvas, image: layerImage }
 }, [])
 
-const drawOnDrawingLayer = useCallback((points: EditPoint[], mode: 'pencil' | 'eraser') => {
-  const layer = getDrawingLayer()
-  const canvas = canvasRef.current
-  const context = layer?.canvas.getContext('2d')
-  if (!layer || !canvas || !context || points.length === 0) return
-
+const drawBrushPath = useCallback((context: CanvasRenderingContext2D, points: EditPoint[], mode: 'pencil' | 'sketch' | 'marker' | 'highlighter' | 'eraser') => {
+  if (points.length === 0) return
   context.save()
   context.globalCompositeOperation = mode === 'eraser' ? 'destination-out' : 'source-over'
+  const widthScale = mode === 'highlighter' ? 3 : mode === 'sketch' ? 0.65 : 1
+  const lineWidth = Math.max(1, brushSizeRef.current * widthScale)
+  context.globalAlpha = mode === 'highlighter' ? 0.32 : mode === 'sketch' ? 0.62 : 1
   context.strokeStyle = drawingColorRef.current
   context.fillStyle = drawingColorRef.current
-  context.lineWidth = brushSizeRef.current
+  context.lineWidth = lineWidth
   context.lineCap = 'round'
   context.lineJoin = 'round'
   context.beginPath()
   context.moveTo(points[0].x, points[0].y)
 
   if (points.length === 1) {
-    context.arc(points[0].x, points[0].y, brushSizeRef.current / 2, 0, Math.PI * 2)
+    context.arc(points[0].x, points[0].y, lineWidth / 2, 0, Math.PI * 2)
     context.fill()
+  } else if (mode === 'marker' && points.length > 2) {
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const previous = points[index - 1] ?? points[index]
+      const current = points[index]
+      const next = points[index + 1]
+      const following = points[index + 2] ?? next
+      context.bezierCurveTo(
+        current.x + (next.x - previous.x) / 6,
+        current.y + (next.y - previous.y) / 6,
+        next.x - (following.x - current.x) / 6,
+        next.y - (following.y - current.y) / 6,
+        next.x,
+        next.y,
+      )
+    }
+    context.stroke()
+  } else if ((mode === 'sketch' || mode === 'highlighter') && points.length > 2) {
+    for (let index = 1; index < points.length - 1; index += 1) {
+      const current = points[index]
+      const next = points[index + 1]
+      context.quadraticCurveTo(
+        current.x,
+        current.y,
+        (current.x + next.x) / 2,
+        (current.y + next.y) / 2,
+      )
+    }
+    const lastPoint = points[points.length - 1]
+    context.lineTo(lastPoint.x, lastPoint.y)
+    context.stroke()
   } else {
     for (const point of points.slice(1)) {
       context.lineTo(point.x, point.y)
@@ -2100,7 +2448,82 @@ const drawOnDrawingLayer = useCallback((points: EditPoint[], mode: 'pencil' | 'e
   }
 
   context.restore()
+}, [])
+
+const drawOnDrawingLayer = useCallback((points: EditPoint[], mode: 'pencil' | 'sketch' | 'marker' | 'highlighter' | 'eraser') => {
+  const layer = getDrawingLayer()
+  const canvas = canvasRef.current
+  const context = layer?.canvas.getContext('2d')
+  if (!layer || !canvas || !context || points.length === 0) return
+
+  drawBrushPath(context, points, mode)
   layer.image.dirty = true
+  canvas.requestRenderAll()
+}, [drawBrushPath, getDrawingLayer])
+
+const beginDrawingPreview = useCallback(() => {
+  const canvas = canvasRef.current
+  if (!canvas) return
+
+  getDrawingLayer()
+  const previewCanvas = document.createElement('canvas')
+  previewCanvas.width = canvas.getWidth()
+  previewCanvas.height = canvas.getHeight()
+  const previewImage = new FabricImage(previewCanvas, {
+    left: 0,
+    top: 0,
+    originX: 'left',
+    originY: 'top',
+    selectable: false,
+    evented: false,
+  })
+  previewImage.set('name', '__pixel_studio_drawing_preview__')
+  drawingPreviewCanvasRef.current = previewCanvas
+  drawingPreviewImageRef.current = previewImage
+
+  const wasSuppressingHistory = suppressHistoryRef.current
+  suppressHistoryRef.current = true
+  canvas.add(previewImage)
+  suppressHistoryRef.current = wasSuppressingHistory
+}, [getDrawingLayer])
+
+const renderDrawingPreviewFrame = useCallback((points: EditPoint[], mode: 'pencil' | 'sketch' | 'marker' | 'highlighter') => {
+  const previewCanvas = drawingPreviewCanvasRef.current
+  const previewImage = drawingPreviewImageRef.current
+  const canvas = canvasRef.current
+  const context = previewCanvas?.getContext('2d')
+  if (!previewCanvas || !previewImage || !canvas || !context) return
+
+  context.clearRect(0, 0, previewCanvas.width, previewCanvas.height)
+  drawBrushPath(context, points, mode)
+  previewImage.dirty = true
+  canvas.requestRenderAll()
+}, [drawBrushPath])
+
+const renderDrawingPreview = useCallback((points: EditPoint[], mode: 'pencil' | 'sketch' | 'marker' | 'highlighter') => {
+  if (drawingPreviewFrameRef.current !== null) return
+  drawingPreviewFrameRef.current = requestAnimationFrame(() => {
+    drawingPreviewFrameRef.current = null
+    renderDrawingPreviewFrame(points, mode)
+  })
+}, [renderDrawingPreviewFrame])
+
+const commitDrawingPreview = useCallback(() => {
+  const previewCanvas = drawingPreviewCanvasRef.current
+  const previewImage = drawingPreviewImageRef.current
+  const canvas = canvasRef.current
+  const layer = getDrawingLayer()
+  const context = layer?.canvas.getContext('2d')
+  if (!previewCanvas || !previewImage || !canvas || !layer || !context) return
+
+  context.drawImage(previewCanvas, 0, 0)
+  layer.image.dirty = true
+  const wasSuppressingHistory = suppressHistoryRef.current
+  suppressHistoryRef.current = true
+  canvas.remove(previewImage)
+  suppressHistoryRef.current = wasSuppressingHistory
+  drawingPreviewCanvasRef.current = null
+  drawingPreviewImageRef.current = null
   canvas.requestRenderAll()
 }, [getDrawingLayer])
 
@@ -2766,10 +3189,15 @@ const deleteSelection = async () => {
 
     const mode = activeDrawingModeRef.current
 
-    if (mode === 'pencil' || mode === 'eraser') {
+    if (mode === 'pencil' || mode === 'sketch' || mode === 'marker' || mode === 'highlighter' || mode === 'eraser') {
       isGestureDrawingRef.current = true
       gesturePointsRef.current = [{ x: point.x, y: point.y }]
-      drawOnDrawingLayer(gesturePointsRef.current, mode)
+      if (mode === 'eraser') {
+        drawOnDrawingLayer(gesturePointsRef.current, mode)
+      } else {
+        beginDrawingPreview()
+        renderDrawingPreview(gesturePointsRef.current, mode)
+      }
       return
     }
 
@@ -2865,10 +3293,13 @@ const deleteSelection = async () => {
 
     const mode = activeDrawingModeRef.current
 
-    if (mode === 'pencil' || mode === 'eraser') {
+    if (mode === 'pencil' || mode === 'sketch' || mode === 'marker' || mode === 'highlighter' || mode === 'eraser') {
       const previousPoint = gesturePointsRef.current.at(-1)
       gesturePointsRef.current.push({ x: point.x, y: point.y })
-      if (previousPoint) drawOnDrawingLayer([previousPoint, point], mode)
+      if (previousPoint) {
+        if (mode === 'eraser') drawOnDrawingLayer([previousPoint, point], mode)
+        else renderDrawingPreview(gesturePointsRef.current, mode)
+      }
       return
     }
 
@@ -2907,7 +3338,15 @@ const deleteSelection = async () => {
     const points = [...gesturePointsRef.current]
     gesturePointsRef.current = []
 
-    if (mode === 'pencil' || mode === 'eraser') {
+    if (mode === 'pencil' || mode === 'sketch' || mode === 'marker' || mode === 'highlighter' || mode === 'eraser') {
+      if (mode !== 'eraser') {
+        if (drawingPreviewFrameRef.current !== null) {
+          cancelAnimationFrame(drawingPreviewFrameRef.current)
+          drawingPreviewFrameRef.current = null
+        }
+        renderDrawingPreviewFrame(points, mode)
+        commitDrawingPreview()
+      }
       recordHistory(true)
     } else if (mode === 'magic-remover') {
       void finishMagicRemoval()
@@ -2930,13 +3369,69 @@ const deleteSelection = async () => {
     canvas.off('mouse:move', onMouseMove)
     canvas.off('mouse:up', onMouseUp)
   }
-}, [activeTool, drawOnDrawingLayer, finishMagicRemoval, hasDocument, paintMagicRemoval, recordHistory, startMagicRemoval, syncTableLayout, tableEditing])
+}, [activeTool, beginDrawingPreview, commitDrawingPreview, drawOnDrawingLayer, finishMagicRemoval, hasDocument, paintMagicRemoval, recordHistory, renderDrawingPreview, renderDrawingPreviewFrame, startMagicRemoval, syncTableLayout, tableEditing])
   
   const selectedText = selectedObject instanceof IText ? selectedObject : null
   const selectedIsShape = Boolean(selectedObject && !selectedIsImage && !(selectedObject instanceof IText) && !cropActive)
 
+  const applyObjectAnimation = (effect: TextAnimation) => {
+    const canvas = canvasRef.current
+    const active = canvas?.getActiveObject()
+    if (!canvas || !active || active === imageObjectRef.current) return
+    active.set('textAnimation', effect)
+    textAnimationStartTimesRef.current.set(active, performance.now())
+    setTextAnimationVersion((version) => version + 1)
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const removeSelectedAnimation = () => {
+    const canvas = canvasRef.current
+    const active = canvas?.getActiveObject()
+    if (!canvas || !active) return
+    active.set('textAnimation', 'none')
+    textAnimationStartTimesRef.current.delete(active)
+    setTextAnimationVersion((version) => version + 1)
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const clearAnimations = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    for (const object of canvas.getObjects()) object.set('textAnimation', 'none')
+    textAnimationStartTimesRef.current = new WeakMap<FabricObject, number>()
+    setTextAnimationVersion((version) => version + 1)
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
   const contextValue: EditorContextValue = {
     fabricCanvas,
+
+    editorMode: {
+      active: activeEditorMode,
+      setActive: changeEditorMode,
+    },
+
+    videoClip: {
+      ...videoClip,
+      isTrimming: isTrimmingVideo,
+      setTrimming: setIsTrimmingVideo,
+      setFile: uploadVideoFile,
+      clear: clearVideoFile,
+      setDuration: (duration) => {
+        if (!Number.isFinite(duration) || duration <= 0) return
+        setVideoClip((current) => ({
+          ...current,
+          duration,
+          trimEnd: current.trimEnd <= 0 || current.trimEnd > duration ? duration : current.trimEnd,
+        }))
+      },
+      setTrimStart: (trimStart) => setVideoClip((current) => ({ ...current, trimStart })),
+      setTrimEnd: (trimEnd) => setVideoClip((current) => ({ ...current, trimEnd })),
+    },
+
     canvas: {
       dimensions,
       hasDocument,
@@ -2986,7 +3481,8 @@ const deleteSelection = async () => {
     },
     resize: { width: resizeWidth, height: resizeHeight, setWidth: updateResizeWidth, setHeight: updateResizeHeight, keepRatio, setKeepRatio, scaleArtwork, setScaleArtwork, apply: applyResize },
     text: { selected: selectedText, value: textValue, fontFamily, setFontFamily, fontSize, setFontSize, color: textColor, setColor: setTextColor, background: textBackground, setBackground: setTextBackground, opacity: textOpacity, setOpacity: setTextOpacity, outline: textOutline, setOutline: setTextOutline, outlineWidth: textOutlineWidth, setOutlineWidth: setTextOutlineWidth, shadow: textShadow, setShadow: setTextShadow, add: createText, update: updateText },
-    shapes: { selected: selectedObject, isSelectedShape: selectedIsShape, kind: shapeKind, setKind: setShapeKind, fill: fillColor, setFill: setFillColor, transparentFill, setTransparentFill, stroke: strokeColor, setStroke: setStrokeColor, strokeWidth, setStrokeWidth, opacity: shapeOpacity, setOpacity: setShapeOpacity, add: addShape, duplicate: duplicateSelected, delete: deleteSelected, updateAppearance: updateShapeAppearance, moveLayer, selectLayer },
+    animation: { selected: String(selectedObject?.get('textAnimation') ?? 'none') as TextAnimation, hasAnimations: objects.some((object) => String(object.get('textAnimation') ?? 'none') !== 'none'), apply: applyObjectAnimation, remove: removeSelectedAnimation, clear: clearAnimations },
+      shapes: { selected: selectedObject, isSelectedShape: selectedIsShape, kind: shapeKind, setKind: setShapeKind, lineStyle, setLineStyle, fill: fillColor, setFill: setFillColor, transparentFill, setTransparentFill, stroke: strokeColor, setStroke: setStrokeColor, strokeWidth, setStrokeWidth, opacity: shapeOpacity, setOpacity: setShapeOpacity, add: addShape, addText: addTextInsideSelectedShape, addImage: addImageInsideSelectedShape, duplicate: duplicateSelected, delete: deleteSelected, updateAppearance: updateShapeAppearance, moveLayer, selectLayer },
     adjustments: {
       brightness,
       setBrightness,
@@ -3061,7 +3557,7 @@ const deleteSelection = async () => {
       selectColumn: selectTableColumn,
       setBorderColor: updateTableBorderColor,
     },
-    export: { open: exportOpen, setOpen: setExportOpen, format: exportFormat, setFormat: setExportFormat, scale: exportScale, setScale: setExportScale, watermark: exportWatermark, setWatermark: setExportWatermark, busy: exportBusy, download: downloadDesign },
+    export: { open: exportOpen, setOpen: setExportOpen, format: exportFormat, setFormat: setExportFormat, scale: exportScale, setScale: setExportScale, watermark: exportWatermark, setWatermark: setExportWatermark, busy: exportBusy, download: downloadDesign, shareBusy, share: shareDesign },
 
   }
 

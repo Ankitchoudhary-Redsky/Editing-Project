@@ -1,5 +1,6 @@
-import { Canvas, Circle, Ellipse, Line, Path, Polygon, Rect, Triangle, type FabricObject } from 'fabric'
-import type { ShapeKind } from '../model/types'
+import { Canvas, Circle, Ellipse, FabricImage, Line, Path, Polygon, Rect, Triangle, type FabricObject } from 'fabric'
+import type { LineStyle, ShapeKind } from '../model/types'
+import { loadLocalImage } from './loadLocalImage'
 
 export type NewShapeOptions = {
   kind: ShapeKind
@@ -9,6 +10,7 @@ export type NewShapeOptions = {
   strokeWidth: number
   opacity: number
   name: string
+  lineStyle?: LineStyle
 }
 
 export type ShapeBounds = {
@@ -86,11 +88,43 @@ export function buildShapeObject(options: NewShapeOptions, bounds: ShapeBounds):
   } else if (options.kind === 'line') {
     const startX = bounds.directionX === -1 ? width : 0
     const startY = bounds.directionY === -1 ? height : 0
-    shape = new Line([startX, startY, width - startX, height - startY], {
-      ...common,
-      strokeWidth: Math.max(2, options.strokeWidth),
-      strokeLineCap: 'round',
-    })
+    const endX = width - startX
+    const endY = height - startY
+    const lineStyle = options.lineStyle ?? 'straight'
+    if (lineStyle === 'straight') {
+      shape = new Line([startX, startY, endX, endY], {
+        ...common,
+        strokeWidth: Math.max(2, options.strokeWidth),
+        strokeLineCap: 'round',
+      })
+    } else {
+      const direction = lineStyle === 'curve-up' ? -1 : 1
+      const deltaX = endX - startX
+      const deltaY = endY - startY
+      const length = Math.max(1, Math.hypot(deltaX, deltaY))
+      let normalX = -deltaY / length
+      let normalY = deltaX / length
+      if (normalY < 0 || (normalY === 0 && normalX < 0)) {
+        normalX *= -1
+        normalY *= -1
+      }
+      const bend = Math.max(4, Math.min(96, length * 0.22))
+      const controlX = (startX + endX) / 2
+      const controlY = (startY + endY) / 2
+      const controlPointX = controlX + normalX * direction * bend * 2
+      const controlPointY = controlY + normalY * direction * bend * 2
+      const minX = Math.min(startX, endX, controlPointX)
+      const minY = Math.min(startY, endY, controlPointY)
+      const path = `M ${startX - minX} ${startY - minY} Q ${controlPointX - minX} ${controlPointY - minY} ${endX - minX} ${endY - minY}`
+      shape = new Path(path, {
+        ...common,
+        left: left + minX,
+        top: top + minY,
+        strokeWidth: Math.max(2, options.strokeWidth),
+        strokeLineCap: 'round',
+        strokeLineJoin: 'round',
+      })
+    }
   } else shape = new Rect({ ...common, width, height, rx: options.kind === 'roundRect' ? Math.min(width, height) * 0.16 : 0, ry: options.kind === 'roundRect' ? Math.min(width, height) * 0.16 : 0 })
 
   return shape
@@ -102,4 +136,81 @@ export function createShapeObject(canvas: Canvas, options: NewShapeOptions): Fab
   canvas.setActiveObject(shape)
   canvas.requestRenderAll()
   return shape
+}
+
+export async function addImageInsideShape(canvas: Canvas, shape: FabricObject, file: File) {
+  const shapeId = String(shape.get('shapeId') ?? `shape-${crypto.randomUUID()}`)
+  shape.set('shapeId', shapeId)
+
+  const { image } = await loadLocalImage(file)
+  const shapeWidth = Math.max(1, shape.getScaledWidth())
+  const shapeHeight = Math.max(1, shape.getScaledHeight())
+  const center = shape.getCenterPoint()
+  const coverScale = Math.max(shapeWidth / image.width, shapeHeight / image.height)
+  const clipPath = await shape.clone()
+  clipPath.set({
+    absolutePositioned: true,
+    fill: '#000000',
+    stroke: null,
+    strokeWidth: 0,
+    opacity: 1,
+    shadow: null,
+    selectable: false,
+    evented: false,
+  })
+
+  image.set({
+    name: 'Image in shape',
+    left: center.x,
+    top: center.y,
+    originX: 'center',
+    originY: 'center',
+    scaleX: coverScale,
+    scaleY: coverScale,
+    angle: shape.angle,
+    clipPath,
+    selectable: false,
+    evented: false,
+    imageParentId: shapeId,
+  })
+  canvas.add(image)
+  canvas.requestRenderAll()
+  return image
+}
+
+export function syncImageWithShape(canvas: Canvas, shape: FabricObject) {
+  const shapeId = shape.get('shapeId')
+  if (!shapeId) return
+
+  const shapeWidth = Math.max(1, shape.getScaledWidth())
+  const shapeHeight = Math.max(1, shape.getScaledHeight())
+  const center = shape.getCenterPoint()
+  for (const object of canvas.getObjects()) {
+    if (!(object instanceof FabricImage) || object.get('imageParentId') !== shapeId) continue
+    const coverScale = Math.max(shapeWidth / object.width, shapeHeight / object.height)
+    object.set({
+      left: center.x,
+      top: center.y,
+      scaleX: coverScale,
+      scaleY: coverScale,
+      angle: shape.angle,
+      visible: shapeWidth > 2 && shapeHeight > 2,
+    })
+    object.clipPath?.set({
+      left: shape.left,
+      top: shape.top,
+      originX: shape.originX,
+      originY: shape.originY,
+      scaleX: shape.scaleX,
+      scaleY: shape.scaleY,
+      angle: shape.angle,
+      flipX: shape.flipX,
+      flipY: shape.flipY,
+      skewX: shape.skewX,
+      skewY: shape.skewY,
+    })
+    object.clipPath?.setCoords()
+    object.setCoords()
+  }
+  canvas.requestRenderAll()
 }

@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronDown,Download,Eye, Redo2, Undo2 } from 'lucide-react'
+import { ArrowRight, ChevronDown, Download, Eye, Redo2, Share2, Undo2 } from 'lucide-react'
 import { useEditor } from '../EditorContext'
 import img1 from '../../../assets/logo.png'
 
@@ -23,6 +23,7 @@ export function EditorHeader() {
         <button className="icon-button" title="Redo" aria-label="Redo" disabled={!history.canRedo} onClick={history.redo}><Redo2 size={18} /></button>
         <span className="action-divider" />
         <button className="preview-button" onClick={preview.show} disabled={!canvas.hasImage} ><Eye size={16} /> Preview</button>
+        <button className="preview-button" onClick={() => void exportState.share()} disabled={!canvas.hasImage || exportState.shareBusy} title="Share edited image"><Share2 size={16} /> {exportState.shareBusy ? 'Preparing…' : 'Share'}</button>
         <button className="download-button" onClick={() => exportState.setOpen(true)} disabled={!canvas.hasImage}><Download size={16} /> Export</button>
       </div>
     </header>

@@ -1,14 +1,43 @@
 import { AlignCenter, AlignLeft, AlignRight, Bold, Italic, Plus } from 'lucide-react'
 import { useEditor } from '../../EditorContext'
+import type { TextDesignOptions } from '../../model/types'
 
 const fontFamilies = ['Georgia', 'Arial', 'Verdana', 'Trebuchet MS', 'Courier New', 'Times New Roman']
+const textDesigns: Array<{ name: string; sample: string; design: TextDesignOptions }> = [
+  { name: 'Bold headline', sample: 'HEADLINE', design: { value: 'HEADLINE', fontFamily: 'Arial', fontSize: 48, color: '#ffffff', fontWeight: 'bold', textAlign: 'center', shadow: 'strong' } },
+  { name: 'Elegant', sample: 'Elegant', design: { value: 'Elegant', fontFamily: 'Georgia', fontSize: 42, color: '#f5e6c8', fontStyle: 'italic', textAlign: 'center', shadow: 'soft' } },
+  { name: 'Poster', sample: 'POSTER', design: { value: 'POSTER', fontFamily: 'Arial', fontSize: 50, color: '#f6bd4b', fontWeight: 'bold', outline: '#38261b', outlineWidth: 2, textAlign: 'center', shadow: 'strong' } },
+  { name: 'Neon', sample: 'Neon', design: { value: 'Neon', fontFamily: 'Verdana', fontSize: 42, color: '#ff68c8', fontWeight: 'bold', outline: '#752455', outlineWidth: 1, shadow: 'strong' } },
+  { name: 'Caption label', sample: 'CAPTION', design: { value: 'CAPTION', fontFamily: 'Arial', fontSize: 22, color: '#ffffff', fontWeight: 'bold', backgroundColor: '#245a4a', textAlign: 'center' } },
+  { name: 'Soft note', sample: 'a little note', design: { value: 'a little note', fontFamily: 'Georgia', fontSize: 30, color: '#ffffff', fontStyle: 'italic', shadow: 'soft' } },
+]
 
 export function TextPanel() {
   const { canvas, text } = useEditor()
   return (
     <div className="panel-content">
       <fieldset className="panel-control-group" disabled={!canvas.hasImage}>
-        <button className="primary-button full-button" onClick={text.add}><Plus size={16} /> Add a text box</button>
+        <button className="primary-button full-button" onClick={() => text.add()}><Plus size={16} /> Add a text box</button>
+        <section className="text-design-section" aria-label="Ready-made text designs">
+          <span className="field-label">Ready-made designs</span>
+          <div className="text-design-grid">
+            {textDesigns.map(({ name, sample, design }) => (
+              <button key={name} type="button" className="text-design-card" onClick={() => text.add(design)} title={`Add ${name} text`}>
+                <span className="text-design-preview" style={{
+                  backgroundColor: design.backgroundColor ?? 'transparent',
+                  color: design.color,
+                  fontFamily: design.fontFamily,
+                  fontWeight: design.fontWeight,
+                  fontStyle: design.fontStyle,
+                  textAlign: design.textAlign,
+                  WebkitTextStroke: design.outlineWidth ? `${Math.min(design.outlineWidth, 1)}px ${design.outline}` : undefined,
+                  textShadow: design.shadow ? '0 2px 5px rgba(0, 0, 0, .35)' : undefined,
+                }}>{sample}</span>
+                <span className="text-design-name">{name}</span>
+              </button>
+            ))}
+          </div>
+        </section>
         {text.selected && <div className="control-section"><label className="field-label">Text<textarea rows={3} value={text.selected.text ?? text.value} onChange={(event) => text.update('text', event.target.value)} /></label></div>}
         <div className="control-section"><span className="field-label">Font</span><select value={text.selected?.fontFamily ?? text.fontFamily} onChange={(event) => { text.setFontFamily(event.target.value); text.update('fontFamily', event.target.value) }}>{fontFamilies.map((family) => <option key={family}>{family}</option>)}</select></div>
         <div className="dimensions-fields"><label className="field-label">Size<input type="number" min="8" max="400" value={text.selected?.fontSize ?? text.fontSize} onChange={(event) => { const value = Number(event.target.value); text.setFontSize(value); text.update('fontSize', value) }} /></label><label className="field-label color-field">Color<input type="color" value={text.selected && typeof text.selected.fill === 'string' ? text.selected.fill : text.color} onChange={(event) => { text.setColor(event.target.value); text.update('fill', event.target.value) }} /></label></div>

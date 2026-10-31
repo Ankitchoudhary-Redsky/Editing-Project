@@ -11,6 +11,7 @@ import { BackgroundPanel } from './panels/BackgroundPanel'
 import { DrawingPanel } from './panels/DrawingPanel'
 import { StickersPanel } from './panels/StickersPanel'
 import { LayersPanel } from './panels/LayersPanel'
+import { AnimatePanel } from './panels/AnimatePanel'
 
 export function ToolPanel() {
   const { canvas, tools } = useEditor()
@@ -50,6 +51,7 @@ export function ToolPanel() {
       {tools.active === 'draw-remove' && <DrawingPanel />}
       {tools.active === 'stickers' && <StickersPanel />}
       {tools.active === 'layers' && <LayersPanel />}
+      {tools.active === 'animate' && <AnimatePanel />}
     </aside>
   )
 }

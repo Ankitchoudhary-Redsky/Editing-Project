@@ -1,11 +1,14 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { Canvas, FabricObject, IText } from 'fabric'
 
-export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers'
-export type DrawingMode = 'pencil' | 'eraser' | 'magic-remover' | 'lasso'
+export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers' | 'animate' | 'video-upload' | 'video-trim'
+export type EditorMode = 'image' | 'video'
+export type DrawingMode = 'pencil' | 'sketch' | 'marker' | 'highlighter' | 'eraser' | 'magic-remover' | 'lasso'
 export type ShapeKind = 'rect' | 'roundRect' | 'circle' | 'ellipse' | 'line' | 'arrow' | 'triangle' | 'star' | 'pentagon'
+export type LineStyle = 'straight' | 'curve-up' | 'curve-down'
 
-export type ExportFormat = 'png' | 'jpeg'
+export type ExportFormat = 'png' | 'jpeg' | 'gif' | 'mp4'
+export type TextAnimation = 'none' | 'fade' | 'pulse' | 'bounce' | 'typewriter' | 'from-top' | 'from-bottom' | 'from-left' | 'from-right' | 'pop' | 'wipe' | 'blur' | 'succession' | 'breathe' | 'baseline' | 'drift' | 'tectonic' | 'tumble' | 'neon' | 'scrapbook' | 'stomp'
 
 
 export type VideoPreviewData = {
@@ -39,15 +42,52 @@ export type VideoAudioDraft = {
   voiceVolume: number
 }
 
+export type VideoClipDraft = {
+  file: File | null
+  url: string
+  duration: number
+  trimStart: number
+  trimEnd: number
+}
+
 export type EditorCanvas = Canvas
 export type FilterId = 'original' | 'grayscale' | 'blackWhite' | 'sepia' | 'vintage' |'retro' | 'warm' | 'cool' | 'vivid' | 'cinematic' | 'dramatic' | 'fade' | 'pastel' | 'noir' | 'dreamy'
 export type FilterSettings = { id: FilterId; intensity: number }
 export type Dimensions = { width: number; height: number }
-export type TextProperty = 'text' | 'fontFamily' | 'fontSize' | 'fill' | 'backgroundColor' | 'opacity' | 'fontWeight' | 'fontStyle' | 'textAlign' | 'stroke' | 'strokeWidth' | 'shadow'
+export type TextProperty = 'text' | 'fontFamily' | 'fontSize' | 'fill' | 'backgroundColor' | 'opacity' | 'fontWeight' | 'fontStyle' | 'textAlign' | 'stroke' | 'strokeWidth' | 'shadow' | 'textAnimation'
+export type TextDesignOptions = Partial<{
+  value: string
+  fontFamily: string
+  fontSize: number
+  color: string
+  opacity: number
+  outline: string
+  outlineWidth: number
+  shadow: string
+  fontWeight: string
+  fontStyle: string
+  backgroundColor: string
+  textAlign: 'left' | 'center' | 'right'
+}>
 
 export interface EditorContextValue {
   /** Actual Fabric.js Canvas instance used for image editing. */
   fabricCanvas: EditorCanvas | null
+
+  editorMode: {
+    active: EditorMode
+    setActive: (mode: EditorMode) => void
+  }
+
+  videoClip: VideoClipDraft & {
+    isTrimming: boolean
+    setTrimming: (isTrimming: boolean) => void
+    setFile: (file: File) => void
+    clear: () => void
+    setDuration: (duration: number) => void
+    setTrimStart: (time: number) => void
+    setTrimEnd: (time: number) => void
+  }
 
   canvas: {
     dimensions: Dimensions
@@ -130,7 +170,7 @@ export interface EditorContextValue {
     setOutlineWidth: Dispatch<SetStateAction<number>>
     shadow: string
     setShadow: Dispatch<SetStateAction<string>>
-    add: () => void
+    add: (design?: TextDesignOptions) => void
     update: (property: TextProperty, value: string | number) => void
   }
   shapes: {
@@ -138,6 +178,8 @@ export interface EditorContextValue {
     isSelectedShape: boolean
     kind: ShapeKind
     setKind: Dispatch<SetStateAction<ShapeKind>>
+    lineStyle: LineStyle
+    setLineStyle: Dispatch<SetStateAction<LineStyle>>
     fill: string
     setFill: Dispatch<SetStateAction<string>>
     transparentFill: boolean
@@ -149,6 +191,8 @@ export interface EditorContextValue {
     opacity: number
     setOpacity: Dispatch<SetStateAction<number>>
     add: () => void
+    addText: () => void
+    addImage: (file: File) => Promise<void>
     duplicate: () => Promise<void>
     delete: () => void
     updateAppearance: (property: 'fill' | 'stroke' | 'strokeWidth' | 'opacity', value: string | number) => void
@@ -178,6 +222,13 @@ export interface EditorContextValue {
     setVideo: Dispatch<SetStateAction<VideoPreviewData | null>>
     show: () => void
     close: () => void
+  }
+  animation: {
+    selected: TextAnimation
+    hasAnimations: boolean
+    apply: (animation: TextAnimation) => void
+    remove: () => void
+    clear: () => void
   }
   videoAudio: VideoAudioDraft
   setVideoAudio: Dispatch<SetStateAction<VideoAudioDraft>>
@@ -243,6 +294,8 @@ export interface EditorContextValue {
     setWatermark: Dispatch<SetStateAction<boolean>>
     busy: boolean
     download: () => Promise<void>
+    shareBusy: boolean
+    share: () => Promise<void>
   }
 
   draggingFile: boolean

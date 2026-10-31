@@ -1,7 +1,7 @@
 
 import type { DragEvent } from 'react'
 import { useState } from 'react'
-import { Eraser, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Upload } from 'lucide-react'
+import { Eraser, Highlighter, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Upload } from 'lucide-react'
 
 import { useEditor } from '../EditorContext'
 import { objectName } from '../model/objectName'
@@ -31,10 +31,10 @@ export function EditorWorkspace({
     x: number
     y: number
   } | null>(null)
-
   const drawingCursorIcons: Partial<Record<DrawingMode, typeof Pencil>> = {
     pencil: Pencil,
     eraser: Eraser,
+    highlighter: Highlighter,
     'magic-remover': Paintbrush,
   }
 
@@ -90,7 +90,10 @@ export function EditorWorkspace({
                 {!resizeCursor && (
                   <span
                     className="drawing-cursor-brush"
-                    style={{ width: drawing.brushSize, height: drawing.brushSize }}
+                      style={{
+                        width: drawing.brushSize * (drawing.activeMode === 'highlighter' ? 3 : 1),
+                        height: drawing.brushSize * (drawing.activeMode === 'highlighter' ? 3 : 1),
+                      }}
                   />
                 )}
                 <span className={resizeCursor ? 'drawing-cursor-icon table-resize-cursor' : 'drawing-cursor-icon'}>

@@ -1,55 +1,140 @@
+import { createPortal } from 'react-dom'
+import { useEffect, useRef, useState } from 'react'
 import { useEditor } from '../../EditorContext'
 import type { DrawingMode } from '../../model/types'
-import { Eraser, Lasso, Minus, Pencil, Trash2, WandSparkles } from 'lucide-react'
+import { Brush, ChevronDown, Eraser, Highlighter, Lasso, Minus, Pencil, Trash2, WandSparkles } from 'lucide-react'
 
-const toolDescriptions: Record<
-  'pencil' | 'eraser' | 'magic-remover' | 'lasso',
-  string
-> = {
+const toolDescriptions: Record<DrawingMode, string> = {
   pencil: 'Draw freehand strokes on your image.',
+  sketch: 'Create light, fine sketch strokes.',
+  marker: 'Draw bold, opaque marker strokes.',
+  highlighter: 'Add broad, translucent highlight strokes.',
   eraser: 'Erase pencil strokes from your design.',
   'magic-remover': 'Brush over image areas to remove them.',
   lasso: 'Draw around an image area to select it.',
 }
 
+const brushModes = [
+  { id: 'sketch', label: 'Sketch', sample: 'sketch', icon: Pencil },
+  { id: 'marker', label: 'Marker', sample: 'marker', icon: Brush },
+  { id: 'highlighter', label: 'Highlighter', sample: 'highlighter', icon: Highlighter },
+] as const
+
 export function DrawingPanel() {
-  const { canvas, drawing, table } = useEditor()
+  const { canvas, drawing, table, tools } = useEditor()
   const isDisabled = !canvas.hasImage
+  const [brushMenuOpen, setBrushMenuOpen] = useState(false)
+  const [brushMenuPosition, setBrushMenuPosition] = useState({ left: 8, top: 8 })
+  const brushTriggerRef = useRef<HTMLButtonElement>(null)
+  const brushMenuRef = useRef<HTMLDivElement>(null)
   const modes = [
-    { id: 'pencil', label: 'Draw', icon: Pencil },
+    { id: 'pencil', label: 'Pencil', icon: Pencil },
     { id: 'eraser', label: 'Eraser', icon: Eraser },
     { id: 'magic-remover', label: 'Object removal', icon: WandSparkles },
     { id: 'lasso', label: 'Freehand Select', icon: Lasso },
   ] as const
+
+  useEffect(() => {
+    if (!brushMenuOpen) return
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (
+        !brushTriggerRef.current?.contains(event.target as Node) &&
+        !brushMenuRef.current?.contains(event.target as Node)
+      ) setBrushMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick)
+  }, [brushMenuOpen])
+
+  const toggleBrushMenu = () => {
+    if (!brushMenuOpen) {
+      const bounds = brushTriggerRef.current?.getBoundingClientRect()
+      if (bounds) {
+        const sidebarBounds = brushTriggerRef.current?.closest('.tool-panel')?.getBoundingClientRect()
+        const leftEdge = (sidebarBounds?.right ?? bounds.right) + 8
+        setBrushMenuPosition({
+          left: Math.max(8, Math.min(window.innerWidth - 132, leftEdge)),
+          top: Math.max(8, Math.min(window.innerHeight - 122, bounds.top + bounds.height / 2 - 57)),
+        })
+      }
+      drawing.setActiveMode('pencil')
+      tools.setActive('draw-remove')
+    }
+    setBrushMenuOpen((open) => !open)
+  }
+
+  const chooseBrush = (mode: DrawingMode) => {
+    drawing.setActiveMode(mode)
+    tools.setActive('draw-remove')
+  }
 
   return (
     <div className="panel-content">
       <div className="drawing-mode-grid" role="group" aria-label="Drawing mode">
         {modes.map((mode) => {
           const Icon = mode.icon
-          const isActive = !table.editing && drawing.activeMode === mode.id
+          const isBrushMode = ['pencil', 'sketch', 'marker', 'highlighter'].includes(drawing.activeMode)
+          const isActive = !table.editing && (mode.id === 'pencil' ? isBrushMode : drawing.activeMode === mode.id)
 
           return (
             <button
               key={mode.id}
+              ref={mode.id === 'pencil' ? brushTriggerRef : undefined}
               type="button"
               className={isActive ? 'drawing-mode-button active' : 'drawing-mode-button'}
               aria-pressed={isActive}
+              aria-expanded={mode.id === 'pencil' ? brushMenuOpen : undefined}
               disabled={isDisabled || table.editing}
-              onClick={() => drawing.setActiveMode(mode.id as DrawingMode)}
+              onClick={() => mode.id === 'pencil' ? toggleBrushMenu() : chooseBrush(mode.id as DrawingMode)}
             >
-              <Icon size={16} />
+              <span className="drawing-mode-icon">
+                <Icon size={16} />
+                {mode.id === 'pencil' && (
+                  <ChevronDown
+                    className={`drawing-mode-chevron${brushMenuOpen ? ' open' : ''}`}
+                    size={14}
+                    strokeWidth={2.25}
+                    aria-hidden="true"
+                  />
+                )}
+              </span>
               <span>{mode.label}</span>
             </button>
           )
         })}
       </div>
+      {brushMenuOpen && createPortal(
+        <div
+          ref={brushMenuRef}
+          className="retouch-brush-popover"
+          role="group"
+          aria-label="Brush type"
+          style={{ left: brushMenuPosition.left, top: brushMenuPosition.top }}
+        >
+          {brushModes.map(({ id, label, sample, icon: BrushIcon }) => (
+            <button
+              key={id}
+              type="button"
+              className={`retouch-brush-option ${drawing.activeMode === id ? 'selected' : ''}`}
+              aria-label={label}
+              aria-pressed={drawing.activeMode === id}
+              title={label}
+              onClick={() => chooseBrush(id)}
+            >
+              <BrushIcon size={14} aria-hidden="true" />
+              <span className={`retouch-brush-sample ${sample}`} aria-hidden="true" />
+              <span className="visually-hidden">{label}</span>
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
       <p className="panel-note">
         {table.editing ? 'Table editing' : isDisabled ? 'Upload an image to enable drawing tools.' : toolDescriptions[drawing.activeMode]}
       </p>
       {drawing.activeMode !== 'lasso' && !table.editing && (
         <>
-          {drawing.activeMode === 'pencil' && (
+          {drawing.activeMode !== 'eraser' && drawing.activeMode !== 'magic-remover' && (
             <label className="field-label">
               Stroke color
               <input
