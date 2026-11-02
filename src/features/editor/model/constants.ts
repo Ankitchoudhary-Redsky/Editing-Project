@@ -87,7 +87,7 @@ export function serializeCanvas(canvas: Canvas) {
     {
       width: canvas.getWidth(),
       height: canvas.getHeight(),
-      scene: canvas.toObject(['name', 'textAnimation', 'shapeId', 'textParentId', 'textParentWidth', 'textParentHeight', 'textParentFontSize', 'shadowSize', 'shadowArtworkSize', 'shadowArtworkBaseScaleX', 'shadowArtworkBaseScaleY']),
+      scene: canvas.toObject(['name', 'textAnimation', 'shapeId', 'textParentId', 'textParentWidth', 'textParentHeight', 'textParentFontSize', 'shadowSize', 'shadowArtworkSize', 'shadowArtworkBaseScaleX', 'shadowArtworkBaseScaleY', 'threeDType', 'threeDShapeKind', 'threeDCharacter', 'threeDEmoji', 'threeDColor', 'threeDRotationX', 'threeDRotationY', 'threeDRotationZ']),
     },
     (key, value: unknown) => {
       if (

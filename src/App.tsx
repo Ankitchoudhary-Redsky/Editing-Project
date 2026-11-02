@@ -48,6 +48,7 @@ import { deleteProjectDraft, loadProjectDraft, saveProjectDraft } from './featur
 import { drawProjectWatermark } from './features/editor/operations/projectWatermark'
 import { exportAnimatedCanvas } from './features/editor/operations/animatedExport'
 import { attachDeleteControl } from './features/editor/operations/objectDeleteControl'
+import { disposeThreeDRotationRuntime } from './features/editor/operations/threeDShapes'
 
 type EditorSnapshot = {
   width: number
@@ -153,7 +154,7 @@ function constrainShapeToImage(
     left: (object.left ?? 0) + offsetX,
     top: (object.top ?? 0) + offsetY,
   })
-  object.setCoords()
+  if (offsetX || offsetY) object.setCoords()
 }
 
 function tableCellName(tableId: number, row: number, column: number) {
@@ -729,6 +730,10 @@ function App() {
     canvas.on('object:added', changed)
     canvas.on('object:modified', changed)
     canvas.on('object:removed', changed)
+    const disposeRemovedThreeDObject = (event: { target?: FabricObject }) => {
+      if (event.target instanceof FabricImage) disposeThreeDRotationRuntime(canvas, event.target)
+    }
+    canvas.on('object:removed', disposeRemovedThreeDObject)
     canvas.on('text:changed', (event) => {
       if (event.target instanceof IText) syncParentShapeForText(canvas, event.target)
       changed()
@@ -742,9 +747,7 @@ function App() {
       if (target && isShapeObject(target)) {
         constrainShapeToImage(canvas, imageObjectRef.current, target)
         syncTextWithShape(canvas, target)
-        syncTextWithShape(canvas, target)
         syncImageWithShape(canvas, target)
-        syncTextWithShape(canvas, target)
       }
     }
     canvas.on('object:moving', constrainShape)
@@ -784,6 +787,7 @@ function App() {
     return () => {
       disposed = true
       resizeObserver.disconnect()
+      canvas.off('object:removed', disposeRemovedThreeDObject)
       canvas.off('object:moving', constrainShape)
       canvas.off('object:scaling', constrainShape)
       canvas.off('object:rotating', constrainShape)
@@ -1041,7 +1045,6 @@ function App() {
     resizeWidth,
     scaleArtwork,
     shapeKind,
-    lineStyle,
     lineStyle,
     saturation,
     selectedFilter,

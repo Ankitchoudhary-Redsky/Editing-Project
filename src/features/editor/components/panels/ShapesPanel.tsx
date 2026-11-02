@@ -1,7 +1,6 @@
-import { useState } from 'react'
-import { FabricImage, type Canvas as FabricCanvas, type FabricObject } from 'fabric'
-import { useRef } from 'react'
-import { ArrowRight, Circle, FileImage, ImagePlus, Minus, Pentagon, Shapes, Spline, Square, Star, Trash2, Type } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { FabricImage, type Canvas as FabricCanvas } from 'fabric'
+import { ArrowRight, Circle, FileImage, ImagePlus, Minus, Pentagon, RotateCcw, Shapes, Spline, Square, Star, Trash2, Type } from 'lucide-react'
 import { useEditor } from '../../EditorContext'
 import { shapeNames } from '../../model/constants'
 import type { ShapeKind } from '../../model/types'
@@ -9,11 +8,15 @@ import {
   addThreeDCharacter,
   addThreeDEmoji,
   addThreeDShape,
+  isThreeDRotatable,
   recolorThreeDCharacter,
+  renderThreeDEmojiThumbnail,
   threeDCharacters,
+  threeDEmojiCategories,
   threeDEmojiChoices,
   threeDShapeChoices,
   threeDShapeGroups,
+  updateThreeDRotation,
 } from '../../operations/threeDShapes'
 
 const lineStyles = [
@@ -40,15 +43,38 @@ export function ShapesPanel() {
   const [addingShape, setAddingShape] = useState(false)
   const [threeDSearch, setThreeDSearch] = useState('')
   const [active3DGroup, setActive3DGroup] = useState<(typeof threeDShapeGroups)[number]>(threeDShapeGroups[0])
+  const [activeEmojiCategory, setActiveEmojiCategory] = useState<'All' | (typeof threeDEmojiCategories)[number]>('All')
+  const [emojiPreviews, setEmojiPreviews] = useState<Record<string, string>>({})
   const selectedThreeDName = String(canvas.selected?.get('name') ?? '')
   const hasSelectedThreeDObject = selectedThreeDName.startsWith('3D ')
 
   const filteredThreeDChoices = threeDShapeChoices.filter((shape) =>
     shape.label.toLowerCase().includes(threeDSearch.trim().toLowerCase()),
   )
+  const filteredThreeDEmojiChoices = threeDEmojiChoices.filter((emoji) =>
+    (activeEmojiCategory === 'All' || emoji.category === activeEmojiCategory)
+    && `${emoji.label} ${emoji.emoji}`.toLowerCase().includes(threeDSearch.trim().toLowerCase()),
+  )
+
+  useEffect(() => {
+    if (mode !== '3d' || active3DGroup !== 'Emojis') return
+    let cancelled = false
+    const searchTerm = threeDSearch.trim().toLowerCase()
+    threeDEmojiChoices.filter((emoji) =>
+      (activeEmojiCategory === 'All' || emoji.category === activeEmojiCategory)
+      && `${emoji.label} ${emoji.emoji}`.toLowerCase().includes(searchTerm),
+    ).forEach((emoji) => {
+      void renderThreeDEmojiThumbnail(emoji.emoji)
+        .then((imageUrl) => {
+          if (!cancelled) setEmojiPreviews((current) => current[emoji.emoji] ? current : { ...current, [emoji.emoji]: imageUrl })
+        })
+        .catch((error) => console.error(`Could not render ${emoji.label} preview:`, error))
+    })
+    return () => { cancelled = true }
+  }, [active3DGroup, activeEmojiCategory, mode, threeDSearch])
 
   const add3DElement = async (label: string, render: () => Promise<void>) => {
-    if (!fabricCanvas || addingShape) return
+    if (!canvas.hasImage || !fabricCanvas || addingShape) return
 
     try {
       setAddingShape(true)
@@ -205,7 +231,7 @@ export function ShapesPanel() {
               </button>
             ))}
           </div>
-          {hasSelectedThreeDObject && canvas.selected instanceof FabricImage && fabricCanvas && <ThreeDCharacterControls
+          {hasSelectedThreeDObject && canvas.selected instanceof FabricImage && isThreeDRotatable(canvas.selected) && fabricCanvas && <ThreeDCharacterControls
             key={`${selectedThreeDName}-${fabricCanvas.getObjects().indexOf(canvas.selected)}`}
             object={canvas.selected}
             fabricCanvas={fabricCanvas}
@@ -248,9 +274,20 @@ export function ShapesPanel() {
             </section>
           ) : (
             <section className="three-d-shape-group">
-              <span className="field-label">3D emoji faces</span>
+              <span className="field-label">3D Emoji Library</span>
+              <div className="three-d-category-tabs emoji-category-tabs" role="group" aria-label="Emoji categories">
+                {(['All', ...threeDEmojiCategories] as const).map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    className={activeEmojiCategory === category ? 'selected' : ''}
+                    aria-pressed={activeEmojiCategory === category}
+                    onClick={() => setActiveEmojiCategory(category)}
+                  >{category}</button>
+                ))}
+              </div>
               <div className="three-d-emoji-grid">
-                {threeDEmojiChoices.filter((emoji) => `${emoji.label} ${emoji.emoji}`.toLowerCase().includes(threeDSearch.trim().toLowerCase())).map((emoji) => (
+                {filteredThreeDEmojiChoices.map((emoji) => (
                   <button
                     key={emoji.label}
                     type="button"
@@ -260,7 +297,11 @@ export function ShapesPanel() {
                     aria-label={`Add 3D ${emoji.label} emoji`}
                     title={`Add ${emoji.label}`}
                   >
-                    <span aria-hidden="true">{emoji.emoji}</span>
+                    <span className="three-d-emoji-preview" aria-hidden="true">
+                      {emojiPreviews[emoji.emoji]
+                        ? <img src={emojiPreviews[emoji.emoji]} alt="" />
+                        : <span>{emoji.emoji}</span>}
+                    </span>
                     <small>{emoji.label}</small>
                   </button>
                 ))}
@@ -271,7 +312,7 @@ export function ShapesPanel() {
             ? filteredThreeDChoices.filter((shape) => shape.group === active3DGroup).length === 0 && <p className="panel-note">No matching 3D elements.</p>
             : active3DGroup === 'Letters & Numbers'
               ? threeDCharacters.filter((character) => character.includes(threeDSearch.trim().toUpperCase())).length === 0 && <p className="panel-note">No matching characters.</p>
-              : threeDEmojiChoices.filter((emoji) => `${emoji.label} ${emoji.emoji}`.toLowerCase().includes(threeDSearch.trim().toLowerCase())).length === 0 && <p className="panel-note">No matching emojis.</p>}
+              : filteredThreeDEmojiChoices.length === 0 && <p className="panel-note">No matching emojis.</p>}
         </section>}
       </fieldset>
       <p className="panel-note draw-hint">{!canvas.hasImage ? 'Upload an image to use shape tools.' : mode === '2d' ? `Drag on the image to draw a ${shapeNames[shapes.kind].toLowerCase()}. Drag again to add another.` : 'Click a shape to add it. Select it on the canvas to move, resize, or rotate.'}</p>
@@ -284,12 +325,13 @@ function ThreeDCharacterControls({
   fabricCanvas,
   setNotice,
 }: {
-  object: FabricObject
+  object: FabricImage
   fabricCanvas: FabricCanvas
   setNotice: (message: string) => void
 }) {
   const [color, setColor] = useState(String(object.get('threeDColor') ?? '#e879bf'))
   const character = String(object.get('name') ?? '').match(/^(?:3D )+([A-Z0-9])$/)?.[1]
+  const emoji = String(object.get('threeDEmoji') ?? '')
 
   const updateColor = async (value: string) => {
     if (!character || !(object instanceof FabricImage)) return
@@ -302,7 +344,7 @@ function ThreeDCharacterControls({
   }
 
   return (
-    <section className="three-d-object-controls">
+    (character || emoji) ? <section className="three-d-object-controls">
       {character && <div className="three-d-character-color">
         <label className="field-label color-field">Letter color
           <input
@@ -316,6 +358,11 @@ function ThreeDCharacterControls({
           />
         </label>
       </div>}
-    </section>
+      {emoji && <button
+        type="button"
+        className="secondary-button full-button"
+        onClick={() => void updateThreeDRotation(fabricCanvas, object, { x: 0, y: 0, z: 0 })}
+      ><RotateCcw size={15} /> Reset rotation</button>}
+    </section> : null
   )
 }

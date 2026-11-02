@@ -24,7 +24,7 @@ export function ToolPanel() {
 
   return (
     <aside className="tool-panel">
-      <div className="panel-heading"><div><h3 className="panel-kicker">{activeCategory.label}</h3></div></div>
+      <div className={`panel-heading ${activeCategory.tools.length > 1 ? 'has-subtools' : ''}`}><div><h3 className="panel-kicker">{activeCategory.label}</h3></div></div>
       {activeCategory.tools.length > 1 && (
         <nav className="panel-subtools" aria-label={`${activeCategory.label} tools`}>
           {activeCategory.tools.map(({ id, label }) => (

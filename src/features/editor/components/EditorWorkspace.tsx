@@ -1,11 +1,15 @@
 
-import type { DragEvent } from 'react'
-import { useState } from 'react'
+import type { DragEvent, PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, useState } from 'react'
+import { FabricImage } from 'fabric'
 import { Eraser, Highlighter, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Upload } from 'lucide-react'
+import { Rotate3D } from 'lucide-react'
 
 import { useEditor } from '../EditorContext'
 import { objectName } from '../model/objectName'
 import type { DrawingMode } from '../model/types'
+import { getThreeDRotation, isThreeDRotatable, updateThreeDRotation } from '../operations/threeDShapes'
+import type { ThreeDRotation } from '../operations/threeDShapes'
 import ImageMusicVideoExport from './ImageMusicVideoExport'
 
 type EditorWorkspaceProps = {
@@ -33,6 +37,19 @@ export function EditorWorkspace({
     x: number
     y: number
   } | null>(null)
+  const rotationDragRef = useRef<{
+    pointerId: number
+    x: number
+    y: number
+    centerX: number
+    centerY: number
+    lastZAngle: number
+    accumulatedZDelta: number
+    rotation: ThreeDRotation
+    pendingRotation: ThreeDRotation
+    frameId: number | null
+    object: FabricImage
+  } | null>(null)
   const drawingCursorIcons: Partial<Record<DrawingMode, typeof Pencil>> = {
     pencil: Pencil,
     eraser: Eraser,
@@ -48,6 +65,78 @@ export function EditorWorkspace({
       ? MoveVertical
       : undefined
   const CursorIcon = resizeCursor ?? DrawingCursorIcon
+  const selectedThreeDObject = canvas.hasImage && canvas.selected instanceof FabricImage && isThreeDRotatable(canvas.selected)
+    ? canvas.selected
+    : null
+  const selectedThreeDBounds = selectedThreeDObject?.getBoundingRect()
+
+  const beginThreeDRotation = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!selectedThreeDObject) return
+    const rotation = getThreeDRotation(selectedThreeDObject)
+    if (!rotation) return
+    const surface = event.currentTarget.closest('.canvas-surface')
+    if (!surface) return
+    const surfaceBounds = surface.getBoundingClientRect()
+    const surfaceScale = surfaceBounds.width / canvas.dimensions.width
+    const objectBounds = selectedThreeDObject.getBoundingRect()
+    const centerX = surfaceBounds.left + (objectBounds.left + objectBounds.width / 2) * surfaceScale
+    const centerY = surfaceBounds.top + (objectBounds.top + objectBounds.height / 2) * surfaceScale
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    rotationDragRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      centerX,
+      centerY,
+      lastZAngle: Math.atan2(event.clientY - centerY, event.clientX - centerX),
+      accumulatedZDelta: 0,
+      rotation,
+      pendingRotation: rotation,
+      frameId: null,
+      object: selectedThreeDObject,
+    }
+  }
+
+  const moveThreeDRotation = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = rotationDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId || !fabricCanvas) return
+    event.preventDefault()
+    event.stopPropagation()
+    const normalize = (value: number) => (value % 360 + 360) % 360
+    const pointerAngle = Math.atan2(event.clientY - drag.centerY, event.clientX - drag.centerX)
+    const rollStep = Math.atan2(
+      Math.sin(pointerAngle - drag.lastZAngle),
+      Math.cos(pointerAngle - drag.lastZAngle),
+    )
+    drag.lastZAngle = pointerAngle
+    drag.accumulatedZDelta += rollStep * 180 / Math.PI
+    drag.pendingRotation = {
+      x: normalize(drag.rotation.x + (event.clientY - drag.y) * 0.7),
+      y: normalize(drag.rotation.y + (event.clientX - drag.x) * 0.7),
+      z: normalize(drag.rotation.z + drag.accumulatedZDelta),
+    }
+    if (drag.frameId !== null) return
+    drag.frameId = requestAnimationFrame(() => {
+      drag.frameId = null
+      if (rotationDragRef.current === drag) {
+        void updateThreeDRotation(fabricCanvas, drag.object, drag.pendingRotation, false)
+      }
+    })
+  }
+
+  const endThreeDRotation = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (rotationDragRef.current?.pointerId !== event.pointerId) return
+    event.preventDefault()
+    event.stopPropagation()
+    const drag = rotationDragRef.current
+    if (drag.frameId !== null) {
+      cancelAnimationFrame(drag.frameId)
+    }
+    if (fabricCanvas) void updateThreeDRotation(fabricCanvas, drag.object, drag.pendingRotation)
+    rotationDragRef.current = null
+  }
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -73,6 +162,7 @@ export function EditorWorkspace({
               transform: `translate(-50%, -50%) scale(${canvas.fitScale * canvas.zoom})`,
             }}
             onPointerMoveCapture={(event) => {
+              if (!showDrawingCursor) return
               const bounds = event.currentTarget.getBoundingClientRect()
               const scale = bounds.width / event.currentTarget.offsetWidth || 1
               setCursorPosition({
@@ -83,6 +173,22 @@ export function EditorWorkspace({
             onPointerLeave={() => setCursorPosition(null)}
           >
             <canvas ref={setCanvasElement} />
+            {fabricCanvas && selectedThreeDObject && selectedThreeDBounds && (
+              <button
+                type="button"
+                className="three-d-rotate-handle"
+                aria-label="Drag to rotate 3D object"
+                title="Drag to rotate"
+                style={{
+                  left: selectedThreeDBounds.left + selectedThreeDBounds.width / 2,
+                  top: selectedThreeDBounds.top + selectedThreeDBounds.height / 2,
+                }}
+                onPointerDown={beginThreeDRotation}
+                onPointerMove={moveThreeDRotation}
+                onPointerUp={endThreeDRotation}
+                onPointerCancel={endThreeDRotation}
+              ><Rotate3D size={18} strokeWidth={1.8} /></button>
+            )}
             {showDrawingCursor && cursorPosition && CursorIcon && (
               <div
                 className="drawing-cursor"
