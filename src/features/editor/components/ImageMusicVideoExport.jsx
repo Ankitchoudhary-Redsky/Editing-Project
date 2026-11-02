@@ -756,9 +756,19 @@ export default function ImageMusicVideoExport({
   }
 
   async function recordVideo(durationSeconds) {
-    const sourceCanvas = fabricCanvas.toCanvasElement(1);
-    if (exportState.watermark) {
-      drawProjectWatermark(sourceCanvas, project.name);
+    const sourceCanvas = document.createElement("canvas");
+    sourceCanvas.width = fabricCanvas.getWidth();
+    sourceCanvas.height = fabricCanvas.getHeight();
+    const sourceContext = sourceCanvas.getContext("2d");
+    if (!sourceContext) throw new Error("Could not prepare the video frames.");
+
+    const watermarkCanvas = exportState.watermark
+      ? document.createElement("canvas")
+      : null;
+    if (watermarkCanvas) {
+      watermarkCanvas.width = sourceCanvas.width;
+      watermarkCanvas.height = sourceCanvas.height;
+      await drawProjectWatermark(watermarkCanvas);
     }
 
     const { outputCanvas, context } =
@@ -792,6 +802,14 @@ export default function ImageMusicVideoExport({
     };
 
     function drawFrame() {
+      sourceContext.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
+      sourceContext.drawImage(
+        fabricCanvas.lowerCanvasEl,
+        0,
+        0,
+        sourceCanvas.width,
+        sourceCanvas.height
+      );
       context.fillStyle = "#ffffff";
       context.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
 
@@ -802,6 +820,15 @@ export default function ImageMusicVideoExport({
         outputCanvas.width,
         outputCanvas.height
       );
+      if (watermarkCanvas) {
+        context.drawImage(
+          watermarkCanvas,
+          0,
+          0,
+          outputCanvas.width,
+          outputCanvas.height
+        );
+      }
 
       animationFrame = requestAnimationFrame(drawFrame);
     }

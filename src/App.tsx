@@ -488,6 +488,15 @@ function App() {
     )
 
     const active = canvas.getActiveObject() ?? null
+    if (active && active.get('name') !== 'Crop area') {
+      active.set({
+        borderColor: 'rgba(0,0,0,0)',
+        cornerColor: '#ffffff',
+        cornerStrokeColor: '#3e705a',
+        cornerSize: 10,
+        transparentCorners: false,
+      })
+    }
     setSelectedObject(active)
     setSelectedIsImage(active === imageObjectRef.current)
   }, [])
@@ -641,7 +650,7 @@ function App() {
           ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
           : '')
         setProjectName(draft.projectName)
-        setActiveTool(draft.activeTool === 'select' ? 'crop' : draft.activeTool)
+        setActiveTool(String(draft.activeTool) === 'shadow' ? 'shadows' : draft.activeTool === 'select' ? 'crop' : draft.activeTool)
         setZoom(draft.zoom)
         setSelectedFilter(draft.selectedFilter)
         selectedFilterRef.current = draft.selectedFilter
@@ -671,6 +680,7 @@ function App() {
         setTextOutlineWidth(draft.textOutlineWidth)
         setTextShadow(draft.textShadow)
         setShapeKind(draft.shapeKind)
+        setLineStyle(draft.lineStyle ?? 'straight')
         setLineStyle(draft.lineStyle ?? 'straight')
         setFillColor(draft.fillColor)
         setTransparentFill(draft.transparentFill)
@@ -723,6 +733,10 @@ function App() {
       if (event.target instanceof IText) syncParentShapeForText(canvas, event.target)
       changed()
     })
+    canvas.on('text:changed', (event) => {
+      if (event.target instanceof IText) syncParentShapeForText(canvas, event.target)
+      changed()
+    })
     const constrainShape = (event: { target?: FabricObject }) => {
       const target = event.target
       if (target && isShapeObject(target)) {
@@ -730,6 +744,7 @@ function App() {
         syncTextWithShape(canvas, target)
         syncTextWithShape(canvas, target)
         syncImageWithShape(canvas, target)
+        syncTextWithShape(canvas, target)
       }
     }
     canvas.on('object:moving', constrainShape)
@@ -1026,6 +1041,7 @@ function App() {
     resizeWidth,
     scaleArtwork,
     shapeKind,
+    lineStyle,
     lineStyle,
     saturation,
     selectedFilter,
@@ -2112,6 +2128,40 @@ const resetBackground = async () => {
     if (!selectedObject || selectedIsImage || selectedObject instanceof IText || selectedObject === cropObjectRef.current) return
     selectedObject.set(property, value)
     canvasRef.current?.requestRenderAll()
+    recordHistory()
+  }
+
+  const updateSelectedShadow = (shadow: Shadow | null, target?: FabricObject | null, size?: number, imageSize?: number) => {
+    const canvas = canvasRef.current
+    const active = target ?? selectedObject
+    if (!canvas || !active || active === cropObjectRef.current) return
+    const name = active.get('name')
+    if (name === '__pixel_studio_drawing_layer__' || name === BACKGROUND_IMAGE_NAME) return
+    active.set('shadow', shadow)
+    if (size !== undefined) active.set('shadowSize', size)
+    if (imageSize !== undefined && active instanceof FabricImage) {
+      const currentScaleX = active.scaleX ?? 1
+      const currentScaleY = active.scaleY ?? 1
+      const baseScaleX = Number(active.get('shadowArtworkBaseScaleX') ?? currentScaleX)
+      const baseScaleY = Number(active.get('shadowArtworkBaseScaleY') ?? currentScaleY)
+      const center = active.getCenterPoint()
+      const scale = imageSize / 100
+      active.set({
+        scaleX: baseScaleX * scale,
+        scaleY: baseScaleY * scale,
+        shadowArtworkSize: imageSize,
+        shadowArtworkBaseScaleX: baseScaleX,
+        shadowArtworkBaseScaleY: baseScaleY,
+      })
+      active.setPositionByOrigin(center, 'center', 'center')
+    }
+    active.setCoords()
+    if (canvas.getActiveObject() !== active) {
+      canvas.setActiveObject(active)
+      setSelectedObject(active)
+      setSelectedIsImage(active === imageObjectRef.current)
+    }
+    canvas.requestRenderAll()
     recordHistory()
   }
 
@@ -3483,6 +3533,7 @@ const deleteSelection = async () => {
     text: { selected: selectedText, value: textValue, fontFamily, setFontFamily, fontSize, setFontSize, color: textColor, setColor: setTextColor, background: textBackground, setBackground: setTextBackground, opacity: textOpacity, setOpacity: setTextOpacity, outline: textOutline, setOutline: setTextOutline, outlineWidth: textOutlineWidth, setOutlineWidth: setTextOutlineWidth, shadow: textShadow, setShadow: setTextShadow, add: createText, update: updateText },
     animation: { selected: String(selectedObject?.get('textAnimation') ?? 'none') as TextAnimation, hasAnimations: objects.some((object) => String(object.get('textAnimation') ?? 'none') !== 'none'), apply: applyObjectAnimation, remove: removeSelectedAnimation, clear: clearAnimations },
       shapes: { selected: selectedObject, isSelectedShape: selectedIsShape, kind: shapeKind, setKind: setShapeKind, lineStyle, setLineStyle, fill: fillColor, setFill: setFillColor, transparentFill, setTransparentFill, stroke: strokeColor, setStroke: setStrokeColor, strokeWidth, setStrokeWidth, opacity: shapeOpacity, setOpacity: setShapeOpacity, add: addShape, addText: addTextInsideSelectedShape, addImage: addImageInsideSelectedShape, duplicate: duplicateSelected, delete: deleteSelected, updateAppearance: updateShapeAppearance, moveLayer, selectLayer },
+    shadows: { update: updateSelectedShadow },
     adjustments: {
       brightness,
       setBrightness,

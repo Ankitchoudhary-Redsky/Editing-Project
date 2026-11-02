@@ -1,8 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { Canvas, FabricObject, IText } from 'fabric'
+import type { Canvas, FabricObject, IText, Shadow } from 'fabric'
 
-export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers' | 'animate' | 'video-upload' | 'video-trim'
 export type EditorMode = 'image' | 'video'
+export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers' | 'shadows' | 'video-upload' | 'video-trim' | 'animate' | 'video-upload' | 'video-trim'
 export type DrawingMode = 'pencil' | 'sketch' | 'marker' | 'highlighter' | 'eraser' | 'magic-remover' | 'lasso'
 export type ShapeKind = 'rect' | 'roundRect' | 'circle' | 'ellipse' | 'line' | 'arrow' | 'triangle' | 'star' | 'pentagon'
 export type LineStyle = 'straight' | 'curve-up' | 'curve-down'
@@ -71,9 +71,6 @@ export type TextDesignOptions = Partial<{
 }>
 
 export interface EditorContextValue {
-  /** Actual Fabric.js Canvas instance used for image editing. */
-  fabricCanvas: EditorCanvas | null
-
   editorMode: {
     active: EditorMode
     setActive: (mode: EditorMode) => void
@@ -88,6 +85,10 @@ export interface EditorContextValue {
     setTrimStart: (time: number) => void
     setTrimEnd: (time: number) => void
   }
+
+  /** Actual Fabric.js Canvas instance used for image editing. */
+  fabricCanvas: EditorCanvas | null
+
 
   canvas: {
     dimensions: Dimensions
@@ -198,6 +199,9 @@ export interface EditorContextValue {
     updateAppearance: (property: 'fill' | 'stroke' | 'strokeWidth' | 'opacity', value: string | number) => void
     moveLayer: (object: FabricObject, direction: 'forward' | 'backward') => void
     selectLayer: (object: FabricObject) => void
+  }
+  shadows: {
+    update: (shadow: Shadow | null, target?: FabricObject | null, size?: number, imageSize?: number) => void
   }
   adjustments: {
     brightness: number

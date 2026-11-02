@@ -10,12 +10,17 @@ export type NewTextOptions = TextDesignOptions & {
   outline: string
   outlineWidth: number
   shadow: string
+  position?: { left: number; top: number }
+  startEditing?: boolean
 }
 
 export function createTextObject(canvas: Canvas, options: NewTextOptions) {
+  const isPositioned = options.position !== undefined
   const text = new IText(options.value || 'Your text here', {
-    left: canvas.getWidth() * 0.2,
-    top: canvas.getHeight() * 0.35,
+    left: options.position?.left ?? canvas.getWidth() * 0.2,
+    top: options.position?.top ?? canvas.getHeight() * 0.35,
+    originX: isPositioned ? 'center' : 'left',
+    originY: isPositioned ? 'center' : 'top',
     fontFamily: options.fontFamily,
     fontSize: options.fontSize,
     fill: options.color,
@@ -35,39 +40,49 @@ export function createTextObject(canvas: Canvas, options: NewTextOptions) {
   canvas.add(text)
   canvas.setActiveObject(text)
   canvas.requestRenderAll()
-  text.enterEditing()
-  text.selectAll()
+  if (options.startEditing !== false) {
+    text.enterEditing()
+    text.selectAll()
+  }
   return text
 }
+
 
 export function createTextInsideShape(canvas: Canvas, shape: FabricObject, options: NewTextOptions) {
   const shapeId = String(shape.get('shapeId') ?? `shape-${crypto.randomUUID()}`)
   shape.set('shapeId', shapeId)
+  const width = Math.max(1, shape.getScaledWidth())
+  const height = Math.max(1, shape.getScaledHeight())
   const center = shape.getCenterPoint()
-  const text = new IText(options.value || 'Your text here', {
-    left: center.x,
-    top: center.y,
-    originX: 'center',
-    originY: 'center',
-    fontFamily: options.fontFamily,
-    fontSize: options.fontSize,
-    fill: options.color,
-    stroke: options.outlineWidth > 0 ? options.outline : undefined,
-    strokeWidth: options.outlineWidth,
-    opacity: options.opacity / 100,
-    shadow: options.shadow === 'none' ? null : new Shadow({ color: 'rgba(12, 20, 17, 0.48)', blur: options.shadow === 'soft' ? 12 : 3, offsetX: 2, offsetY: options.shadow === 'soft' ? 5 : 3 }),
-    editable: true,
-    cornerColor: '#2c7660',
-    transparentCorners: false,
-    name: 'Text in shape',
-    textParentId: shapeId,
-    textParentWidth: Math.max(1, shape.getScaledWidth()),
-    textParentHeight: Math.max(1, shape.getScaledHeight()),
-    textParentFontSize: options.fontSize,
+  const text = createTextObject(canvas, {
+    ...options,
+    position: {
+      left: center.x,
+      top: center.y,
+    },
+    startEditing: false,
   })
-  canvas.add(text)
-  canvas.setActiveObject(text)
-  canvas.requestRenderAll()
+  text.set({
+    textParentId: shapeId,
+    textParentWidth: width,
+    textParentHeight: height,
+    lockMovementX: true,
+    lockMovementY: true,
+    lockScalingX: true,
+    lockScalingY: true,
+  })
+  const fitScale = Math.min(
+    1,
+    (width * 0.84) / Math.max(1, text.width),
+    (height * 0.68) / Math.max(1, text.height),
+  )
+  if (fitScale < 1) {
+    text.set('fontSize', Math.max(0.1, options.fontSize * fitScale))
+    text.initDimensions()
+  }
+  text.set('textParentFontSize', text.fontSize)
+  text.setCoords()
+  syncTextWithShape(canvas, shape)
   text.enterEditing()
   text.selectAll()
   return text
