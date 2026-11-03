@@ -1,65 +1,171 @@
+
 import { Control, type FabricObject } from 'fabric'
+import { Copy, Trash2 } from 'lucide-react'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+
+// Convert Lucide SVG icons into browser images
+function createLucideImage(
+  Icon: typeof Copy,
+  color: string
+): HTMLImageElement {
+  const svg = renderToStaticMarkup(
+    createElement(Icon, {
+      size: 28,
+      color,
+      strokeWidth: 2.2,
+    })
+  )
+
+  const image = new Image()
+
+  image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+
+  return image
+}
+
+// Lucide icons
+const duplicateIcon = createLucideImage(Copy, '#000000')
+const deleteIcon = createLucideImage(Trash2, '#bc2727')
 
 export function attachDeleteControl(object: FabricObject) {
-  if (object.controls.deleteObject) return
+  if (object.controls.deleteObject && object.controls.duplicateObject) return
 
   object.controls = {
     ...object.controls,
-    deleteObject: new Control({
+
+    // DUPLICATE CONTROL
+    duplicateObject: new Control({
       x: 0.5,
       y: -0.5,
-      offsetY: -14,
-      sizeX: 24,
-      sizeY: 24,
+      offsetX: -78,
+      offsetY: -37,
+      sizeX: 72,
+      sizeY: 72,
       cursorStyle: 'pointer',
-      actionName: 'delete',
-      mouseUpHandler: (_eventData, transform) => {
+      actionName: 'duplicate',
+
+      mouseUpHandler: async (_eventData, transform) => {
         const target = transform.target
         const canvas = target.canvas
+
         if (!canvas) return false
 
-        const shapeId = target.get('shapeId')
-        const linkedObjects = shapeId
-          ? canvas.getObjects().filter((item) => item !== target && (
-            item.get('textParentId') === shapeId || item.get('imageParentId') === shapeId
-          ))
-          : []
-        canvas.remove(...linkedObjects, target)
-        canvas.discardActiveObject()
+        const clone = await target.clone()
+
+        clone.set({
+          left: (target.left ?? 0) + 24,
+          top: (target.top ?? 0) + 24,
+          name: `${target.get('name') || 'Object'} copy`,
+        })
+
+        canvas.add(clone)
+        canvas.setActiveObject(clone)
         canvas.requestRenderAll()
+
         return true
       },
+
       render: (context, left, top) => {
         context.save()
         context.translate(left, top)
-        context.shadowColor = 'rgba(24, 35, 29, 0.2)'
-        context.shadowBlur = 4
-        context.shadowOffsetY = 1
-        context.fillStyle = '#c84f4a'
+
+        // White circular background
+        context.shadowColor = 'rgba(0, 0, 0, 0.12)'
+        context.shadowBlur = 8
+        context.shadowOffsetY = 2
+        context.fillStyle = '#ffffff'
+
         context.beginPath()
-        context.arc(0, 0, 10, 0, Math.PI * 2)
+        context.arc(0, 0, 32, 0, Math.PI * 2)
         context.fill()
+
+        // Reset shadow
         context.shadowColor = 'transparent'
         context.shadowBlur = 0
         context.shadowOffsetY = 0
-        context.strokeStyle = '#ffffff'
-        context.lineWidth = 1.4
-        context.lineCap = 'round'
-        context.lineJoin = 'round'
+
+        // Lucide Copy icon
+        if (duplicateIcon.complete && duplicateIcon.naturalWidth > 0) {
+          context.drawImage(
+            duplicateIcon,
+            -14,
+            -14,
+            28,
+            28
+          )
+        }
+
+        context.restore()
+      },
+    }),
+
+    // DELETE CONTROL
+    deleteObject: new Control({
+      x: 0.5,
+      y: -0.5,
+      offsetY: -37,
+      sizeX: 72,
+      sizeY: 72,
+      cursorStyle: 'pointer',
+      actionName: 'delete',
+
+      mouseUpHandler: (_eventData, transform) => {
+        const target = transform.target
+        const canvas = target.canvas
+
+        if (!canvas) return false
+
+        const shapeId = target.get('shapeId')
+
+        const linkedObjects = shapeId
+          ? canvas.getObjects().filter(
+              (item) =>
+                item !== target &&
+                (
+                  item.get('textParentId') === shapeId ||
+                  item.get('imageParentId') === shapeId
+                )
+            )
+          : []
+
+        canvas.remove(...linkedObjects, target)
+        canvas.discardActiveObject()
+        canvas.requestRenderAll()
+
+        return true
+      },
+
+      render: (context, left, top) => {
+        context.save()
+        context.translate(left, top)
+
+        // White circular background
+        context.shadowColor = 'rgba(0, 0, 0, 0.12)'
+        context.shadowBlur = 8
+        context.shadowOffsetY = 2
+        context.fillStyle = '#ffffff'
+
         context.beginPath()
-        context.moveTo(-3.5, -4)
-        context.lineTo(3.5, -4)
-        context.moveTo(-1.5, -6)
-        context.lineTo(1.5, -6)
-        context.moveTo(-2.5, -3)
-        context.lineTo(-2, 5)
-        context.lineTo(2, 5)
-        context.lineTo(2.5, -3)
-        context.moveTo(-0.7, -2)
-        context.lineTo(-0.7, 3)
-        context.moveTo(0.7, -2)
-        context.lineTo(0.7, 3)
-        context.stroke()
+        context.arc(0, 0, 32, 0, Math.PI * 2)
+        context.fill()
+
+        // Reset shadow
+        context.shadowColor = 'transparent'
+        context.shadowBlur = 0
+        context.shadowOffsetY = 0
+
+        // Lucide Trash2 icon
+        if (deleteIcon.complete && deleteIcon.naturalWidth > 0) {
+          context.drawImage(
+            deleteIcon,
+            -14,
+            -14,
+            28,
+            28
+          )
+        }
+
         context.restore()
       },
     }),

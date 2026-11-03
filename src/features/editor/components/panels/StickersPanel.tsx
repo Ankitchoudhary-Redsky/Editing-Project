@@ -128,7 +128,7 @@ export function StickersPanel() {
         <button
           type="button"
           className="sticker-upload-button"
-          disabled={loading}
+          disabled={loading || !canvas.hasDocument}
           onClick={() => fileInputRef.current?.click()}
           aria-label="Upload an animated GIF sticker"
           title="Upload GIF sticker"
@@ -165,6 +165,7 @@ export function StickersPanel() {
                   <button
                     className={`sticker-tile tone-${sticker.tone}`}
                     type="button"
+                    disabled={!canvas.hasDocument}
                     key={sticker.name}
                     aria-label={`Add ${sticker.name}`}
                     title={`Add ${sticker.name}`}

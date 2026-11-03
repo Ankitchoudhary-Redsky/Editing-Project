@@ -87,9 +87,9 @@ export function AnimatePanel() {
         <button type="button" className="primary-button full-button" disabled={!canAnimate || animation.selected === 'none'} onClick={animation.remove}>
           Remove animation
         </button>
-        <button type="button" className="secondary-button full-button" disabled={!animation.hasAnimations} onClick={animation.clear}>
+        {/* <button type="button" className="secondary-button full-button" disabled={!animation.hasAnimations} onClick={animation.clear}>
           Clear animations
-        </button>
+        </button> */}
       </div>
     </div>
   )

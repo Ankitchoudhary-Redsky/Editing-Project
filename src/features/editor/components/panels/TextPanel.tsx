@@ -9,6 +9,12 @@ const textDesigns: Array<{ name: string; sample: string; design: TextDesignOptio
   { name: 'Neon', sample: 'Neon', design: { value: 'Neon', fontFamily: 'Verdana', fontSize: 42, color: '#ff68c8', fontWeight: 'bold', outline: '#752455', outlineWidth: 1, shadow: 'strong' } },
   { name: 'Caption label', sample: 'CAPTION', design: { value: 'CAPTION', fontFamily: 'Arial', fontSize: 22, color: '#ffffff', fontWeight: 'bold', backgroundColor: '#245a4a', textAlign: 'center' } },
   { name: 'Soft note', sample: 'a little note', design: { value: 'a little note', fontFamily: 'Georgia', fontSize: 30, color: '#ffffff', fontStyle: 'italic', shadow: 'soft' } },
+  { name: 'Happy Birthday', sample: 'HAPPY BIRTHDAY', design: { value: 'HAPPY BIRTHDAY', fontFamily: 'Arial', fontSize: 38, color: '#fff7df', fontWeight: 'bold', outline: '#e38b35', outlineWidth: 2, shadow: 'strong', textAlign: 'center' } },
+  { name: 'Birthday Bash', sample: 'BIRTHDAY BASH', design: { value: 'BIRTHDAY BASH', fontFamily: 'Verdana', fontSize: 36, color: '#ffffff', fontWeight: 'bold', backgroundColor: '#df5d83', textAlign: 'center' } },
+  { name: 'Party Time', sample: 'PARTY TIME', design: { value: 'PARTY TIME', fontFamily: 'Arial', fontSize: 44, color: '#ffe66d', fontWeight: 'bold', outline: '#3b2674', outlineWidth: 2, shadow: 'strong', textAlign: 'center' } },
+  { name: 'Confetti Pop', sample: 'CELEBRATE', design: { value: 'CELEBRATE', fontFamily: 'Trebuchet MS', fontSize: 42, color: '#35c9b0', fontWeight: 'bold', outline: '#173d57', outlineWidth: 1, shadow: 'soft', textAlign: 'center' } },
+  { name: 'Cake topper', sample: 'MAKE A WISH', design: { value: 'MAKE A WISH', fontFamily: 'Georgia', fontSize: 34, color: '#8a4b67', fontStyle: 'italic', backgroundColor: '#ffe4ed', textAlign: 'center' } },
+  { name: 'Disco night', sample: 'DANCE ALL NIGHT', design: { value: 'DANCE ALL NIGHT', fontFamily: 'Verdana', fontSize: 32, color: '#d8f6ff', fontWeight: 'bold', outline: '#176b87', outlineWidth: 1, shadow: 'strong', textAlign: 'center' } },
 ]
 
 export function TextPanel() {

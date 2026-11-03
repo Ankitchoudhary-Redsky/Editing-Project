@@ -181,7 +181,7 @@ export function ShapesPanel() {
             <button type="button" className="secondary-button" onClick={shapes.addText}><Type size={15} /> Add text</button>
             <button type="button" className="secondary-button" disabled={!canAddImage} onClick={() => imageInputRef.current?.click()}><ImagePlus size={15} /> Add image</button>
           </div>
-          <div className="object-actions"><button className="secondary-button" onClick={shapes.addText}><Type size={15} /> Add text</button><button className="secondary-button" onClick={() => void shapes.duplicate()}><FileImage size={15} /> Duplicate</button><button className="secondary-button danger-action" onClick={shapes.delete}><Trash2 size={15} /> Delete</button></div>
+          <div className="object-actions"><button className="secondary-button" onClick={() => void shapes.duplicate()}><FileImage size={15} /> Duplicate</button><button className="secondary-button danger-action" onClick={shapes.delete}><Trash2 size={15} /> Delete</button></div>
         </>}
         </> : <section className="three-d-shapes-section">
           <input

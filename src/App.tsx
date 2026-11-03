@@ -1292,6 +1292,7 @@ function App() {
     imageObjectRef.current = null
     setHasImage(false)
     setHasDocument(false)
+    setActiveTool('upload')
     setImageThumbnail('')
     setCropActive(false)
     setDimensions({ width: 1200, height: 800 })
@@ -1674,6 +1675,16 @@ function App() {
     const originalSnapshot = cropOriginalSnapshotRef.current
 
     if (!canvas || !originalSnapshot) {
+      const image = imageObjectRef.current
+      if (canvas && image) {
+        image.set({ angle: 0, flipX: false, flipY: false })
+        image.setCoords()
+        setCropRotation(0)
+        setCropRatio('Free')
+        canvas.discardActiveObject()
+        canvas.requestRenderAll()
+        syncObjects()
+      }
       cancelCrop()
       return
     }
