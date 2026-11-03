@@ -8,12 +8,21 @@ export function createEditorContextValue({
   features,
   snapshot,
   toolActions,
+  animation,
   ui,
 }: CreateEditorContextValueOptions): EditorContextValue {
   const { fabricCanvas, fitScale, fitToScreen } = canvasCore.fabric
   const selectedText = ui.selectedObject instanceof IText ? ui.selectedObject : null
 
   return {
+    editorMode: {
+      active: settings.editorMode,
+      setActive: (mode) => {
+        settings.setEditorMode(mode)
+        toolActions.setActiveEditorTool(mode === 'image' ? 'upload' : 'video-upload')
+      },
+    },
+    videoClip: settings.videoClip,
     fabricCanvas,
     canvas: {
       dimensions: ui.dimensions,
@@ -80,6 +89,8 @@ export function createEditorContextValue({
       isSelectedShape: features.objectEditing.selectedIsShape,
       kind: settings.shapeKind,
       setKind: settings.setShapeKind,
+      lineStyle: settings.lineStyle,
+      setLineStyle: settings.setLineStyle,
       fill: settings.fillColor,
       setFill: settings.setFillColor,
       transparentFill: settings.transparentFill,
@@ -91,11 +102,16 @@ export function createEditorContextValue({
       opacity: settings.shapeOpacity,
       setOpacity: settings.setShapeOpacity,
       add: features.objectEditing.addShape,
+      addText: features.objectEditing.addTextToShape,
+      addImage: features.objectEditing.addImageToShape,
       duplicate: features.objectEditing.duplicateSelected,
       delete: features.objectEditing.deleteSelected,
       updateAppearance: features.objectEditing.updateShapeAppearance,
       moveLayer: features.objectEditing.moveLayer,
       selectLayer: features.objectEditing.selectLayer,
+    },
+    shadows: {
+      update: features.objectEditing.updateShadow,
     },
     adjustments: {
       brightness: settings.brightness,
@@ -116,10 +132,31 @@ export function createEditorContextValue({
       show: toolActions.openPreview,
       close: () => settings.setPreviewOpen(false),
     },
+    animation,
     videoAudio: settings.videoAudio,
     setVideoAudio: settings.setVideoAudio,
     draggingFile: ui.draggingFile,
-    handleDrop: documentActions.handleDrop,
+    handleDrop: (event) => {
+      if (settings.editorMode !== 'video') {
+        documentActions.handleDrop(event)
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      ui.setDraggingFile(false)
+      const file = event.dataTransfer.files[0]
+      if (!file) return
+      if (!file.type.startsWith('video/')) {
+        ui.setNotice('Choose a video file to continue.')
+        return
+      }
+      if (file.size > 500 * 1024 * 1024) {
+        ui.setNotice('Videos must be smaller than 500 MB.')
+        return
+      }
+      settings.videoClip.setFile(file)
+      ui.setNotice('')
+    },
     filters: {
       selected: settings.selectedFilter,
       intensity: settings.filterIntensity,
@@ -149,6 +186,8 @@ export function createEditorContextValue({
       setWatermark: settings.setExportWatermark,
       busy: settings.exportBusy,
       download: toolActions.downloadDesign,
+      shareBusy: settings.shareBusy,
+      share: toolActions.shareDesign,
     },
     table: features.table,
   }

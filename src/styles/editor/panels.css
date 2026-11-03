@@ -684,4 +684,28 @@
 .layer-mini { width: 25px; height: 25px; color: #869089; }
 .delete-mini:hover { color: #b5574d; }
 .layer-actions { margin-top: 6px; }
+.shape-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f5f7f5;
+}
+.shape-mode-switch button {
+  min-height: 30px;
+  border: 0;
+  border-radius: 4px;
+  color: #78827b;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.shape-mode-switch button.selected {
+  color: var(--accent);
+  background: #fff;
+  box-shadow: 0 1px 3px #1f35251a;
+}
+.shape-mode-switch button:disabled { opacity: 0.45; cursor: not-allowed; }
 

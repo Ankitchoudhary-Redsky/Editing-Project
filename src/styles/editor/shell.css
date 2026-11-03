@@ -20,14 +20,49 @@
 }
 
 .topbar {
-  z-index: 4;
   display: flex;
   flex: 0 0 64px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 24px;
   padding: 0 22px;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
+}
+
+.mode-switch {
+  display: flex;
+  flex: 1;
+  max-width: 150px;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid #e0e5e1;
+  border-radius: 7px;
+  background: #f6f8f6;
+}
+
+.mode-switch button {
+  display: flex;
+  min-width: 0;
+  min-height: 28px;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 4px;
+  color: #748078;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mode-switch button.active {
+  color: #255843;
+  background: #fff;
+  box-shadow: 0 1px 3px #263a2d1a;
 }
 
 .brand-lockup,
@@ -46,6 +81,7 @@
 .export-info {
   display: flex;
   align-items: center;
+  gap:10px;
 }
 
 .brand-lockup {
@@ -72,14 +108,18 @@
   font-weight: 400;
 }
 .project-title {
-  flex: 1;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding-left: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 10px;
 }
+
 .project-name {
+  display: flex;
+  align-items: center;
   gap: 7px;
+  max-width: 130px;
+  min-width: 0;
   padding: 0;
   border: 0;
   color: #2e3934;
@@ -88,6 +128,20 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+.project-name-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.project-name svg {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+}
+
 .project-title input {
   width: min(260px, 44vw);
   padding: 3px 6px;
@@ -110,7 +164,7 @@
   background: #71a98b;
 }
 .top-actions {
-  gap: 9px;
+  margin-left: auto;
 }
 .icon-button,
 .zoom-button,

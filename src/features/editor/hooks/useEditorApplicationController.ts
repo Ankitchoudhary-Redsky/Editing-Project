@@ -4,6 +4,7 @@ import { useEditorDocumentActions } from './useEditorDocumentActions'
 import { useEditorKeyboardShortcuts } from './useEditorKeyboardShortcuts'
 import { useEditorProjectPersistence } from './useEditorProjectPersistence'
 import { useEditorToolActions } from './useEditorToolActions'
+import { useTextAnimation } from './useTextAnimation'
 
 
 export function useEditorApplicationController({
@@ -33,6 +34,13 @@ export function useEditorApplicationController({
   } = canvasCore
   const { recordHistory, initialize: initializeHistory, touch: touchHistory } = canvasCore.history
   const { fabricCanvas, setCanvasElement, setStageElement, resizeDisplay } = canvasCore.fabric
+  const animation = useTextAnimation({
+    canvas: fabricCanvas,
+    selectedObject: ui.selectedObject,
+    selectedIsImage: ui.selectedIsImage,
+    historyVersion,
+    recordHistory,
+  })
   const { background, table, pixelDrawing, objectEditing } = editorFeatures
   const { restoreCanvasSnapshot, restoreResize, canvasTransforms, undo, redo } = snapshotController
 
@@ -140,6 +148,8 @@ export function useEditorApplicationController({
     setPreviewOpen: settings.setPreviewOpen,
     setExportOpen: settings.setExportOpen,
     setExportBusy: settings.setExportBusy,
+    setShareBusy: settings.setShareBusy,
+    restartAnimations: animation.restart,
     setNotice: ui.setNotice,
   })
 
@@ -157,6 +167,7 @@ export function useEditorApplicationController({
     features: editorFeatures,
     snapshot: snapshotController,
     toolActions,
+    animation,
     ui: {
       dimensions: ui.dimensions,
       hasDocument: ui.hasDocument,

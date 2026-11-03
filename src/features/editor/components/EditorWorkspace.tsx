@@ -1,7 +1,7 @@
 
 import type { DragEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Eraser, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Upload } from 'lucide-react'
+import { Eraser, Highlighter, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Upload } from 'lucide-react'
 
 import { useEditor } from '../EditorContext'
 import { EditorEmptyState } from './EditorEmptyState'
@@ -89,6 +89,8 @@ export function EditorWorkspace({
     canvas,
     fabricCanvas,
     tools,
+    editorMode,
+    videoClip,
     drawing,
     draggingFile,
     table,
@@ -98,6 +100,7 @@ export function EditorWorkspace({
   const drawingCursorIcons: Partial<Record<DrawingMode, typeof Pencil>> = {
     pencil: Pencil,
     eraser: Eraser,
+    highlighter: Highlighter,
     'magic-remover': Paintbrush,
   }
 
@@ -128,7 +131,7 @@ export function EditorWorkspace({
 
   return (
     <section
-      className={`workspace ${tools.active === 'music' ? 'music-mode' : ''}`}
+      className={`workspace ${editorMode.active === 'video' ? 'video-mode' : ''} ${tools.active === 'music' ? 'music-mode' : ''}`}
     >
       <div
         className="stage"
@@ -142,18 +145,45 @@ export function EditorWorkspace({
             scale={canvas.fitScale * canvas.zoom}
             setCanvasElement={setCanvasElement}
             showDrawingCursor={showDrawingCursor}
-            brushSize={drawing.brushSize}
+            brushSize={drawing.brushSize * (drawing.activeMode === 'highlighter' ? 3 : 1)}
             cursorIcon={CursorIcon}
             isResizeCursor={Boolean(resizeCursor)}
           />
           {!canvas.hasDocument && <EditorEmptyState onUpload={tools.openFilePicker} />}
         </div>
 
+        {editorMode.active === 'video' && tools.active !== 'music' && (
+          <div className="video-workspace-preview">
+            {videoClip.url ? (
+              <video
+                src={videoClip.url}
+                controls
+                onLoadedMetadata={(event) => videoClip.setDuration(event.currentTarget.duration)}
+                aria-label="Uploaded video preview"
+              />
+            ) : (
+              <div className="video-empty-state">
+                <Upload size={25} />
+                <strong>Start with a video</strong>
+                <button className="primary-button" onClick={() => tools.setActive('video-upload')}>Upload video</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {editorMode.active === 'video' && videoClip.isTrimming && (
+          <div className="video-trim-loading" role="status" aria-live="polite">
+            <span className="video-trim-spinner" aria-hidden="true" />
+            <strong>Preparing your trimmed video</strong>
+            <span>Playing audio while the clip is processed. Your download will start when it finishes.</span>
+          </div>
+        )}
+
         {draggingFile && (
           <div className="drop-cover">
             <div>
               <Upload size={24} />
-              <strong>Drop image to open</strong>
+              <strong>Drop {editorMode.active === 'video' ? 'video' : 'image'} to open</strong>
             </div>
           </div>
         )}
@@ -162,16 +192,18 @@ export function EditorWorkspace({
       <div className="workspace-footer">
         <span>
           <span className="status-dot" />{' '}
-          {canvas.selected
+          {editorMode.active === 'video'
+            ? videoClip.file ? 'Video loaded' : 'No video selected'
+            : canvas.selected
             ? `${objectName(canvas.selected, 0)} selected`
             : canvas.hasDocument
               ? 'Ready to edit'
               : 'No image selected'}
         </span>
 
-        <span>
-          Local document · {canvas.dimensions.width} × {canvas.dimensions.height}
-        </span>
+        <span>{editorMode.active === 'video'
+          ? videoClip.file ? `Local video · ${videoClip.duration ? `${videoClip.duration.toFixed(1)} s` : 'reading duration'}` : 'Local video workspace'
+          : `Local document · ${canvas.dimensions.width} × ${canvas.dimensions.height}`}</span>
       </div>
 
       {fabricCanvas && (

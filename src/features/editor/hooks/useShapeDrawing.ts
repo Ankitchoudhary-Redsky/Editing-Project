@@ -12,6 +12,7 @@ export function useShapeDrawing({
   activeTool,
   hasDocument,
   shapeKind,
+  lineStyle,
   fillColor,
   transparentFill,
   strokeColor,
@@ -53,6 +54,7 @@ export function useShapeDrawing({
         strokeWidth,
         opacity: shapeOpacity,
         name: shapeNames[shapeKind],
+        lineStyle,
       }, { left: start.x, top: start.y, width: 1, height: 1 })
       shapeDrawingRef.current.preview = preview
       canvas.add(preview)
@@ -81,6 +83,7 @@ export function useShapeDrawing({
         strokeWidth,
         opacity: shapeOpacity,
         name: shapeNames[shapeKind],
+        lineStyle,
       }, {
         left,
         top,
@@ -127,5 +130,5 @@ export function useShapeDrawing({
       canvas.skipTargetFind = false
       canvas.selection = true
     }
-  }, [activeTool, canvasInstance, canvasRef, fillColor, hasDocument, imageObjectRef, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, suppressHistoryRef, syncObjects, transparentFill])
+  }, [activeTool, canvasInstance, canvasRef, fillColor, hasDocument, imageObjectRef, lineStyle, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, suppressHistoryRef, syncObjects, transparentFill])
 }

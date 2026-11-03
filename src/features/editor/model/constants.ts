@@ -5,7 +5,11 @@ import {
   Upload,
   WandSparkles,
   Pencil,
+  Video,
+  Scissors,
   Layers3,
+  Moon,
+  Sparkles,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
 import type { DrawingMode, EditorTool, ShapeKind } from './types'
@@ -24,8 +28,15 @@ export const editorToolCategories: {
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal, defaultTool: 'adjust', tools: [{ id: 'adjust', label: 'Adjustments' }] },
   { id: 'effects', label: 'Effects', icon: WandSparkles, defaultTool: 'filters', tools: [{ id: 'filters', label: 'Filters' }, { id: 'background', label: 'Background' }] },
   { id: 'elements', label: 'Elements', icon: Shapes, defaultTool: 'text', tools: [{ id: 'text', label: 'Text' }, { id: 'shapes', label: 'Shapes' }, { id: 'stickers', label: 'Stickers' }] },
+  { id: 'animate', label: 'Animate', icon: Sparkles, defaultTool: 'animate', tools: [{ id: 'animate', label: 'Animations' }] },
   { id: 'retouch', label: 'Retouch', icon: Pencil, defaultTool: 'draw-remove', tools: [{ id: 'draw-remove', label: 'Retouch' }] },
   { id: 'layers', label: 'Layers', icon: Layers3, defaultTool: 'layers', tools: [{ id: 'layers', label: 'Layers' }] },
+  { id: 'shadows', label: 'Shadows', icon: Moon, defaultTool: 'shadows', tools: [{ id: 'shadows', label: 'Shadows' }] },
+]
+
+export const videoTools: { id: EditorTool; label: string; icon: typeof Upload }[] = [
+  { id: 'video-upload', label: 'Upload video', icon: Video },
+  { id: 'video-trim', label: 'Trim video', icon: Scissors },
 ]
 
 export const cropRatios: Record<string, number | null> = {
@@ -59,6 +70,9 @@ export const textFontFamilies = ['Georgia', 'Arial', 'Verdana', 'Trebuchet MS', 
 
 export const drawingModeDescriptions: Record<DrawingMode, string> = {
   pencil: 'Draw freehand strokes on your image.',
+  sketch: 'Create light, fine sketch strokes.',
+  marker: 'Draw bold, opaque marker strokes.',
+  highlighter: 'Add broad, translucent highlight strokes.',
   eraser: 'Erase pencil strokes from your design.',
   'magic-remover': 'Brush over image areas to make them transparent.',
   lasso: 'Draw around an image area to select it.',
@@ -87,14 +101,26 @@ export function resolveImageSourceToken(token: string) {
 }
 
 export function serializeCanvas(canvas: Canvas) {
-  const scene = canvas.toObject(['name']) as Record<string, unknown>
+  const scene = canvas.toObject([
+    'name',
+    'textAnimation',
+    'shapeId',
+    'textParentId',
+    'textParentWidth',
+    'textParentHeight',
+    'textParentFontSize',
+    'imageParentId',
+    'shadowSize',
+    'shadowArtworkSize',
+    'shadowArtworkBaseScaleX',
+    'shadowArtworkBaseScaleY',
+  ]) as Record<string, unknown>
   const replaceImageSources = (value: unknown) => {
     if (Array.isArray(value)) {
       value.forEach(replaceImageSources)
       return
     }
     if (!value || typeof value !== 'object') return
-
     for (const [key, child] of Object.entries(value)) {
       if (key === 'src' && typeof child === 'string' && child.startsWith('data:image/')) {
         ;(value as Record<string, unknown>)[key] = getImageSourceToken(child)

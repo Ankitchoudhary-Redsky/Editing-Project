@@ -1,8 +1,18 @@
-import { useState } from 'react'
-import type { EditorTool, ExportFormat, VideoAudioDraft, VideoPreviewData } from '../model/types'
+import { useEffect, useRef, useState } from 'react'
+import type { EditorMode, EditorTool, ExportFormat, VideoAudioDraft, VideoClipDraft, VideoPreviewData } from '../model/types'
 
 export function useEditorProjectSettingsState() {
   const [activeTool, setActiveTool] = useState<EditorTool>('upload')
+  const [editorMode, setEditorMode] = useState<EditorMode>('image')
+  const [videoClip, setVideoClip] = useState<VideoClipDraft>({
+    file: null,
+    url: '',
+    duration: 0,
+    trimStart: 0,
+    trimEnd: 0,
+  })
+  const [isTrimmingVideo, setIsTrimmingVideo] = useState(false)
+  const videoUrlRef = useRef('')
   const [projectName, setProjectName] = useState('Untitled')
   const [isRenaming, setIsRenaming] = useState(false)
   const [previewUrl, setPreviewUrl] = useState('')
@@ -23,9 +33,55 @@ export function useEditorProjectSettingsState() {
   const [exportScale, setExportScale] = useState(1)
   const [exportWatermark, setExportWatermark] = useState(true)
   const [exportBusy, setExportBusy] = useState(false)
+  const [shareBusy, setShareBusy] = useState(false)
+
+  useEffect(() => () => {
+    if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current)
+  }, [])
+
+  const setVideoFile = (file: File) => {
+    if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current)
+    const url = URL.createObjectURL(file)
+    videoUrlRef.current = url
+    setVideoClip({ file, url, duration: 0, trimStart: 0, trimEnd: 0 })
+  }
+
+  const clearVideo = () => {
+    if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current)
+    videoUrlRef.current = ''
+    setVideoClip({ file: null, url: '', duration: 0, trimStart: 0, trimEnd: 0 })
+  }
+
+  const setVideoDuration = (duration: number) => {
+    if (!Number.isFinite(duration) || duration <= 0) return
+    setVideoClip((current) => ({
+      ...current,
+      duration,
+      trimEnd: current.trimEnd > 0 ? Math.min(current.trimEnd, duration) : duration,
+    }))
+  }
+
+  const setVideoTrimStart = (trimStart: number) => {
+    setVideoClip((current) => ({ ...current, trimStart }))
+  }
+
+  const setVideoTrimEnd = (trimEnd: number) => {
+    setVideoClip((current) => ({ ...current, trimEnd }))
+  }
 
   return {
     activeTool, setActiveTool,
+    editorMode, setEditorMode,
+    videoClip: {
+      ...videoClip,
+      isTrimming: isTrimmingVideo,
+      setTrimming: setIsTrimmingVideo,
+      setFile: setVideoFile,
+      clear: clearVideo,
+      setDuration: setVideoDuration,
+      setTrimStart: setVideoTrimStart,
+      setTrimEnd: setVideoTrimEnd,
+    },
     projectName, setProjectName,
     isRenaming, setIsRenaming,
     previewUrl, setPreviewUrl,
@@ -39,5 +95,6 @@ export function useEditorProjectSettingsState() {
     exportScale, setExportScale,
     exportWatermark, setExportWatermark,
     exportBusy, setExportBusy,
+    shareBusy, setShareBusy,
   }
 }

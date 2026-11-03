@@ -35,6 +35,7 @@ export function useEditorDraftRestoration({
     setTextOutlineWidth,
     setTextShadow,
     setShapeKind,
+    setLineStyle,
     setFillColor,
     setTransparentFill,
     setStrokeColor,
@@ -71,6 +72,7 @@ export function useEditorDraftRestoration({
     setTextOutlineWidth(draft.textOutlineWidth)
     setTextShadow(draft.textShadow)
     setShapeKind(draft.shapeKind)
+    setLineStyle(draft.lineStyle)
     setFillColor(draft.fillColor)
     setTransparentFill(draft.transparentFill)
     setStrokeColor(draft.strokeColor)
@@ -106,6 +108,7 @@ export function useEditorDraftRestoration({
     setProjectName,
     setSaturation,
     setShapeKind,
+    setLineStyle,
     setShapeOpacity,
     setStrokeColor,
     setStrokeWidth,

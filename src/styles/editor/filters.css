@@ -75,3 +75,73 @@
   }
 }
 
+.retouch-brush-popover {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100px;
+  padding: 4px;
+  border: 1px solid #e0e6e1;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 5px 18px #25382d24;
+  animation: panel-in 0.14s ease-out;
+}
+
+.retouch-brush-option {
+  display: grid;
+  width: 106px;
+  height: 32px;
+  flex: 0 0 32px;
+  grid-template-columns: 16px 1fr;
+  align-items: center;
+  justify-items: center;
+  gap: 7px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #53665a;
+  background: transparent;
+  cursor: pointer;
+}
+.retouch-brush-option:hover,
+.retouch-brush-option.selected {
+  border-color: #d3e4d8;
+  color: var(--accent-dark);
+  background: var(--accent-pale);
+}
+.retouch-brush-sample {
+  position: relative;
+  display: block;
+  width: 58px;
+  height: 20px;
+}
+.retouch-brush-sample::before {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  display: block;
+  width: 50px;
+  content: '';
+  transform: translateY(-50%) rotate(-12deg);
+}
+.retouch-brush-sample.sketch::before {
+  height: 2px;
+  border-radius: 2px;
+  background: #3478ed;
+  box-shadow: 6px -2px 0 -0.5px #3478ed, 13px 1px 0 -0.5px #3478ed, 21px -2px 0 -0.5px #3478ed;
+}
+.retouch-brush-sample.marker::before {
+  height: 5px;
+  border-radius: 3px;
+  background: #ef4541;
+  box-shadow: 7px 1px 0 -0.5px #ef4541, 16px -1px 0 -0.5px #ef4541;
+}
+.retouch-brush-sample.highlighter::before {
+  height: 10px;
+  border-radius: 2px;
+  background: rgba(255, 220, 55, 0.62);
+  box-shadow: 7px 0 0 -0.5px rgba(255, 220, 55, 0.62), 16px 0 0 -0.5px rgba(255, 220, 55, 0.62);
+}

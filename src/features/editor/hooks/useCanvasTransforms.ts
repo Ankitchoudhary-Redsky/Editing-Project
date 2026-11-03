@@ -123,7 +123,17 @@ export function useCanvasTransforms({
   const resetCrop = async () => {
     const snapshot = cropOriginalSnapshotRef.current
     if (!snapshot) {
-      cancelCrop()
+      const image = imageObjectRef.current
+      if (image) {
+        image.set('angle', 0)
+        image.set('flipX', false)
+        image.set('flipY', false)
+        image.setCoords()
+        setCropRotation(0)
+        setCropRatio('Free')
+        setActiveTool('crop')
+      }
+      beginCrop()
       return
     }
 
@@ -140,6 +150,7 @@ export function useCanvasTransforms({
       suppressHistoryRef.current = false
     }
     recordHistory(true)
+    beginCrop()
   }
 
   const applyResize = () => {

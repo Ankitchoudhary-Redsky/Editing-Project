@@ -12,7 +12,12 @@ import { FiltersPanel } from './panels/FiltersPanel'
 import { BackgroundPanel } from './panels/BackgroundPanel'
 import { DrawingPanel } from './panels/DrawingPanel'
 import { StickersPanel } from './panels/StickersPanel'
+import { VideoUploadPanel } from './panels/VideoUploadPanel'
+import { VideoTrimPanel } from './panels/VideoTrimPanel'
+
 import { LayersPanel } from './panels/LayersPanel'
+import { ShadowPanel } from './panels/ShadowPanel'
+import { AnimatePanel } from './panels/AnimatePanel'
 
 export function ToolPanel() {
   const { canvas, tools } = useEditor()
@@ -22,7 +27,7 @@ export function ToolPanel() {
 
   return (
     <aside className="tool-panel">
-      <div className="panel-heading"><div><h3 className="panel-kicker">{panelHeading}</h3></div><button className="panel-close" onClick={() => tools.setActive('select')} aria-label="Close tool panel"><X size={17} /></button></div>
+      <div className="panel-heading"><div><h3 className="panel-kicker">{panelHeading}</h3></div></div>
       {activeCategory.tools.length > 1 && (
         <nav className="panel-subtools" aria-label={`${activeCategory.label} tools`}>
           {activeCategory.tools.map(({ id, label }) => (
@@ -52,7 +57,11 @@ export function ToolPanel() {
       {tools.active === 'background' && <BackgroundPanel />}
       {tools.active === 'draw-remove' && <DrawingPanel />}
       {tools.active === 'stickers' && <StickersPanel />}
+      {tools.active === 'video-upload' && <VideoUploadPanel />}
+      {tools.active === 'video-trim' && <VideoTrimPanel />}
       {tools.active === 'layers' && <LayersPanel />}
+      {tools.active === 'shadows' && <ShadowPanel />}
+      {tools.active === 'animate' && <AnimatePanel />}
     </aside>
   )
 }

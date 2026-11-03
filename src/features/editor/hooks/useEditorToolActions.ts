@@ -2,6 +2,8 @@ import { useCallback } from 'react'
 import type { EditorTool, FilterId, UseEditorToolActionsOptions } from '../model/types'
 import { applyImageAdjustments } from '../operations/imageAdjustments'
 import { createEditorPreview, downloadEditorImage } from '../operations/editorExport'
+import { exportAnimatedCanvas } from '../operations/animatedExport'
+import { drawProjectWatermark } from '../operations/projectWatermark'
 
 export function useEditorToolActions({
   canvasRef,
@@ -30,6 +32,8 @@ export function useEditorToolActions({
   setPreviewOpen,
   setExportOpen,
   setExportBusy,
+  setShareBusy,
+  restartAnimations,
   setNotice,
 }: UseEditorToolActionsOptions) {
   const setActiveEditorTool = useCallback((tool: EditorTool) => {
@@ -103,12 +107,60 @@ export function useEditorToolActions({
     if (!canvas) return
     setExportBusy(true)
     try {
+      if (exportFormat === 'gif' || exportFormat === 'mp4') {
+        restartAnimations()
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        const blob = await exportAnimatedCanvas(canvas, exportFormat, exportScale, exportWatermark)
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        const safeName = projectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'pixel-studio-design'
+        link.href = url
+        link.download = `${safeName}.${exportFormat}`
+        link.click()
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+        setExportOpen(false)
+        return
+      }
       await downloadEditorImage(canvas, projectName, exportFormat, exportScale, exportWatermark)
       setExportOpen(false)
     } catch {
       setNotice('Export failed. Try a smaller output size or PNG format.')
     } finally {
       setExportBusy(false)
+    }
+  }
+
+  const shareDesign = async () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    setShareBusy(true)
+    try {
+      const output = canvas.toCanvasElement(exportScale)
+      if (exportWatermark) await drawProjectWatermark(output)
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        output.toBlob((result) => {
+          if (result) resolve(result)
+          else reject(new Error('Could not prepare the image for sharing.'))
+        }, 'image/png')
+      })
+      const safeName = projectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'pixel-studio-design'
+      const file = new File([blob], `${safeName}.png`, { type: 'image/png' })
+      if (typeof navigator.share === 'function' && navigator.canShare?.({ files: [file] }) !== false) {
+        await navigator.share({ files: [file], title: projectName })
+      } else {
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = file.name
+        link.click()
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+        setNotice('Image sharing is not available in this browser. The PNG was downloaded instead.')
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return
+      setNotice('Could not share the image. Please try exporting it instead.')
+    } finally {
+      setShareBusy(false)
     }
   }
 
@@ -121,5 +173,6 @@ export function useEditorToolActions({
     resetAdjustments,
     openPreview,
     downloadDesign,
+    shareDesign,
   }
 }

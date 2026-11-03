@@ -1,10 +1,10 @@
 import { useCallback, useEffect } from 'react'
-import { IText, Shadow, type FabricObject } from 'fabric'
-import type { TextProperty, UseObjectEditingOptions } from '../model/types'
+import { FabricImage, IText, Shadow, type FabricObject } from 'fabric'
+import type { TextDesignOptions, TextProperty, UseObjectEditingOptions } from '../model/types'
 import { shapeNames } from '../model/constants'
 import { objectName } from '../model/objectName'
-import { constrainShapeToImage, createShapeObject, isShapeObject } from '../operations/shapeObjects'
-import { createTextObject } from '../operations/textObjects'
+import { addImageInsideShape, constrainShapeToImage, createShapeObject, isShapeObject, syncImageWithShape } from '../operations/shapeObjects'
+import { createTextInsideShape, createTextObject, syncParentShapeForText, syncTextWithShape, updateLinkedTextFontSize } from '../operations/textObjects'
 
 export function useObjectEditing({
   canvas,
@@ -18,11 +18,13 @@ export function useObjectEditing({
   fontFamily,
   fontSize,
   textColor,
+  textBackground,
   textOpacity,
   textOutline,
   textOutlineWidth,
   textShadow,
   shapeKind,
+  lineStyle,
   fillColor,
   transparentFill,
   strokeColor,
@@ -34,19 +36,23 @@ export function useObjectEditing({
 }: UseObjectEditingOptions) {
   useEffect(() => {
     if (!canvas) return
-    const constrainShape = (event: { target?: FabricObject }) => {
+    const constrainAndSync = (event: { target?: FabricObject }) => {
       const target = event.target
       if (target && isShapeObject(target)) {
         constrainShapeToImage(canvas, imageObjectRef.current, target)
+        syncImageWithShape(canvas, target)
+        syncTextWithShape(canvas, target)
+      } else if (target instanceof IText) {
+        syncParentShapeForText(canvas, target)
       }
     }
-    canvas.on('object:moving', constrainShape)
-    canvas.on('object:scaling', constrainShape)
-    canvas.on('object:rotating', constrainShape)
+    canvas.on('object:moving', constrainAndSync)
+    canvas.on('object:scaling', constrainAndSync)
+    canvas.on('object:rotating', constrainAndSync)
     return () => {
-      canvas.off('object:moving', constrainShape)
-      canvas.off('object:scaling', constrainShape)
-      canvas.off('object:rotating', constrainShape)
+      canvas.off('object:moving', constrainAndSync)
+      canvas.off('object:scaling', constrainAndSync)
+      canvas.off('object:rotating', constrainAndSync)
     }
   }, [canvas, imageObjectRef])
 
@@ -54,18 +60,22 @@ export function useObjectEditing({
     selectedObject && !selectedIsImage && !(selectedObject instanceof IText) && !cropActive,
   )
 
-  const createText = () => {
+  const createText = (design?: TextDesignOptions) => {
     const canvas = canvasRef.current
     if (!canvas) return
     createTextObject(canvas, {
-      value: textValue,
-      fontFamily,
-      fontSize,
-      color: textColor,
-      opacity: textOpacity,
-      outline: textOutline,
-      outlineWidth: textOutlineWidth,
-      shadow: textShadow,
+      value: design?.value ?? textValue,
+      fontFamily: design?.fontFamily ?? fontFamily,
+      fontSize: design?.fontSize ?? fontSize,
+      color: design?.color ?? textColor,
+      opacity: design?.opacity ?? textOpacity,
+      outline: design?.outline ?? textOutline,
+      outlineWidth: design?.outlineWidth ?? textOutlineWidth,
+      shadow: design?.shadow ?? textShadow,
+      fontWeight: design?.fontWeight,
+      fontStyle: design?.fontStyle,
+      backgroundColor: design?.backgroundColor,
+      textAlign: design?.textAlign,
     })
     recordHistory(true)
     setActiveTool('text')
@@ -82,7 +92,33 @@ export function useObjectEditing({
       strokeWidth,
       opacity: shapeOpacity,
       name: shapeNames[shapeKind],
+      lineStyle,
     })
+    recordHistory(true)
+  }
+
+  const addTextToShape = () => {
+    const canvas = canvasRef.current
+    if (!canvas || !selectedObject || !isShapeObject(selectedObject)) return
+    const text = createTextInsideShape(canvas, selectedObject, {
+      value: textValue,
+      fontFamily,
+      fontSize,
+      color: textColor,
+      opacity: textOpacity,
+      outline: textOutline,
+      outlineWidth: textOutlineWidth,
+      shadow: textShadow,
+      backgroundColor: textBackground,
+    })
+    canvas.setActiveObject(text)
+    recordHistory(true)
+  }
+
+  const addImageToShape = async (file: File) => {
+    const canvas = canvasRef.current
+    if (!canvas || !selectedObject || !isShapeObject(selectedObject)) return
+    await addImageInsideShape(canvas, selectedObject, file)
     recordHistory(true)
   }
 
@@ -99,6 +135,8 @@ export function useObjectEditing({
           offsetY: value === 'soft' ? 5 : 3,
         })
       active.set('shadow', shadow)
+    } else if (property === 'fontSize' && active.get('textParentId')) {
+      updateLinkedTextFontSize(canvasRef.current!, active as IText, Number(value))
     } else {
       active.set(property, value)
     }
@@ -159,9 +197,44 @@ export function useObjectEditing({
     recordHistory()
   }
 
+  const updateShadow = (
+    shadow: Shadow | null,
+    target: FabricObject | null = selectedObject,
+    size?: number,
+    imageSize?: number,
+  ) => {
+    const canvas = canvasRef.current
+    if (!canvas || !target || target === cropObjectRef.current) return
+    const name = target.get('name')
+    if (name === '__pixel_studio_drawing_layer__' || name === '__pixel_studio_background_image__') return
+    target.set('shadow', shadow)
+    if (size !== undefined) target.set('shadowSize', size)
+    if (imageSize !== undefined && target instanceof FabricImage) {
+      const currentScaleX = target.scaleX ?? 1
+      const currentScaleY = target.scaleY ?? 1
+      const baseScaleX = Number(target.get('shadowArtworkBaseScaleX') ?? currentScaleX)
+      const baseScaleY = Number(target.get('shadowArtworkBaseScaleY') ?? currentScaleY)
+      const center = target.getCenterPoint()
+      target.set({
+        scaleX: baseScaleX * imageSize / 100,
+        scaleY: baseScaleY * imageSize / 100,
+        shadowArtworkSize: imageSize,
+        shadowArtworkBaseScaleX: baseScaleX,
+        shadowArtworkBaseScaleY: baseScaleY,
+      })
+      target.setPositionByOrigin(center, 'center', 'center')
+    }
+    target.setCoords()
+    if (canvas.getActiveObject() !== target) canvas.setActiveObject(target)
+    canvas.requestRenderAll()
+    recordHistory()
+  }
+
   return {
     selectedIsShape,
     createText,
+    addTextToShape,
+    addImageToShape,
     addShape,
     updateText,
     deleteSelected,
@@ -169,5 +242,6 @@ export function useObjectEditing({
     selectLayer,
     moveLayer,
     updateShapeAppearance,
+    updateShadow,
   }
 }
