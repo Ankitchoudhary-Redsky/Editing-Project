@@ -10,6 +10,7 @@ import {
   Layers3,
   Moon,
   Sparkles,
+  Type,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
 import type { EditorTool, ShapeKind } from './types'
@@ -27,7 +28,8 @@ export const editorToolCategories: {
   { id: 'transform', label: 'Transform', icon: MousePointer2, defaultTool: 'crop', tools: [{ id: 'crop', label: 'Crop' }, { id: 'resize', label: 'Resize' }] },
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal, defaultTool: 'adjust', tools: [{ id: 'adjust', label: 'Adjustments' }] },
   { id: 'effects', label: 'Effects', icon: WandSparkles, defaultTool: 'filters', tools: [{ id: 'filters', label: 'Filters' }, { id: 'background', label: 'Background' }] },
-  { id: 'elements', label: 'Elements', icon: Shapes, defaultTool: 'text', tools: [{ id: 'text', label: 'Text' }, { id: 'shapes', label: 'Shapes' }, { id: 'stickers', label: 'Stickers' }] },
+  { id: 'text', label: 'Text', icon: Type, defaultTool: 'text', tools: [{ id: 'text', label: 'Text' }] },
+  { id: 'elements', label: 'Elements', icon: Shapes, defaultTool: 'shapes', tools: [{ id: 'shapes', label: 'Shapes' }, { id: 'stickers', label: 'Stickers' }] },
   { id: 'animate', label: 'Animate', icon: Sparkles, defaultTool: 'animate', tools: [{ id: 'animate', label: 'Animations' }] },
   { id: 'retouch', label: 'Retouch', icon: Pencil, defaultTool: 'draw-remove', tools: [{ id: 'draw-remove', label: 'Retouch' }] },
   { id: 'layers', label: 'Layers', icon: Layers3, defaultTool: 'layers', tools: [{ id: 'layers', label: 'Layers' }] },

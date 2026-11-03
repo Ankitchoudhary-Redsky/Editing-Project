@@ -54,6 +54,17 @@ export type EditorCanvas = Canvas
 export type FilterId = 'original' | 'grayscale' | 'blackWhite' | 'sepia' | 'vintage' |'retro' | 'warm' | 'cool' | 'vivid' | 'cinematic' | 'dramatic' | 'fade' | 'pastel' | 'noir' | 'dreamy'
 export type FilterSettings = { id: FilterId; intensity: number }
 export type Dimensions = { width: number; height: number }
+export type AddedEditorPage = {
+  id: number
+  imageUrl?: string
+  fileName?: string
+  width?: number
+  height?: number
+}
+export type AddedPageActions = {
+  replace: (pageId: number) => void
+  delete: (pageId: number) => void
+}
 export type TextProperty = 'text' | 'fontFamily' | 'fontSize' | 'fill' | 'backgroundColor' | 'opacity' | 'fontWeight' | 'fontStyle' | 'textAlign' | 'stroke' | 'strokeWidth' | 'shadow' | 'textAnimation'
 export type TextDesignOptions = Partial<{
   value: string
@@ -102,6 +113,14 @@ export interface EditorContextValue {
     setZoom: Dispatch<SetStateAction<number>>
     fitScale: number
     fitToScreen: () => void
+  }
+
+  pages: {
+    items: AddedEditorPage[]
+    setItems: Dispatch<SetStateAction<AddedEditorPage[]>>
+    replace: (pageId: number) => void
+    delete: (pageId: number) => void
+    registerActions: (actions: AddedPageActions | null) => void
   }
 
   history: {
@@ -215,6 +234,8 @@ export interface EditorContextValue {
       contrast?: number,
       saturation?: number,
     ) => void
+    beginPreview: () => void
+    finishPreview: (brightness: number, contrast: number, saturation: number) => void
     reset: () => void
   }
 

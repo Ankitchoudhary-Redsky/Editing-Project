@@ -31,6 +31,8 @@ import { applyImageAdjustments } from './features/editor/operations/imageAdjustm
 import { applyCanvasCrop, createCropFrame, updateCropRatio } from './features/editor/operations/cropCanvas'
 import { loadLocalImage } from './features/editor/operations/loadLocalImage'
 import type { DrawingMode,
+  AddedEditorPage,
+  AddedPageActions,
   EditorContextValue,
   EditorMode, EditorTool, ShapeKind, LineStyle, TextProperty, FilterId,
   VideoAudioDraft, VideoClipDraft, VideoPreviewData,
@@ -294,6 +296,7 @@ function App() {
   const canvasElementRef = useRef<HTMLCanvasElement>(null)
   const stageElementRef = useRef<HTMLDivElement>(null)
   const uploadInputRef = useRef<HTMLInputElement>(null)
+  const addedPageActionsRef = useRef<AddedPageActions | null>(null)
 
   const canvasRef = useRef<Canvas | null>(null)
   const historyRef = useRef<string[]>([])
@@ -364,6 +367,10 @@ function App() {
     [],
   )
 
+  const registerAddedPageActions = useCallback((actions: AddedPageActions | null) => {
+    addedPageActionsRef.current = actions
+  }, [])
+
   const [activeTool, setActiveTool] = useState<EditorTool>('upload')
   const [activeEditorMode, setActiveEditorMode] = useState<EditorMode>('image')
   const [videoClip, setVideoClip] = useState<VideoClipDraft>({
@@ -385,6 +392,7 @@ function App() {
   const [hasImage, setHasImage] = useState(false)
   const [selectedIsImage, setSelectedIsImage] = useState(false)
   const [imageThumbnail, setImageThumbnail] = useState('')
+  const [addedPages, setAddedPages] = useState<AddedEditorPage[]>([])
   const [zoom, setZoom] = useState(1)
   const [fitScale, setFitScale] = useState(1)
   const [draggingFile, setDraggingFile] = useState(false)
@@ -415,6 +423,9 @@ function App() {
   const [brightness, setBrightness] = useState(0)
   const [contrast, setContrast] = useState(0)
   const [saturation, setSaturation] = useState(0)
+  const adjustmentFrameRef = useRef<number | null>(null)
+  const adjustmentPreviewRef = useRef(false)
+  const pendingAdjustmentsRef = useRef<[number, number, number] | null>(null)
   const [previewUrl, setPreviewUrl] = useState('')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewMode, setPreviewMode] = useState<'image' | 'video'>('image')
@@ -1825,12 +1836,50 @@ function App() {
     nextBrightness = brightness,
     nextContrast = contrast,
     nextSaturation = saturation,
+    preview = false,
   ) => {
     const image = imageObjectRef.current
     if (!image) return
-    applyImageAdjustments(image, nextBrightness, nextContrast, nextSaturation, selectedFilterRef.current, filterIntensityRef.current,)
+    applyImageAdjustments(image, nextBrightness, nextContrast, nextSaturation, selectedFilterRef.current, filterIntensityRef.current, preview)
     canvasRef.current?.requestRenderAll()
-    recordHistory()
+    if (!preview) recordHistory()
+  }
+
+  const scheduleAdjustmentPreview = (
+    nextBrightness = brightness,
+    nextContrast = contrast,
+    nextSaturation = saturation,
+  ) => {
+    pendingAdjustmentsRef.current = [nextBrightness, nextContrast, nextSaturation]
+    if (adjustmentFrameRef.current !== null) return
+
+    adjustmentFrameRef.current = requestAnimationFrame(() => {
+      adjustmentFrameRef.current = null
+      const pending = pendingAdjustmentsRef.current
+      pendingAdjustmentsRef.current = null
+      if (pending) applyAdjustments(...pending, adjustmentPreviewRef.current)
+    })
+  }
+
+  const beginAdjustmentPreview = () => {
+    adjustmentPreviewRef.current = true
+  }
+
+  const finishAdjustmentPreview = (
+    nextBrightness = brightness,
+    nextContrast = contrast,
+    nextSaturation = saturation,
+  ) => {
+    if (!adjustmentPreviewRef.current) return
+    adjustmentPreviewRef.current = false
+    if (adjustmentFrameRef.current !== null) cancelAnimationFrame(adjustmentFrameRef.current)
+    adjustmentFrameRef.current = null
+    const pending = pendingAdjustmentsRef.current ?? [nextBrightness, nextContrast, nextSaturation]
+    pendingAdjustmentsRef.current = null
+    setBrightness(pending[0])
+    setContrast(pending[1])
+    setSaturation(pending[2])
+    applyAdjustments(...pending)
   }
 
   const removeBackgroundFromImage = async () => {
@@ -2169,6 +2218,10 @@ const resetBackground = async () => {
   }
 
   const resetAdjustments = () => {
+    if (adjustmentFrameRef.current !== null) cancelAnimationFrame(adjustmentFrameRef.current)
+    adjustmentFrameRef.current = null
+    adjustmentPreviewRef.current = false
+    pendingAdjustmentsRef.current = null
     setBrightness(0)
     setContrast(0)
     setSaturation(0)
@@ -3498,6 +3551,13 @@ const deleteSelection = async () => {
       fitScale,
       fitToScreen,
     },
+    pages: {
+      items: addedPages,
+      setItems: setAddedPages,
+      replace: (pageId) => addedPageActionsRef.current?.replace(pageId),
+      delete: (pageId) => addedPageActionsRef.current?.delete(pageId),
+      registerActions: registerAddedPageActions,
+    },
     history: {
       canUndo,
       canRedo,
@@ -3544,7 +3604,9 @@ const deleteSelection = async () => {
       setContrast,
       saturation,
       setSaturation,
-      apply: applyAdjustments,
+      apply: scheduleAdjustmentPreview,
+      beginPreview: beginAdjustmentPreview,
+      finishPreview: finishAdjustmentPreview,
       reset: resetAdjustments,
     },
     preview: {

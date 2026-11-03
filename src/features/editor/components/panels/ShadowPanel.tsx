@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { FabricImage, Shadow, type FabricObject } from 'fabric'
 import { useEditor } from '../../EditorContext'
 import { objectName } from '../../model/objectName'
@@ -82,6 +83,7 @@ function isEditableObject(object: FabricObject | null) {
 
 export function ShadowPanel() {
   const { canvas, shadows } = useEditor()
+  const [, setRangeVersion] = useState(0)
   const selected = isEditableObject(canvas.selected)
     ? canvas.selected
     : canvas.objects.find((object) => isEditableObject(object)) ?? null
@@ -107,6 +109,11 @@ export function ShadowPanel() {
     const value = { ...settings, ...next }
     const angle = next.curve === undefined ? value.angle : 45 + value.curve * 0.9
     shadows.update(buildShadow(value.color, value.opacity, value.blur, value.distance, angle, value.size), selected, value.size, value.imageSize)
+  }
+
+  const updateRange = (next: Partial<typeof settings>) => {
+    update(next)
+    setRangeVersion((version) => version + 1)
   }
 
   const applyPreset = (preset: typeof presets[number]) => {
@@ -169,17 +176,17 @@ export function ShadowPanel() {
             <div className="shadow-heading-row"><div><span className="field-label">Adjust shadow</span><p>Fine-tune the selected style</p></div></div>
             <div className="dimensions-fields shadow-color-fields">
               <label className="field-label color-field">Colour<input type="color" value={settings.color} disabled={!enabled} onChange={(event) => update({ color: event.target.value })} /></label>
-              <label className="range-field"><span>Intensity <b>{settings.opacity}%</b></span><input type="range" min="0" max="100" value={settings.opacity} disabled={!enabled} onChange={(event) => update({ opacity: Number(event.target.value) })} /></label>
+              <label className="range-field"><span>Intensity <b>{settings.opacity}%</b></span><input type="range" min="0" max="100" value={settings.opacity} disabled={!enabled} onChange={(event) => updateRange({ opacity: Number(event.target.value) })} /></label>
             </div>
-            {visibleControls.includes('size') && <label className="range-field"><span>Size <b>{settings.size}</b></span><input type="range" min="0" max="100" value={settings.size} disabled={!enabled} onChange={(event) => update({ size: Number(event.target.value) })} /></label>}
+            {visibleControls.includes('size') && <label className="range-field"><span>Size <b>{settings.size}</b></span><input type="range" min="0" max="100" value={settings.size} disabled={!enabled} onChange={(event) => updateRange({ size: Number(event.target.value) })} /></label>}
             {selected instanceof FabricImage && <div className="shadow-image-size">
-              <label className="range-field"><span>Image size <b>{settings.imageSize}%</b></span><input type="range" min="50" max="120" value={settings.imageSize} disabled={!enabled} onChange={(event) => update({ imageSize: Number(event.target.value) })} /></label>
+              <label className="range-field"><span>Image size <b>{settings.imageSize}%</b></span><input type="range" min="50" max="120" value={settings.imageSize} disabled={!enabled} onChange={(event) => updateRange({ imageSize: Number(event.target.value) })} /></label>
               <p>Reduce image size to make room for a clear shadow.</p>
             </div>}
-            {visibleControls.includes('blur') && <label className="range-field"><span>Blur amount <b>{settings.blur}</b></span><input type="range" min="0" max="60" value={settings.blur} disabled={!enabled} onChange={(event) => update({ blur: Number(event.target.value) })} /></label>}
-            {visibleControls.includes('angle') && <label className="range-field"><span>{activePreset === 'angled' ? 'Rotation' : activePreset === 'backdrop' ? 'Direction' : 'Angle'} <b>{settings.angle}°</b></span><input type="range" min="0" max="359" value={settings.angle} disabled={!enabled || settings.distance === 0} onChange={(event) => update({ angle: Number(event.target.value) })} /></label>}
-            {visibleControls.includes('distance') && <label className="range-field"><span>Distance <b>{settings.distance}</b></span><input type="range" min="0" max="100" value={settings.distance} disabled={!enabled} onChange={(event) => update({ distance: Number(event.target.value) })} /></label>}
-            {visibleControls.includes('curve') && <label className="range-field"><span>Curve <b>{settings.curve}</b></span><input type="range" min="0" max="100" value={settings.curve} disabled={!enabled || settings.distance === 0} onChange={(event) => update({ curve: Number(event.target.value) })} /></label>}
+            {visibleControls.includes('blur') && <label className="range-field"><span>Blur amount <b>{settings.blur}</b></span><input type="range" min="0" max="60" value={settings.blur} disabled={!enabled} onChange={(event) => updateRange({ blur: Number(event.target.value) })} /></label>}
+            {visibleControls.includes('angle') && <label className="range-field"><span>{activePreset === 'angled' ? 'Rotation' : activePreset === 'backdrop' ? 'Direction' : 'Angle'} <b>{settings.angle}°</b></span><input type="range" min="0" max="359" value={settings.angle} disabled={!enabled || settings.distance === 0} onChange={(event) => updateRange({ angle: Number(event.target.value) })} /></label>}
+            {visibleControls.includes('distance') && <label className="range-field"><span>Distance <b>{settings.distance}</b></span><input type="range" min="0" max="100" value={settings.distance} disabled={!enabled} onChange={(event) => updateRange({ distance: Number(event.target.value) })} /></label>}
+            {visibleControls.includes('curve') && <label className="range-field"><span>Curve <b>{settings.curve}</b></span><input type="range" min="0" max="100" value={settings.curve} disabled={!enabled || settings.distance === 0} onChange={(event) => updateRange({ curve: Number(event.target.value) })} /></label>}
           </section>
     </div>
   )
