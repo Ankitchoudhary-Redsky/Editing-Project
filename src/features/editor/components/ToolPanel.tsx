@@ -1,7 +1,6 @@
 import { useEditor } from '../EditorContext'
 import { editorToolCategories } from '../model/constants'
 import { editorHeadings } from '../model/editorCopy'
-import { X } from 'lucide-react'
 import { AdjustmentsPanel } from './panels/AdjustmentsPanel'
 import { UploadPanel } from './panels/UploadPanel'
 import { CropPanel } from './panels/CropPanel'
