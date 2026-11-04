@@ -308,8 +308,22 @@ export type UseCanvasTransformsOptions = {
 
 export interface EditorContextValue {
   /** Actual Fabric.js Canvas instance used for image editing. */
-  fabricCanvas: EditorCanvas | null;
+  editorMode: {
+    active: EditorMode;
+    setActive: (mode: EditorMode) => void;
+  };
 
+  videoClip: VideoClipDraft & {
+    isTrimming: boolean;
+    setTrimming: (isTrimming: boolean) => void;
+    setFile: (file: File) => void;
+    clear: () => void;
+    setDuration: (duration: number) => void;
+    setTrimStart: (time: number) => void;
+    setTrimEnd: (time: number) => void;
+  };
+
+  fabricCanvas: EditorCanvas | null;
   canvas: {
     dimensions: Dimensions;
     hasDocument: boolean;
@@ -355,6 +369,7 @@ export interface EditorContextValue {
     setNotice: Dispatch<SetStateAction<string>>;
     deleteImage: () => void;
   };
+
   framesLayout: {
     applyFrame: (
       style: "none" | "clean" | "matte" | "soft-shadow" | "bold",
@@ -849,6 +864,7 @@ export type EditorFeatureRefs = {
 };
 
 export type EditorFeatureState = {
+  dimensions: Dimensions;
   activeTool: EditorTool;
   hasDocument: boolean;
   hasImage: boolean;
@@ -881,6 +897,7 @@ export type EditorFeatureState = {
 };
 
 export type EditorFeatureActions = {
+  setDimensions: (dimensions: Dimensions) => void;
   setActiveTool: (tool: EditorTool) => void;
   setActiveDrawingMode: (mode: DrawingMode) => void;
   setTextValue: (value: string) => void;

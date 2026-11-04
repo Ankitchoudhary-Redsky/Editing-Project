@@ -7,9 +7,16 @@ type UploadLandingProps = {
     file: File,
     onProgress: (progress: number) => void,
   ) => Promise<string | null>;
+  onUploadStart: () => void;
+  onUploadFinish: () => void;
 };
 
-export function UploadLanding({ restoring, onUpload }: UploadLandingProps) {
+export function UploadLanding({
+  restoring,
+  onUpload,
+  onUploadStart,
+  onUploadFinish,
+}: UploadLandingProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -21,11 +28,26 @@ export function UploadLanding({ restoring, onUpload }: UploadLandingProps) {
     setError("");
     setProgress(0);
     setBusy(true);
-    const result = await onUpload(file, setProgress);
-    if (result) {
-      setError(result);
+    onUploadStart();
+    try {
+      const result = await onUpload(file, setProgress);
+      if (result) {
+        setError(result);
+        setProgress(0);
+        return;
+      }
+      setProgress(100);
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 450));
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "The image could not be opened.",
+      );
       setProgress(0);
+    } finally {
       setBusy(false);
+      onUploadFinish();
     }
   };
 

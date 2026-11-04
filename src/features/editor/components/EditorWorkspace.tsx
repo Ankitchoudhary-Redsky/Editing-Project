@@ -1,5 +1,5 @@
 import type { DragEvent } from "react";
-import { useEffect, useRef, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Eraser,
   Fullscreen,
@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 import { useEditor } from "../EditorContext";
-import { EditorEmptyState } from "./EditorEmptyState";
+import { UploadLanding } from "./UploadLanding";
 import { objectName } from "../model/objectName";
 import type { DrawingMode, CanvasSurfaceProps } from "../model/types";
 import type { EditorWorkspaceProps } from "../model/types";
@@ -122,10 +122,7 @@ export function EditorWorkspace({
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const [showFullScreen, setShowFullScreen] = useState(false);
-  const [cursorPosition, setCursorPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const [uploadingInitialImage, setUploadingInitialImage] = useState(false);
 
   const drawingCursorIcons: Partial<Record<DrawingMode, typeof Pencil>> = {
     pencil: Pencil,
@@ -145,7 +142,6 @@ export function EditorWorkspace({
         : undefined;
 
   const CursorIcon = resizeCursor ?? DrawingCursorIcon;
-  const displayScale = canvas.fitScale * canvas.zoom;
   const currentZoom = canvas.zoom;
   const setZoom = canvas.setZoom;
 
@@ -210,7 +206,7 @@ export function EditorWorkspace({
 
   return (
     <section
-      className={`workspace${editorMode.active === "video" ? "video-mode" : ""} ${tools.active === "music" ? " music-mode" : ""}${showFullScreen ? " focus-mode" : ""}`}
+      className={`workspace ${editorMode.active === "video" ? "video-mode" : ""} ${tools.active === "music" ? " music-mode" : ""}${showFullScreen ? " focus-mode" : ""}`}
     >
       <div
         className="stage"
@@ -230,9 +226,17 @@ export function EditorWorkspace({
             cursorIcon={CursorIcon}
             isResizeCursor={Boolean(resizeCursor)}
           />
-          {!canvas.hasDocument && (
-            <EditorEmptyState onUpload={tools.openFilePicker} />
-          )}
+          {(!canvas.hasDocument || uploadingInitialImage) &&
+            editorMode.active === "image" && (
+              <UploadLanding
+                restoring={false}
+                onUploadStart={() => setUploadingInitialImage(true)}
+                onUploadFinish={() => setUploadingInitialImage(false)}
+                onUpload={(file, onProgress) =>
+                  tools.uploadFile(file, onProgress)
+                }
+              />
+            )}
         </div>
 
         {editorMode.active === "video" && tools.active !== "music" && (

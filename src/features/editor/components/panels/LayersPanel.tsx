@@ -4,7 +4,6 @@ import {
   CopyPlus,
   FileImage,
   Shapes,
-  Table2,
   Square,
   SquareCheck,
   Trash2,
@@ -14,49 +13,58 @@ import { FabricImage, IText, type FabricObject } from "fabric";
 import { useEditor } from "../../EditorContext";
 import { objectName } from "../../model/objectName";
 import { useEffect, useState } from "react";
-import type { CachedLayerThumbnail } from "../../model/types";
-import { getTableId } from "../../operations/tableGeometry";
-
-const layerThumbnailCache = new WeakMap<FabricObject, CachedLayerThumbnail>();
-
-function getLayerThumbnail(object: FabricObject) {
-  const key = [
-    object.left,
-    object.top,
-    object.width,
-    object.height,
-    object.scaleX,
-    object.scaleY,
-    object.angle,
-    object.flipX,
-    object.flipY,
-    object.opacity,
-    object.fill,
-    object.stroke,
-    object.strokeWidth,
-  ].join("|");
-  const cached = layerThumbnailCache.get(object);
-  const isCanvasBackedImage =
-    object instanceof FabricImage &&
-    object.getElement() instanceof HTMLCanvasElement;
-  if (!isCanvasBackedImage && cached?.key === key) return cached.source;
-
-  try {
-    const size = Math.max(object.getScaledWidth(), object.getScaledHeight(), 1);
-    const source = object.toDataURL({
-      format: "png",
-      multiplier: Math.min(0.25, 32 / size),
-      enableRetinaScaling: false,
-    });
-    layerThumbnailCache.set(object, { key, source });
-    return source;
-  } catch {
-    return "";
-  }
-}
 
 export function LayersPanel() {
   const { canvas, shapes } = useEditor();
+  const [checked, setChecked] = useState<FabricObject[]>([]);
+  const layerObjects = canvas.objects.filter(
+    (object) => object.selectable !== false,
+  );
+  const allSelected =
+    layerObjects.length > 0 && checked.length === layerObjects.length;
+
+  useEffect(() => {
+    setChecked((current) => {
+      const next = current.filter((object) => layerObjects.includes(object));
+      return next.length === current.length ? current : next;
+    });
+  }, [canvas.objects]);
+
+  const toggleLayer = (object: FabricObject) => {
+    const next = checked.includes(object)
+      ? checked.filter((item) => item !== object)
+      : [...checked, object];
+    setChecked(next);
+    shapes.selectLayers(next);
+  };
+
+  const toggleAll = () => {
+    const next =
+      checked.length === layerObjects.length ? [] : [...layerObjects];
+    setChecked(next);
+    shapes.selectLayers(next);
+  };
+
+  const moveSelection = (direction: "forward" | "backward") => {
+    if (!checked.length) return;
+    shapes.moveLayers(checked, direction);
+  };
+
+  const removeLayer = (object: FabricObject) => {
+    shapes.deleteLayers([object]);
+    setChecked((current) => current.filter((item) => item !== object));
+  };
+
+  const deleteChecked = () => {
+    shapes.deleteLayers(checked);
+    setChecked([]);
+  };
+
+  const duplicateChecked = async () => {
+    const copies = await shapes.duplicateLayers(checked);
+    setChecked(copies);
+  };
+
   return (
     <div className="panel-content layers-content">
       <div className="layer-heading">

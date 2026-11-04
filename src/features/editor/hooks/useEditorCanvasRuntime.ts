@@ -1,15 +1,15 @@
-import type { EditorSettings, EditorUiState } from '../model/types'
-import { useEditorCanvasCore } from './useEditorCanvasCore'
-import { useEditorFeatureControllers } from './useEditorFeatureControllers'
-import { useEditorSnapshotController } from './useEditorSnapshotController'
-import { useEditorDrawingMode } from './useEditorDrawingMode'
+import type { EditorSettings, EditorUiState } from "../model/types";
+import { useEditorCanvasCore } from "./useEditorCanvasCore";
+import { useEditorFeatureControllers } from "./useEditorFeatureControllers";
+import { useEditorSnapshotController } from "./useEditorSnapshotController";
+import { useEditorDrawingMode } from "./useEditorDrawingMode";
 
 export function useEditorCanvasRuntime({
   settings,
   ui,
 }: {
-  settings: EditorSettings
-  ui: EditorUiState
+  settings: EditorSettings;
+  ui: EditorUiState;
 }) {
   const canvasCore = useEditorCanvasCore({
     activeTool: settings.activeTool,
@@ -21,7 +21,7 @@ export function useEditorCanvasRuntime({
     setSelectedIsImage: ui.setSelectedIsImage,
     setImageThumbnail: ui.setImageThumbnail,
     setCropRotation: ui.setCropRotation,
-  })
+  });
   const {
     canvasRef,
     suppressHistoryRef,
@@ -36,7 +36,7 @@ export function useEditorCanvasRuntime({
     activeToolRef,
     serializeEditorSnapshot,
     syncObjects,
-  } = canvasCore
+  } = canvasCore;
   const {
     historyRef,
     historyIndexRef,
@@ -45,11 +45,8 @@ export function useEditorCanvasRuntime({
     recordHistory,
     syncHistoryControls,
     touch: touchHistory,
-  } = canvasCore.history
-  const {
-    fabricCanvas,
-    resizeDisplay,
-  } = canvasCore.fabric
+  } = canvasCore.history;
+  const { fabricCanvas, resizeDisplay } = canvasCore.fabric;
 
   const editorFeatures = useEditorFeatureControllers({
     canvas: fabricCanvas,
@@ -64,6 +61,7 @@ export function useEditorCanvasRuntime({
       suppressHistoryRef,
     },
     state: {
+      dimensions: ui.dimensions,
       activeTool: settings.activeTool,
       hasDocument: ui.hasDocument,
       hasImage: ui.hasImage,
@@ -95,6 +93,7 @@ export function useEditorCanvasRuntime({
       shapeOpacity: settings.shapeOpacity,
     },
     actions: {
+      setDimensions: ui.setDimensions,
       setActiveTool: settings.setActiveTool,
       setActiveDrawingMode: settings.setActiveDrawingMode,
       setTextValue: settings.setTextValue,
@@ -106,15 +105,15 @@ export function useEditorCanvasRuntime({
       syncObjects,
       setNotice: ui.setNotice,
     },
-  })
-  const { background, table } = editorFeatures
+  });
+  const { background, table } = editorFeatures;
 
   useEditorDrawingMode({
     canvasRef,
     activeTool: settings.activeTool,
     activeDrawingMode: settings.activeDrawingMode,
     hasImage: ui.hasImage,
-  })
+  });
 
   const snapshotController = useEditorSnapshotController({
     canvasRef,
@@ -152,7 +151,7 @@ export function useEditorCanvasRuntime({
     setCropActive: ui.setCropActive,
     setCropRotation: ui.setCropRotation,
     setActiveTool: settings.setActiveTool,
-  })
+  });
 
-  return { canvasCore, editorFeatures, snapshotController, historyVersion }
+  return { canvasCore, editorFeatures, snapshotController, historyVersion };
 }

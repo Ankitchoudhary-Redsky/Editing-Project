@@ -1,10 +1,8 @@
-import { useState } from "react";
 import { useEditor } from "../../EditorContext";
 import { resizePresets } from "../../model/constants";
 
 export function ResizePanel() {
   const { canvas, resize } = useEditor();
-  const [active, setActive] = useState("");
   return (
     <div className="panel-content">
       <fieldset className="panel-control-group" disabled={!canvas.hasImage}>

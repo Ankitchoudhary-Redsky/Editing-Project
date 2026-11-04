@@ -1,9 +1,10 @@
-import type { UseEditorFeatureControllersOptions } from '../model/types'
-import { useImageBackground } from './useImageBackground'
-import { useTableEditor } from './useTableEditor'
-import { usePixelDrawing } from './usePixelDrawing'
-import { useObjectEditing } from './useObjectEditing'
-import { useShapeDrawing } from './useShapeDrawing'
+import type { UseEditorFeatureControllersOptions } from "../model/types";
+import { useImageBackground } from "./useImageBackground";
+import { useTableEditor } from "./useTableEditor";
+import { usePixelDrawing } from "./usePixelDrawing";
+import { useObjectEditing } from "./useObjectEditing";
+import { useShapeDrawing } from "./useShapeDrawing";
+import { useFramesLayout } from "./useFramesLayout";
 
 export function useEditorFeatureControllers({
   canvas,
@@ -28,7 +29,7 @@ export function useEditorFeatureControllers({
     recordHistory: actions.recordHistory,
     syncObjects: actions.syncObjects,
     setNotice: actions.setNotice,
-  })
+  });
 
   const table = useTableEditor({
     canvas,
@@ -39,7 +40,7 @@ export function useEditorFeatureControllers({
     setActiveDrawingMode: actions.setActiveDrawingMode,
     recordHistory: actions.recordHistory,
     setNotice: actions.setNotice,
-  })
+  });
 
   const pixelDrawing = usePixelDrawing({
     canvas,
@@ -54,7 +55,7 @@ export function useEditorFeatureControllers({
     recordHistory: actions.recordHistory,
     syncObjects: actions.syncObjects,
     setNotice: actions.setNotice,
-  })
+  });
 
   const objectEditing = useObjectEditing({
     canvas,
@@ -83,7 +84,16 @@ export function useEditorFeatureControllers({
     setActiveTool: actions.setActiveTool,
     setTextValue: actions.setTextValue,
     recordHistory: actions.recordHistory,
-  })
+  });
+
+  const framesLayout = useFramesLayout({
+    canvasRef: refs.canvasRef,
+    dimensions: state.dimensions,
+    setDimensions: actions.setDimensions,
+    recordHistory: actions.recordHistory,
+    syncObjects: actions.syncObjects,
+    setNotice: actions.setNotice,
+  });
 
   useShapeDrawing({
     canvas,
@@ -101,7 +111,7 @@ export function useEditorFeatureControllers({
     suppressHistoryRef: refs.suppressHistoryRef,
     recordHistory: actions.recordHistory,
     syncObjects: actions.syncObjects,
-  })
+  });
 
-  return { background, table, pixelDrawing, objectEditing }
+  return { background, table, pixelDrawing, objectEditing, framesLayout };
 }
