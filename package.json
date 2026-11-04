@@ -21,7 +21,8 @@
     "onnxruntime-web": "^1.21.0",
     "react": "19.2",
     "react-dom": "19.2",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
