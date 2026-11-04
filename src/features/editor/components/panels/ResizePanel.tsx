@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useEditor } from '../../EditorContext'
 
 const presets = [
@@ -8,7 +9,8 @@ const presets = [
 ]
 
 export function ResizePanel() {
-  const { canvas, resize } = useEditor()
+  const { canvas, resize } = useEditor();
+  const [active, setActive] = useState("");
   return (
     <div className="panel-content">
       <fieldset className="panel-control-group" disabled={!canvas.hasImage}>
@@ -20,7 +22,23 @@ export function ResizePanel() {
         <label className="check-row"><input type="checkbox" checked={resize.keepRatio} onChange={(event) => resize.setKeepRatio(event.target.checked)} /> Keep aspect ratio</label>
         <label className="check-row"><input type="checkbox" checked={resize.scaleArtwork} onChange={(event) => resize.setScaleArtwork(event.target.checked)} /> Scale artwork with canvas</label>
         <div className="panel-label-row presets-heading"><span>Canvas presets</span></div>
-        <div className="preset-grid">{presets.map(({ label, width, height }) => <button key={label} className="preset-button" onClick={() => { resize.setWidth(width); resize.setHeight(height); resize.setKeepRatio(false) }}><span className={`preset-shape ${label.toLowerCase()}`} /><span>{label}</span></button>)}</div>
+        <div className="preset-grid">
+          {presets.map(
+            ({ label, width, height }) =>
+              <button
+                key={label}
+                className={`preset-button ${active === label ? 'active' : ''}`}
+                onClick={() => {
+                  resize.setWidth(width);
+                  resize.setHeight(height);
+                  resize.setKeepRatio(false);
+                  setActive(label);
+                }}
+              >
+                <span className={`preset-shape ${label.toLowerCase()}`} />
+                <span>{label}</span>
+              </button>)}
+        </div>
         <button className="primary-button full-button" onClick={resize.apply}>Apply dimensions</button>
       </fieldset>
       <p className="panel-note">{canvas.hasImage ? 'Canvas size is separate from artwork scaling. Artwork is cropped by the document edges.' : 'Upload an image to resize it.'}</p>

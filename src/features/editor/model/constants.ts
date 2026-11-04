@@ -7,6 +7,7 @@ import {
   Pencil,
   Layers3,
   PanelsTopLeft,
+  ChartNoAxesColumnIncreasing,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
 import type { EditorTool, ShapeKind } from './types'
@@ -28,6 +29,7 @@ export const editorToolCategories: {
   { id: 'retouch', label: 'Retouch', icon: Pencil, defaultTool: 'draw-remove', tools: [{ id: 'draw-remove', label: 'Retouch' }] },
   { id: 'layers', label: 'Layers', icon: Layers3, defaultTool: 'layers', tools: [{ id: 'layers', label: 'Layers' }] },
   { id: 'frames-layout', label: 'Frames & layout', icon: PanelsTopLeft, defaultTool: 'frames-layout', tools: [{ id: 'frames-layout', label: 'Frames & layout' }] },
+  { id: 'charts', label: 'Charts', icon: ChartNoAxesColumnIncreasing, defaultTool: 'charts', tools: [{ id: 'charts', label: 'Chart library' }] },
 ]
 
 export const cropRatios: Record<string, number | null> = {
@@ -78,13 +80,14 @@ export function serializeCanvas(canvas: Canvas) {
     {
       width: canvas.getWidth(),
       height: canvas.getHeight(),
-      scene: canvas.toObject(['name', 'frameTarget', 'frameStyle', 'framePadding', 'frameId', 'frameSlot', 'frameColor', 'gridCellId', 'gridCellIndex', 'gridSlot']),
+      scene: canvas.toObject(['name', 'frameTarget', 'frameStyle', 'framePadding', 'frameId', 'frameSlot', 'frameColor', 'gridCellId', 'gridCellIndex', 'gridSlot', 'chartConfigJson', 'chartType']),
     },
     (key, value: unknown) => {
       if (
         key === 'src' &&
         typeof value === 'string' &&
-        value.startsWith('data:image/')
+        value.startsWith('data:image/') &&
+        !value.startsWith('data:image/svg+xml')
       ) {
         return getImageSourceToken(value)
       }

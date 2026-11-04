@@ -14,6 +14,7 @@ import { LayersPanel } from './panels/LayersPanel'
 import { SignaturePanel } from './panels/SignaturePanel'
 import { StickyNotePanel } from './panels/StickyNotePanel'
 import { FramesLayoutPanel } from './panels/FramesLayoutPanel'
+import { ChartPanel } from './panels/ChartPanel'
 
 export function ToolPanel() {
   const { canvas, tools } = useEditor()
@@ -56,6 +57,7 @@ export function ToolPanel() {
       {tools.active === 'sticky-note' && <StickyNotePanel />}
       {tools.active === 'layers' && <LayersPanel />}
       {tools.active === 'frames-layout' && <FramesLayoutPanel />}
+      {tools.active === 'charts' && <ChartPanel />}
     </aside>
   )
 }
