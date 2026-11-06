@@ -1,7 +1,7 @@
 
 import type { DragEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Eraser, Highlighter, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Upload } from 'lucide-react'
+import { CopyPlus, Eraser, Highlighter, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Trash2, Upload } from 'lucide-react'
 
 import { useEditor } from '../EditorContext'
 import { EditorEmptyState } from './EditorEmptyState'
@@ -80,11 +80,76 @@ function CanvasSurface({
   )
 }
 
+function FloatingObjectToolbar({
+  stageRef,
+}: {
+  stageRef: React.RefObject<HTMLDivElement | null>
+}) {
+  const { canvas, fabricCanvas, shapes } = useEditor()
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
+
+  useEffect(() => {
+    const active = canvas.selected
+    const stage = stageRef.current
+    const fabricElement = fabricCanvas?.getElement()
+    if (!active || !stage || !fabricCanvas || !fabricElement || active.get('name') === 'Crop area') {
+      setPosition(null)
+      return
+    }
+
+    const updatePosition = () => {
+      const activeBounds = active.getBoundingRect()
+      const stageBounds = stage.getBoundingClientRect()
+      const canvasBounds = fabricElement.getBoundingClientRect()
+      const canvasOffsetX = canvasBounds.left - stageBounds.left
+      const canvasOffsetY = canvasBounds.top - stageBounds.top
+      const scaleX = canvasBounds.width / fabricCanvas.getWidth()
+      const scaleY = canvasBounds.height / fabricCanvas.getHeight()
+      const right = canvasOffsetX + (activeBounds.left + activeBounds.width) * scaleX
+      const top = canvasOffsetY + activeBounds.top * scaleY - 10
+      const toolbarWidth = 104
+
+      setPosition({
+        left: Math.max(toolbarWidth + 8, Math.min(stageBounds.width - 8, right)),
+        top: Math.max(8, top),
+      })
+    }
+
+    updatePosition()
+    fabricCanvas.on('after:render', updatePosition)
+    window.addEventListener('resize', updatePosition)
+    return () => {
+      fabricCanvas.off('after:render', updatePosition)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [canvas.selected, fabricCanvas, stageRef])
+
+  if (!position) return null
+
+  return (
+    <div
+      className="floating-object-toolbar"
+      style={{ left: position.left, top: position.top }}
+      onPointerDown={(event) => event.stopPropagation()}
+      role="toolbar"
+      aria-label="Selected object actions"
+    >
+      <button type="button" title="Duplicate" aria-label="Duplicate selected object" onClick={() => void shapes.duplicate()}>
+        <CopyPlus size={19} strokeWidth={2} />
+      </button>
+      <button type="button" className="floating-delete-button" title="Delete" aria-label="Delete selected object" onClick={shapes.delete}>
+        <Trash2 size={19} strokeWidth={2} />
+      </button>
+    </div>
+  )
+}
+
 export function EditorWorkspace({
   historyVersion,
   setCanvasElement,
   setStageElement,
 }: EditorWorkspaceProps & { historyVersion: number }) {
+  const stageRef = useRef<HTMLDivElement | null>(null)
   const {
     canvas,
     fabricCanvas,
@@ -135,7 +200,10 @@ export function EditorWorkspace({
     >
       <div
         className="stage"
-        ref={setStageElement}
+        ref={(element) => {
+          stageRef.current = element
+          setStageElement(element)
+        }}
         onDragOver={handleDragOver}
         onDragLeave={() => tools.setDraggingFile(false)}
         onDrop={handleDrop}
@@ -151,6 +219,7 @@ export function EditorWorkspace({
           />
           {!canvas.hasDocument && <EditorEmptyState onUpload={tools.openFilePicker} />}
         </div>
+        <FloatingObjectToolbar stageRef={stageRef} />
 
         {editorMode.active === 'video' && tools.active !== 'music' && (
           <div className="video-workspace-preview">

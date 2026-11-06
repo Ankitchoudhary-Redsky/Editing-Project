@@ -1,14 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { type FabricObject, type TPointerEvent } from 'fabric'
 import { shapeNames } from '../model/constants'
-import { buildShapeObject, constrainShapeToImage } from '../operations/shapeObjects'
-import { getImageBounds } from '../operations/tableGeometry'
+import { buildShapeObject, constrainShapeToCanvas } from '../operations/shapeObjects'
 import type { UseShapeDrawingOptions } from '../model/types'
 
 export function useShapeDrawing({
   canvas: canvasInstance,
   canvasRef,
-  imageObjectRef,
   activeTool,
   hasDocument,
   shapeKind,
@@ -38,11 +36,10 @@ export function useShapeDrawing({
 
     const handlePointerDown = (event: { e: TPointerEvent }) => {
       if (!drawing || !hasDocument || canvas.findTarget(event.e)) return
-      const bounds = getImageBounds(canvas, imageObjectRef.current)
       const pointer = canvas.getPointer(event.e)
       const start = {
-        x: Math.max(bounds.left, Math.min(bounds.left + bounds.width, pointer.x)),
-        y: Math.max(bounds.top, Math.min(bounds.top + bounds.height, pointer.y)),
+        x: Math.max(0, Math.min(canvas.getWidth(), pointer.x)),
+        y: Math.max(0, Math.min(canvas.getHeight(), pointer.y)),
       }
       shapeDrawingRef.current = { start, preview: null }
       suppressHistoryRef.current = true
@@ -64,11 +61,10 @@ export function useShapeDrawing({
     const handlePointerMove = (event: { e: TPointerEvent }) => {
       const drawingState = shapeDrawingRef.current
       if (!drawing || !drawingState) return
-      const bounds = getImageBounds(canvas, imageObjectRef.current)
       const pointer = canvas.getPointer(event.e)
       const point = {
-        x: Math.max(bounds.left, Math.min(bounds.left + bounds.width, pointer.x)),
-        y: Math.max(bounds.top, Math.min(bounds.top + bounds.height, pointer.y)),
+        x: Math.max(0, Math.min(canvas.getWidth(), pointer.x)),
+        y: Math.max(0, Math.min(canvas.getHeight(), pointer.y)),
       }
       const left = Math.min(drawingState.start.x, point.x)
       const top = Math.min(drawingState.start.y, point.y)
@@ -92,7 +88,7 @@ export function useShapeDrawing({
         directionX: point.x < drawingState.start.x ? -1 : 1,
         directionY: point.y < drawingState.start.y ? -1 : 1,
       })
-      constrainShapeToImage(canvas, imageObjectRef.current, preview)
+      constrainShapeToCanvas(canvas, preview)
       drawingState.preview = preview
       canvas.add(preview)
       canvas.requestRenderAll()
@@ -130,5 +126,5 @@ export function useShapeDrawing({
       canvas.skipTargetFind = false
       canvas.selection = true
     }
-  }, [activeTool, canvasInstance, canvasRef, fillColor, hasDocument, imageObjectRef, lineStyle, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, suppressHistoryRef, syncObjects, transparentFill])
+  }, [activeTool, canvasInstance, canvasRef, fillColor, hasDocument, lineStyle, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, suppressHistoryRef, syncObjects, transparentFill])
 }

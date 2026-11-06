@@ -1,19 +1,15 @@
 import { Canvas, Circle, Ellipse, FabricImage, Line, Path, Polygon, Rect, Triangle, type FabricObject } from 'fabric'
 import { shapeNames } from '../model/constants'
 import type { NewShapeOptions, ShapeBounds } from '../model/types'
-import { getImageBounds } from './tableGeometry'
 import { loadLocalImage } from './loadLocalImage'
 
-export function constrainShapeToImage(canvas: Canvas, image: FabricImage | null, object: FabricObject) {
-  const bounds = getImageBounds(canvas, image)
-  if (!bounds.width || !bounds.height) return
-
+export function constrainShapeToCanvas(canvas: Canvas, object: FabricObject) {
   object.setCoords()
   let objectBounds = object.getBoundingRect()
   const scale = Math.min(
     1,
-    bounds.width / Math.max(1, objectBounds.width),
-    bounds.height / Math.max(1, objectBounds.height),
+    canvas.getWidth() / Math.max(1, objectBounds.width),
+    canvas.getHeight() / Math.max(1, objectBounds.height),
   )
   if (scale < 1) {
     object.set({
@@ -24,17 +20,15 @@ export function constrainShapeToImage(canvas: Canvas, image: FabricImage | null,
     objectBounds = object.getBoundingRect()
   }
 
-  const right = bounds.left + bounds.width
-  const bottom = bounds.top + bounds.height
-  const offsetX = objectBounds.left < bounds.left
-    ? bounds.left - objectBounds.left
-    : objectBounds.left + objectBounds.width > right
-      ? right - objectBounds.left - objectBounds.width
+  const offsetX = objectBounds.left < 0
+    ? -objectBounds.left
+    : objectBounds.left + objectBounds.width > canvas.getWidth()
+      ? canvas.getWidth() - objectBounds.left - objectBounds.width
       : 0
-  const offsetY = objectBounds.top < bounds.top
-    ? bounds.top - objectBounds.top
-    : objectBounds.top + objectBounds.height > bottom
-      ? bottom - objectBounds.top - objectBounds.height
+  const offsetY = objectBounds.top < 0
+    ? -objectBounds.top
+    : objectBounds.top + objectBounds.height > canvas.getHeight()
+      ? canvas.getHeight() - objectBounds.top - objectBounds.height
       : 0
   object.set({
     left: (object.left ?? 0) + offsetX,
@@ -160,8 +154,7 @@ export function buildShapeObject(options: NewShapeOptions, bounds: ShapeBounds):
 
 export function createShapeObject(canvas: Canvas, options: NewShapeOptions): FabricObject {
   const shape = buildShapeObject(options, { left: canvas.getWidth() / 2 - 90, top: canvas.getHeight() / 2 - 60, width: 180, height: 120 })
-  const image = canvas.getObjects().find((object) => object instanceof FabricImage && object.get('name') !== '__pixel_studio_background_image__')
-  constrainShapeToImage(canvas, image instanceof FabricImage ? image : null, shape)
+  constrainShapeToCanvas(canvas, shape)
   canvas.add(shape)
   canvas.setActiveObject(shape)
   canvas.requestRenderAll()

@@ -3,7 +3,7 @@ import { FabricImage, IText, Shadow, type FabricObject } from 'fabric'
 import type { TextDesignOptions, TextProperty, UseObjectEditingOptions } from '../model/types'
 import { shapeNames } from '../model/constants'
 import { objectName } from '../model/objectName'
-import { addImageInsideShape, constrainShapeToImage, createShapeObject, isShapeObject, syncImageWithShape } from '../operations/shapeObjects'
+import { addImageInsideShape, constrainShapeToCanvas, createShapeObject, isShapeObject, syncImageWithShape } from '../operations/shapeObjects'
 import { createTextInsideShape, createTextObject, syncParentShapeForText, syncTextWithShape, updateLinkedTextFontSize } from '../operations/textObjects'
 
 export function useObjectEditing({
@@ -39,7 +39,7 @@ export function useObjectEditing({
     const constrainAndSync = (event: { target?: FabricObject }) => {
       const target = event.target
       if (target && isShapeObject(target)) {
-        constrainShapeToImage(canvas, imageObjectRef.current, target)
+        constrainShapeToCanvas(canvas, target)
         syncImageWithShape(canvas, target)
         syncTextWithShape(canvas, target)
       } else if (target instanceof IText) {
@@ -164,7 +164,6 @@ export function useObjectEditing({
     const clone = await active.clone()
     clone.set({ left: (active.left ?? 0) + 24, top: (active.top ?? 0) + 24 })
     clone.set('name', `${objectName(active, 0)} copy`)
-    constrainShapeToImage(canvas, imageObjectRef.current, clone)
     canvas.add(clone)
     canvas.setActiveObject(clone)
     canvas.requestRenderAll()

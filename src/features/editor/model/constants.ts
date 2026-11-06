@@ -8,6 +8,7 @@ import {
   Video,
   Scissors,
   Layers3,
+  Library,
   Moon,
   Sparkles,
 } from 'lucide-react'
@@ -24,6 +25,7 @@ export const editorToolCategories: {
   tools: { id: EditorTool; label: string }[]
 }[] = [
   { id: 'upload', label: 'Upload', icon: Upload, defaultTool: 'upload', tools: [{ id: 'upload', label: 'Images' }] },
+  { id: 'library', label: 'Library', icon: Library, defaultTool: 'library', tools: [{ id: 'library', label: 'Library' }] },
   { id: 'transform', label: 'Transform', icon: MousePointer2, defaultTool: 'crop', tools: [{ id: 'crop', label: 'Crop' }, { id: 'resize', label: 'Resize' }] },
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal, defaultTool: 'adjust', tools: [{ id: 'adjust', label: 'Adjustments' }] },
   { id: 'effects', label: 'Effects', icon: WandSparkles, defaultTool: 'filters', tools: [{ id: 'filters', label: 'Filters' }, { id: 'background', label: 'Background' }] },

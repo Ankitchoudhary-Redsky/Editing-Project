@@ -43,6 +43,15 @@ export function useEditorCanvasCore({
     if (!canvas) return
 
     const active = canvas.getActiveObject() ?? null
+    active?.set({
+      borderColor: '#2c7660',
+      borderScaleFactor: 1.35,
+      cornerColor: '#ffffff',
+      cornerStrokeColor: '#2c7660',
+      cornerSize: 8,
+      cornerStyle: 'circle',
+      transparentCorners: false,
+    })
     setSelectedObject(active)
     setSelectedIsImage(active === imageObjectRef.current)
   }, [setSelectedIsImage, setSelectedObject])
@@ -53,22 +62,25 @@ export function useEditorCanvasCore({
 
     const currentObjects = canvas.getObjects()
     const image = currentObjects.find(
-      (item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME,
+      (item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME && !item.get('isLibraryImage'),
     )
+    const imageInteractive = activeToolRef.current === 'upload' || activeToolRef.current === 'library'
     if (image && (
-      image.selectable || image.evented || !image.lockMovementX || !image.lockMovementY ||
-      !image.lockScalingX || !image.lockScalingY || !image.lockRotation
+      image.selectable !== imageInteractive || image.evented !== imageInteractive ||
+      image.lockMovementX === imageInteractive || image.lockMovementY === imageInteractive ||
+      image.lockScalingX === imageInteractive || image.lockScalingY === imageInteractive || image.lockRotation !== true
     )) {
       image.set({
-        selectable: false,
-        evented: false,
-        lockMovementX: true,
-        lockMovementY: true,
-        lockScalingX: true,
-        lockScalingY: true,
+        selectable: imageInteractive,
+        evented: imageInteractive,
+        lockMovementX: !imageInteractive,
+        lockMovementY: !imageInteractive,
+        lockScalingX: !imageInteractive,
+        lockScalingY: !imageInteractive,
         lockRotation: true,
       })
     }
+    if (!imageInteractive && canvas.getActiveObject() === image) canvas.discardActiveObject()
     const imageObject = image instanceof FabricImage ? image : null
     if (imageObjectRef.current !== imageObject) imageObjectRef.current = imageObject
     setCropRotation(image instanceof FabricImage ? Math.round(image.angle || 0) : 0)
@@ -121,7 +133,8 @@ export function useEditorCanvasCore({
 
   useEffect(() => {
     activeToolRef.current = activeTool
-  }, [activeTool])
+    syncObjects()
+  }, [activeTool, syncObjects])
 
   return {
     canvasRef,

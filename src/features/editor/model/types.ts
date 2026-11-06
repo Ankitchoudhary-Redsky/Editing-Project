@@ -14,7 +14,7 @@ import type { useEditorProjectSettingsState } from '../hooks/useEditorProjectSet
 import type { useTextAnimation } from '../hooks/useTextAnimation'
 
 export type EditorMode = 'image' | 'video'
-export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers' | 'shadows' | 'video-upload' | 'video-trim' | 'animate'
+export type EditorTool = 'upload' | 'library' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers' | 'shadows' | 'video-upload' | 'video-trim' | 'animate'
 export type DrawingMode = 'pencil' | 'sketch' | 'marker' | 'highlighter' | 'eraser' | 'magic-remover' | 'lasso'
 export type ShapeKind = 'rect' | 'roundRect' | 'circle' | 'ellipse' | 'line' | 'arrow' | 'triangle' | 'star' | 'pentagon'
 export type LineStyle = 'straight' | 'curve-up' | 'curve-down'

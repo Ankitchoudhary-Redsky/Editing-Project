@@ -77,12 +77,12 @@ export function useImageUpload({
         top: 0,
         originX: 'left',
         originY: 'top',
-        selectable: false,
-        evented: false,
-        lockMovementX: true,
-        lockMovementY: true,
-        lockScalingX: true,
-        lockScalingY: true,
+        selectable: true,
+        evented: true,
+        lockMovementX: false,
+        lockMovementY: false,
+        lockScalingX: false,
+        lockScalingY: false,
         lockRotation: true,
       })
       image.set('name', file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Image')
