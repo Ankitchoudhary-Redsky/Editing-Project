@@ -60,6 +60,7 @@ export type AddedEditorPage = {
   fileName?: string
   width?: number
   height?: number
+  snapshot?: string
 }
 export type AddedPageActions = {
   replace: (pageId: number) => void
@@ -105,6 +106,7 @@ export interface EditorContextValue {
     dimensions: Dimensions
     hasDocument: boolean
     hasImage: boolean
+    hasDeletedPageOneImage: boolean
     imageThumbnail: string
     selected: FabricObject | null
     objects: FabricObject[]
@@ -118,8 +120,14 @@ export interface EditorContextValue {
   pages: {
     items: AddedEditorPage[]
     setItems: Dispatch<SetStateAction<AddedEditorPage[]>>
+    activeId: number | null
+    setActiveId: Dispatch<SetStateAction<number | null>>
+    switching: boolean
+    pageOnePreview: string
     replace: (pageId: number) => void
     delete: (pageId: number) => void
+    select: (pageId: number | null) => Promise<void>
+    getSnapshot: (pageId: number | null) => string | undefined
     registerActions: (actions: AddedPageActions | null) => void
   }
 

@@ -16,6 +16,8 @@ import { Canvas } from 'fabric'
 import type { EditorTool, ShapeKind } from './types'
 
 export const BACKGROUND_IMAGE_NAME = '__pixel_studio_background_image__'
+export const DEFAULT_PAGE_WIDTH = 1200
+export const DEFAULT_PAGE_HEIGHT = 800
 
 export const editorToolCategories: {
   id: string
@@ -82,6 +84,19 @@ function getImageSourceToken(source: string) {
 
 export function resolveImageSourceToken(token: string) {
   return tokenToSource.get(token)
+}
+
+export function getImageSourceTokens() {
+  return Object.fromEntries(tokenToSource)
+}
+
+export function restoreImageSourceTokens(sources: Record<string, string>) {
+  for (const [token, source] of Object.entries(sources)) {
+    tokenToSource.set(token, source)
+    sourceToToken.set(source, token)
+    const tokenId = Number(token.match(/_(\d+)__$/)?.[1])
+    if (Number.isFinite(tokenId)) nextSourceId = Math.max(nextSourceId, tokenId + 1)
+  }
 }
 
 export function serializeCanvas(canvas: Canvas) {

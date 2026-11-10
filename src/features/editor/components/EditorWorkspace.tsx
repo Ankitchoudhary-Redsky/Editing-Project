@@ -7,16 +7,16 @@ import { Rotate3D } from 'lucide-react'
 
 import { useEditor } from '../EditorContext'
 import { objectName } from '../model/objectName'
-import type { DrawingMode } from '../model/types'
+import type { AddedEditorPage, DrawingMode } from '../model/types'
 import { getThreeDRotation, isThreeDRotatable, updateThreeDRotation } from '../operations/threeDShapes'
 import type { ThreeDRotation } from '../operations/threeDShapes'
 import ImageMusicVideoExport from './ImageMusicVideoExport'
 
-const DEFAULT_PAGE_WIDTH = 1200
-const DEFAULT_PAGE_HEIGHT = 800
+const PAGE_ALREADY_HAS_IMAGE_NOTICE = 'This page already has an image. Remove it before adding another.'
 
 type EditorWorkspaceProps = {
   setCanvasElement: (element: HTMLCanvasElement | null) => void
+  setPageCanvasElement: (pageId: number, element: HTMLCanvasElement | null) => void
   setStageElement: (element: HTMLDivElement | null) => void
 }
 
@@ -29,6 +29,7 @@ type DraggedPageImage = {
 
 export function EditorWorkspace({
   setCanvasElement,
+  setPageCanvasElement,
   setStageElement,
 }: EditorWorkspaceProps) {
   const {
@@ -44,9 +45,13 @@ export function EditorWorkspace({
     pages: {
       items: addedPages,
       setItems: setAddedPages,
+      activeId: activePageId,
+      select: activatePage,
+      getSnapshot: getPageSnapshot,
       registerActions: registerPageActions,
     },
   } = useEditor()
+  const setNotice = tools.setNotice
 
   const [cursorPosition, setCursorPosition] = useState<{
     x: number
@@ -54,7 +59,6 @@ export function EditorWorkspace({
   } | null>(null)
   const [dropTargetPageId, setDropTargetPageId] = useState<number | null>(null)
   const [canvasSurfaceSize, setCanvasSurfaceSize] = useState({ width: 0, height: 0 })
-  const [stageSize, setStageSize] = useState({ width: 0, height: 0 })
   const nextPageIdRef = useRef(2)
   const pageUploadInputsRef = useRef(new Map<number, HTMLInputElement>())
   const pageElementsRef = useRef(new Map<number, HTMLElement>())
@@ -63,6 +67,8 @@ export function EditorWorkspace({
   const stageScrollRef = useRef<HTMLDivElement | null>(null)
   const canvasSurfaceRef = useRef<HTMLDivElement | null>(null)
   const pendingPageScrollRef = useRef<number | null>(null)
+  const pendingPageSelectRef = useRef<number | null>(null)
+  const firstPageRef = useRef<HTMLDivElement | null>(null)
   const rotationDragRef = useRef<{
     pointerId: number
     x: number
@@ -92,12 +98,8 @@ export function EditorWorkspace({
       : undefined
   const CursorIcon = resizeCursor ?? DrawingCursorIcon
 
-  useEffect(() => () => {
-    pageObjectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
-  }, [])
-  useEffect(() => {
-    const pageId = pendingPageScrollRef.current
-    const pageElement = pageId === null ? null : pageElementsRef.current.get(pageId)
+  const scrollToPage = useCallback((pageId: number | null) => {
+    const pageElement = pageId === null ? firstPageRef.current : pageElementsRef.current.get(pageId)
     const stageElement = stageScrollRef.current
     if (!pageElement || !stageElement) return
 
@@ -109,12 +111,42 @@ export function EditorWorkspace({
     if (requiredScrollTail > 0) {
       stageElement.style.setProperty('--page-scroll-tail', `${requiredScrollTail + 2}px`)
     }
-    stageElement.scrollTo({
-      top: targetScrollTop,
-      behavior: 'smooth',
-    })
-    pendingPageScrollRef.current = null
-  }, [addedPages])
+    stageElement.scrollTo({ top: targetScrollTop, behavior: 'smooth' })
+  }, [])
+
+  useEffect(() => () => {
+    pageObjectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+  }, [])
+  useEffect(() => {
+    nextPageIdRef.current = Math.max(
+      nextPageIdRef.current,
+      ...addedPages.map((page) => page.id + 1),
+    )
+    const scrollPageId = pendingPageScrollRef.current
+    if (scrollPageId !== null) {
+      scrollToPage(scrollPageId)
+      pendingPageScrollRef.current = null
+    }
+    const selectPageId = pendingPageSelectRef.current
+    if (selectPageId !== null && addedPages.some((page) => page.id === selectPageId)) {
+      pendingPageSelectRef.current = null
+      void activatePage(selectPageId)
+    }
+  }, [addedPages, activatePage, scrollToPage])
+  useEffect(() => {
+    if (activePageId === null) return
+    const activePage = addedPages.find((page) => page.id === activePageId)
+    if (!activePage || (
+      activePage.width === canvas.dimensions.width && activePage.height === canvas.dimensions.height
+    )) return
+
+    setAddedPages((pages) => pages.map((page) => ({
+      ...page,
+      ...(page.id === activePageId
+        ? { width: canvas.dimensions.width, height: canvas.dimensions.height }
+        : {}),
+    })))
+  }, [activePageId, addedPages, canvas.dimensions.height, canvas.dimensions.width, setAddedPages])
 
   const setStageRef = useCallback((element: HTMLDivElement | null) => {
     stageScrollRef.current = element
@@ -133,18 +165,6 @@ export function EditorWorkspace({
     observer.observe(surface)
     return () => observer.disconnect()
   }, [canvas.dimensions.height, canvas.dimensions.width, canvas.fitScale, canvas.zoom])
-  useEffect(() => {
-    const stage = stageScrollRef.current
-    if (!stage) return
-
-    const updateStageSize = () => {
-      setStageSize({ width: stage.clientWidth, height: stage.clientHeight })
-    }
-    const observer = new ResizeObserver(updateStageSize)
-    updateStageSize()
-    observer.observe(stage)
-    return () => observer.disconnect()
-  }, [])
   const selectedThreeDObject = canvas.hasImage && canvas.selected instanceof FabricImage && isThreeDRotatable(canvas.selected)
     ? canvas.selected
     : null
@@ -218,34 +238,80 @@ export function EditorWorkspace({
     rotationDragRef.current = null
   }
 
+  const autoScrollStage = (event: DragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes('application/x-estudio-page-image')) return
+    const stage = stageScrollRef.current
+    if (!stage) return
+
+    const bounds = stage.getBoundingClientRect()
+    const edgeSize = Math.min(96, bounds.height * 0.18)
+    const distanceFromTop = event.clientY - bounds.top
+    const distanceFromBottom = bounds.bottom - event.clientY
+    const scrollDelta = distanceFromTop < edgeSize
+      ? -Math.ceil((edgeSize - distanceFromTop) / edgeSize * 24)
+      : distanceFromBottom < edgeSize
+        ? Math.ceil((edgeSize - distanceFromBottom) / edgeSize * 24)
+        : 0
+    const maxScrollTop = stage.scrollHeight - stage.clientHeight
+    stage.scrollTop = Math.max(0, Math.min(maxScrollTop, stage.scrollTop + scrollDelta))
+  }
+
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
+    if (event.dataTransfer.types.includes('application/x-estudio-page-image')) {
+      autoScrollStage(event)
+      return
+    }
     tools.setDraggingFile(true)
   }
 
-  const handleFirstPageImageDragStart = (event: DragEvent<HTMLDivElement>) => {
-    if (!fabricCanvas || !canvas.hasImage) {
-      event.preventDefault()
-      return
+  useEffect(() => {
+    const upperCanvas = canvasSurfaceRef.current?.querySelector<HTMLCanvasElement>('.upper-canvas')
+    if (!upperCanvas) return
+
+    const handleFirstPageImageDragStart = (event: globalThis.DragEvent) => {
+      if (!fabricCanvas || !canvas.hasImage || !event.dataTransfer) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        return
+      }
+
+      try {
+        event.dataTransfer.effectAllowed = 'copy'
+        event.dataTransfer.setData('application/x-estudio-page-image', JSON.stringify({
+          imageUrl: fabricCanvas.toDataURL({ format: 'png', multiplier: 1 }),
+          fileName: 'Page 1 image',
+          width: canvas.dimensions.width,
+          height: canvas.dimensions.height,
+        }))
+        event.stopImmediatePropagation()
+      } catch {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        setNotice('Could not drag this page image.')
+      }
     }
 
-    event.dataTransfer.effectAllowed = 'copy'
-    event.dataTransfer.setData('application/x-estudio-page-image', JSON.stringify({
-      imageUrl: fabricCanvas.toDataURL({ format: 'png', multiplier: 1 }),
-      fileName: 'Page 1 image',
-      width: canvas.dimensions.width,
-      height: canvas.dimensions.height,
-    }))
-  }
+    const canDrag = canvas.hasImage && editorMode.active === 'image'
+    upperCanvas.draggable = canDrag
+    if (!canDrag) return
+
+    upperCanvas.addEventListener('dragstart', handleFirstPageImageDragStart, true)
+    return () => {
+      upperCanvas.removeEventListener('dragstart', handleFirstPageImageDragStart, true)
+      upperCanvas.draggable = false
+    }
+  }, [canvas.hasImage, canvas.dimensions.height, canvas.dimensions.width, editorMode.active, fabricCanvas, setNotice])
 
   const addPage = () => {
     const pageId = nextPageIdRef.current
     nextPageIdRef.current += 1
     pendingPageScrollRef.current = pageId
+    pendingPageSelectRef.current = pageId
     setAddedPages((pages) => [...pages, {
       id: pageId,
-      width: DEFAULT_PAGE_WIDTH,
-      height: DEFAULT_PAGE_HEIGHT,
+      width: canvas.dimensions.width,
+      height: canvas.dimensions.height,
     }])
   }
 
@@ -253,23 +319,36 @@ export function EditorWorkspace({
     const sourcePage = sourcePageId === undefined
       ? undefined
       : addedPages.find((page) => page.id === sourcePageId)
+    const pageSnapshot = getPageSnapshot(sourcePageId ?? null)
     const imageUrl = sourcePage?.imageUrl ?? (
       sourcePageId === undefined && canvas.hasImage && fabricCanvas
         ? fabricCanvas.toDataURL({ format: 'png', multiplier: 1 })
         : undefined
     )
-    if (!imageUrl) return
+    if (!imageUrl && !pageSnapshot) return
 
     const pageId = nextPageIdRef.current
     nextPageIdRef.current += 1
+    const copiedSnapshot = pageSnapshot
+      ? JSON.stringify({ ...JSON.parse(pageSnapshot), pageId })
+      : undefined
     pendingPageScrollRef.current = pageId
-    setAddedPages((pages) => [...pages, {
-      id: pageId,
-      imageUrl,
-      fileName: `${sourcePage?.fileName ?? 'Page 1'} copy`,
-      width: sourcePage?.width ?? canvas.dimensions.width,
-      height: sourcePage?.height ?? canvas.dimensions.height,
-    }])
+    pendingPageSelectRef.current = pageId
+    setAddedPages((pages) => {
+      const sourceIndex = sourcePageId === undefined
+        ? -1
+        : pages.findIndex((page) => page.id === sourcePageId)
+      const insertIndex = sourceIndex < 0 ? 0 : sourceIndex + 1
+      const duplicate = {
+        id: pageId,
+        imageUrl,
+        snapshot: copiedSnapshot,
+        fileName: `${sourcePage?.fileName ?? 'Page 1'} copy`,
+        width: canvas.dimensions.width,
+        height: canvas.dimensions.height,
+      }
+      return [...pages.slice(0, insertIndex), duplicate, ...pages.slice(insertIndex)]
+    })
   }
 
   const uploadPageImage = (pageId: number, file?: File) => {
@@ -285,56 +364,124 @@ export function EditorWorkspace({
 
     const uploadVersion = (pageUploadVersionsRef.current.get(pageId) ?? 0) + 1
     pageUploadVersionsRef.current.set(pageId, uploadVersion)
-    const previousUrl = addedPages.find((page) => page.id === pageId)?.imageUrl
-    if (previousUrl) {
-      const usedByAnotherPage = addedPages.some(
-        (page) => page.id !== pageId && page.imageUrl === previousUrl,
-      )
-      if (!usedByAnotherPage) {
-        URL.revokeObjectURL(previousUrl)
-        pageObjectUrlsRef.current.delete(previousUrl)
-      }
-    }
-    const imageUrl = URL.createObjectURL(file)
-    pageObjectUrlsRef.current.add(imageUrl)
-    const image = new Image()
-    image.onload = () => {
+    const reader = new FileReader()
+    reader.onload = () => {
       if (pageUploadVersionsRef.current.get(pageId) !== uploadVersion) return
-      setAddedPages((pages) => pages.map((page) => page.id === pageId
-        ? {
-            ...page,
-            imageUrl,
-            fileName: file.name,
-            width: image.naturalWidth,
-            height: image.naturalHeight,
-          }
-        : page))
+      if (typeof reader.result !== 'string') {
+        tools.setNotice('This image could not be opened. Please choose another file.')
+        return
+      }
+
+      const imageUrl = reader.result
+      const image = new Image()
+      image.onload = () => {
+        if (pageUploadVersionsRef.current.get(pageId) !== uploadVersion) return
+        setAddedPages((pages) => pages.map((page) => page.id === pageId
+          ? {
+              ...page,
+              imageUrl,
+              fileName: file.name,
+              width: page.width ?? canvas.dimensions.width,
+              height: page.height ?? canvas.dimensions.height,
+            }
+          : page))
+        void (async () => {
+          await activatePage(pageId)
+          await tools.uploadFile(file)
+        })()
+      }
+      image.onerror = () => {
+        if (pageUploadVersionsRef.current.get(pageId) === uploadVersion) {
+          tools.setNotice('This image could not be opened. Please choose another file.')
+        }
+      }
+      image.src = imageUrl
     }
-    image.onerror = () => {
-      URL.revokeObjectURL(imageUrl)
-      pageObjectUrlsRef.current.delete(imageUrl)
+    reader.onerror = () => {
       if (pageUploadVersionsRef.current.get(pageId) === uploadVersion) {
         tools.setNotice('This image could not be opened. Please choose another file.')
       }
     }
-    image.src = imageUrl
+    reader.readAsDataURL(file)
   }
 
   const handlePageDragOver = (event: DragEvent<HTMLElement>, pageId: number) => {
-    if (!event.dataTransfer.types.includes('application/x-estudio-page-image')) return
+    const isPageImage = event.dataTransfer.types.includes('application/x-estudio-page-image')
+    const isFile = event.dataTransfer.types.includes('Files')
+    if (!isPageImage && !isFile) return
     event.preventDefault()
     event.stopPropagation()
+    if (isPageImage) autoScrollStage(event)
     event.dataTransfer.dropEffect = 'copy'
     setDropTargetPageId(pageId)
   }
 
-  const handlePageDrop = (event: DragEvent<HTMLElement>, pageId: number) => {
+  const handleFirstPageDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes('application/x-estudio-page-image')) return
+    event.preventDefault()
+    event.stopPropagation()
+    autoScrollStage(event)
+    event.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleFirstPageDrop = async (event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes('application/x-estudio-page-image')) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (canvas.hasImage) {
+      tools.setNotice(PAGE_ALREADY_HAS_IMAGE_NOTICE)
+      return
+    }
+
+    try {
+      const draggedImage = JSON.parse(
+        event.dataTransfer.getData('application/x-estudio-page-image'),
+      ) as Partial<DraggedPageImage>
+      if (
+        typeof draggedImage.imageUrl !== 'string' ||
+        typeof draggedImage.width !== 'number' ||
+        typeof draggedImage.height !== 'number' ||
+        (!draggedImage.imageUrl.startsWith('data:image/') && !draggedImage.imageUrl.startsWith('blob:'))
+      ) {
+        throw new Error('Invalid image data.')
+      }
+
+      const response = await fetch(draggedImage.imageUrl)
+      const imageBlob = await response.blob()
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(imageBlob.type)) {
+        throw new Error('Unsupported image type.')
+      }
+
+      const file = new File(
+        [imageBlob],
+        draggedImage.fileName ?? 'Page image',
+        { type: imageBlob.type },
+      )
+      await activatePage(null)
+      await tools.uploadFile(file)
+    } catch {
+      tools.setNotice('Could not place that image on Page 1.')
+    }
+  }
+
+  const handlePageDrop = async (event: DragEvent<HTMLElement>, pageId: number) => {
     event.preventDefault()
     event.stopPropagation()
     setDropTargetPageId(null)
 
+    const targetPage = addedPages.find((page) => page.id === pageId)
+    if (targetPage?.imageUrl) {
+      tools.setNotice(PAGE_ALREADY_HAS_IMAGE_NOTICE)
+      return
+    }
+
     const data = event.dataTransfer.getData('application/x-estudio-page-image')
-    if (!data) return
+    if (!data) {
+      const file = event.dataTransfer.files[0]
+      if (!file) return
+      uploadPageImage(pageId, file)
+      return
+    }
 
     try {
       const draggedImage = JSON.parse(data) as Partial<DraggedPageImage>
@@ -344,30 +491,44 @@ export function EditorWorkspace({
         typeof draggedImage.height !== 'number'
       ) return
 
-      const targetPage = addedPages.find((page) => page.id === pageId)
-      const previousUrl = targetPage?.imageUrl
-      if (previousUrl && previousUrl !== draggedImage.imageUrl) {
-        const sharedWithAnotherPage = addedPages.some(
-          (page) => page.id !== pageId && page.imageUrl === previousUrl,
-        )
-        if (!sharedWithAnotherPage && pageObjectUrlsRef.current.has(previousUrl)) {
-          URL.revokeObjectURL(previousUrl)
-          pageObjectUrlsRef.current.delete(previousUrl)
-        }
-      }
-
       setAddedPages((pages) => pages.map((page) => page.id === pageId
         ? {
             ...page,
             imageUrl: draggedImage.imageUrl,
             fileName: draggedImage.fileName ?? 'Dropped image',
-            width: draggedImage.width,
-            height: draggedImage.height,
+            width: targetPage?.width ?? canvas.dimensions.width,
+            height: targetPage?.height ?? canvas.dimensions.height,
           }
         : page))
+      await activatePage(pageId)
+      const response = await fetch(draggedImage.imageUrl)
+      const imageBlob = await response.blob()
+      await tools.uploadFile(new File(
+        [imageBlob],
+        draggedImage.fileName ?? 'Dropped image',
+        { type: imageBlob.type || 'image/png' },
+      ))
     } catch {
       tools.setNotice('Could not place that image on this page.')
     }
+  }
+
+  const handleWorkspaceDrop = (event: DragEvent<HTMLDivElement>) => {
+    const target = event.target
+    if (
+      editorMode.active === 'image' &&
+      canvas.hasImage &&
+      target instanceof Element &&
+      target.closest('.stage-page-main')
+    ) {
+      event.preventDefault()
+      event.stopPropagation()
+      tools.setDraggingFile(false)
+      tools.setNotice(PAGE_ALREADY_HAS_IMAGE_NOTICE)
+      return
+    }
+
+    handleDrop(event)
   }
 
   const deletePage = useCallback((pageId: number) => {
@@ -384,33 +545,23 @@ export function EditorWorkspace({
     pageUploadInputsRef.current.delete(pageId)
     pageElementsRef.current.delete(pageId)
     pageUploadVersionsRef.current.delete(pageId)
+    if (activePageId === pageId) {
+      const nextPageId = addedPages.find((item) => item.id !== pageId)?.id ?? null
+      void activatePage(nextPageId)
+    }
     if (addedPages.length === 1) {
       stageScrollRef.current?.style.removeProperty('--page-scroll-tail')
     }
     setAddedPages((pages) => pages.filter((item) => item.id !== pageId))
-  }, [addedPages, setAddedPages])
+  }, [activePageId, addedPages, activatePage, setAddedPages])
 
-  const getPageCanvasStyle = (page: typeof addedPages[number]) => {
-    if (!stageSize.width || !stageSize.height) return undefined
-
-    const pageWidth = page.width ?? DEFAULT_PAGE_WIDTH
-    const pageHeight = page.height ?? DEFAULT_PAGE_HEIGHT
-
-    const pageScale = Math.max(0.08, Math.min(
-      (stageSize.width - 96) / pageWidth,
-      (stageSize.height - 96) / pageHeight,
-      1.5,
-    ))
-
-    return {
-      width: pageWidth * pageScale,
-      height: pageHeight * pageScale,
-      aspectRatio: `${pageWidth} / ${pageHeight}`,
-    }
-  }
+  const getPageCanvasStyle = (page: AddedEditorPage) => ({
+    aspectRatio: `${page.width ?? canvas.dimensions.width} / ${page.height ?? canvas.dimensions.height}`,
+  })
   const firstPageActionOffset = canvasSurfaceSize.height > 0
     ? canvasSurfaceSize.height / 2 + 14
     : canvas.dimensions.height * canvas.fitScale * canvas.zoom / 2 + 14
+  const addedPageNumberOffset = 2
 
   useEffect(() => {
     registerPageActions({
@@ -429,15 +580,24 @@ export function EditorWorkspace({
         ref={setStageRef}
         onDragOver={handleDragOver}
         onDragLeave={() => tools.setDraggingFile(false)}
-        onDrop={handleDrop}
+        onDrop={handleWorkspaceDrop}
       >
-        <div className="stage-page-main" aria-label="Page 1">
+        <div
+          className={`stage-page-main${canvas.hasDeletedPageOneImage ? ' removed-page' : ''} ${activePageId === null ? 'active-page' : ''}`}
+          aria-label="Page 1"
+          aria-current={activePageId === null ? 'page' : undefined}
+          ref={firstPageRef}
+          onPointerDownCapture={(event) => {
+            if (event.target instanceof Element && event.target.closest('button, input')) return
+            void activatePage(null)
+          }}
+        >
           <div className="canvas-holder">
           <div
             className="canvas-surface"
             ref={canvasSurfaceRef}
-            draggable={canvas.hasImage && tools.active === 'upload'}
-            onDragStart={handleFirstPageImageDragStart}
+            onDragOver={handleFirstPageDragOver}
+            onDrop={(event) => void handleFirstPageDrop(event)}
             data-drawing-cursor={showDrawingCursor}
             style={{
               transform: `translate(-50%, -50%) scale(${canvas.fitScale * canvas.zoom})`,
@@ -556,7 +716,7 @@ export function EditorWorkspace({
             </div>
           )}
 
-          {draggingFile && (
+          {draggingFile && (editorMode.active === 'video' || !canvas.hasImage) && (
             <div className="drop-cover">
               <div>
                 <Upload size={24} />
@@ -586,13 +746,18 @@ export function EditorWorkspace({
             key={page.id}
           >
             <section
-              className={`added-page-canvas ${dropTargetPageId === page.id ? 'drop-target' : ''}`}
-              aria-label={`Page ${index + 2}`}
+              className={`added-page-canvas ${activePageId === page.id ? 'active-page' : ''} ${dropTargetPageId === page.id ? 'drop-target' : ''}`}
+              aria-label={`Page ${index + addedPageNumberOffset}`}
+              aria-current={activePageId === page.id ? 'page' : undefined}
               ref={(element) => {
                 if (element) pageElementsRef.current.set(page.id, element)
                 else pageElementsRef.current.delete(page.id)
               }}
               style={getPageCanvasStyle(page)}
+              onPointerDownCapture={(event) => {
+                if (event.target instanceof Element && event.target.closest('button, input')) return
+                void activatePage(page.id)
+              }}
               onDragOver={(event) => handlePageDragOver(event, page.id)}
               onDragLeave={(event) => {
                 event.stopPropagation()
@@ -602,36 +767,12 @@ export function EditorWorkspace({
               }}
               onDrop={(event) => handlePageDrop(event, page.id)}
             >
-              {page.imageUrl ? (
-                <>
-                  <img
-                    className="added-page-image"
-                    src={page.imageUrl}
-                    alt={page.fileName ?? `Page ${index + 2}`}
-                    draggable
-                    onDragStart={(event) => {
-                      event.dataTransfer.effectAllowed = 'copy'
-                      event.dataTransfer.setData('application/x-estudio-page-image', JSON.stringify({
-                        imageUrl: page.imageUrl,
-                        fileName: page.fileName,
-                        width: page.width,
-                        height: page.height,
-                      }))
-                    }}
-                  />
-                  <div className="page-image-tools" aria-label={`Page ${index + 2} image actions`}>
-                    <button type="button" className="page-icon-button" onClick={() => pageUploadInputsRef.current.get(page.id)?.click()} aria-label="Replace image" title="Replace image">
-                      <RotateCcw size={15} aria-hidden="true" />
-                    </button>
-                    <button type="button" className="page-icon-button" onClick={() => duplicatePage(page.id)} aria-label="Duplicate page" title="Duplicate page">
-                      <Copy size={15} aria-hidden="true" />
-                    </button>
-                    <button type="button" className="page-icon-button delete-page-icon" onClick={() => deletePage(page.id)} aria-label="Delete page" title="Delete page">
-                      <Trash2 size={15} aria-hidden="true" />
-                    </button>
-                  </div>
-                </>
-              ) : (
+              <canvas
+                className="added-page-fabric-canvas"
+                ref={(element) => setPageCanvasElement(page.id, element)}
+                aria-label={`Editable Page ${index + addedPageNumberOffset}`}
+              />
+              {!page.imageUrl && (
                 <div className="empty-prompt">
                   <div className="empty-art">
                     <div className="empty-sun" />
@@ -646,6 +787,21 @@ export function EditorWorkspace({
                   </button>
                   <span className="empty-format">PNG · JPG · WEBP</span>
                 </div>
+              )}
+              {page.imageUrl && (
+                <>
+                  <div className="page-image-tools" aria-label={`Page ${index + addedPageNumberOffset} image actions`}>
+                    <button type="button" className="page-icon-button" onClick={() => pageUploadInputsRef.current.get(page.id)?.click()} aria-label="Replace image" title="Replace image">
+                      <RotateCcw size={15} aria-hidden="true" />
+                    </button>
+                    <button type="button" className="page-icon-button" onClick={() => duplicatePage(page.id)} aria-label="Duplicate page" title="Duplicate page">
+                      <Copy size={15} aria-hidden="true" />
+                    </button>
+                    <button type="button" className="page-icon-button delete-page-icon" onClick={() => deletePage(page.id)} aria-label="Delete page" title="Delete page">
+                      <Trash2 size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                </>
               )}
               <input
                 ref={(element) => {

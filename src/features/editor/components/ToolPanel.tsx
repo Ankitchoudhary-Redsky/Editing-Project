@@ -18,12 +18,12 @@ import { ShadowPanel } from './panels/ShadowPanel'
 import { AnimatePanel } from './panels/AnimatePanel'
 
 export function ToolPanel() {
-  const { canvas, tools } = useEditor()
+  const { canvas, pages, tools } = useEditor()
   if (tools.active === 'music') return null
   const activeCategory = editorToolCategories.find((category) => category.tools.some(({ id }) => id === tools.active)) ?? editorToolCategories[0]
 
   return (
-    <aside className="tool-panel">
+    <aside className="tool-panel" inert={pages.switching && tools.active !== 'upload'} aria-busy={pages.switching}>
       <div className={`panel-heading ${activeCategory.tools.length > 1 ? 'has-subtools' : ''}`}><div><h3 className="panel-kicker">{activeCategory.label}</h3></div></div>
       {activeCategory.tools.length > 1 && (
         <nav className="panel-subtools" aria-label={`${activeCategory.label} tools`}>

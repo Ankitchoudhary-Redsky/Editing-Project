@@ -1,6 +1,13 @@
 const DATABASE_NAME = 'estudio-projects'
 const STORE_NAME = 'drafts'
 const DRAFT_KEY = 'current-project'
+let writeQueue: Promise<void> = Promise.resolve()
+
+function enqueueWrite<T>(write: () => Promise<T>): Promise<T> {
+  const result = writeQueue.then(write)
+  writeQueue = result.then(() => undefined, () => undefined)
+  return result
+}
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -27,44 +34,48 @@ export async function loadProjectDraft<T>(): Promise<T | undefined> {
   })
 }
 
-export async function saveProjectDraft<T>(draft: T): Promise<void> {
-  const database = await openDatabase()
+export function saveProjectDraft<T>(draft: T): Promise<void> {
+  return enqueueWrite(async () => {
+    const database = await openDatabase()
 
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, 'readwrite')
-    transaction.objectStore(STORE_NAME).put(draft, DRAFT_KEY)
-    transaction.oncomplete = () => {
-      database.close()
-      resolve()
-    }
-    transaction.onerror = () => {
-      database.close()
-      reject(transaction.error)
-    }
-    transaction.onabort = () => {
-      database.close()
-      reject(transaction.error)
-    }
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(STORE_NAME, 'readwrite')
+      transaction.objectStore(STORE_NAME).put(draft, DRAFT_KEY)
+      transaction.oncomplete = () => {
+        database.close()
+        resolve()
+      }
+      transaction.onerror = () => {
+        database.close()
+        reject(transaction.error)
+      }
+      transaction.onabort = () => {
+        database.close()
+        reject(transaction.error)
+      }
+    })
   })
 }
 
-export async function deleteProjectDraft(): Promise<void> {
-  const database = await openDatabase()
+export function deleteProjectDraft(): Promise<void> {
+  return enqueueWrite(async () => {
+    const database = await openDatabase()
 
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, 'readwrite')
-    transaction.objectStore(STORE_NAME).delete(DRAFT_KEY)
-    transaction.oncomplete = () => {
-      database.close()
-      resolve()
-    }
-    transaction.onerror = () => {
-      database.close()
-      reject(transaction.error)
-    }
-    transaction.onabort = () => {
-      database.close()
-      reject(transaction.error)
-    }
+    return new Promise((resolve, reject) => {
+      const transaction = database.transaction(STORE_NAME, 'readwrite')
+      transaction.objectStore(STORE_NAME).delete(DRAFT_KEY)
+      transaction.oncomplete = () => {
+        database.close()
+        resolve()
+      }
+      transaction.onerror = () => {
+        database.close()
+        reject(transaction.error)
+      }
+      transaction.onabort = () => {
+        database.close()
+        reject(transaction.error)
+      }
+    })
   })
 }

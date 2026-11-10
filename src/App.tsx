@@ -23,8 +23,8 @@ import { EditorHeader } from './features/editor/components/EditorHeader'
 import { ToolPanel } from './features/editor/components/ToolPanel'
 import { ToolRail } from './features/editor/components/ToolRail'
 import { EditorWorkspace } from './features/editor/components/EditorWorkspace'
-import { BACKGROUND_IMAGE_NAME,
-  IMAGE_SOURCE_TOKEN, resolveImageSourceToken,
+import { BACKGROUND_IMAGE_NAME, DEFAULT_PAGE_HEIGHT, DEFAULT_PAGE_WIDTH,
+  IMAGE_SOURCE_TOKEN, getImageSourceTokens, resolveImageSourceToken, restoreImageSourceTokens,
   serializeCanvas, shapeNames,
 } from './features/editor/model/constants'
 import { applyImageAdjustments } from './features/editor/operations/imageAdjustments'
@@ -53,6 +53,7 @@ import { attachDeleteControl } from './features/editor/operations/objectDeleteCo
 import { disposeThreeDRotationRuntime } from './features/editor/operations/threeDShapes'
 
 type EditorSnapshot = {
+  pageId?: number | null
   width: number
   height: number
   scene: Parameters<Canvas['loadFromJSON']>[0]
@@ -62,6 +63,72 @@ type EditorSnapshot = {
     backgroundRemoved?: boolean
     backgroundColor?: string
   }
+  settings?: PageEditorSettings
+}
+
+type PageEditorSettings = {
+  zoom: number
+  brightness: number
+  contrast: number
+  saturation: number
+  drawingColor: string
+  brushSize: number
+  activeDrawingMode: DrawingMode
+  cropRatio: string
+  cropRotation: number
+  resizeWidth: number
+  resizeHeight: number
+  keepRatio: boolean
+  scaleArtwork: boolean
+  textValue: string
+  fontFamily: string
+  fontSize: number
+  textColor: string
+  textBackground: string
+  textOpacity: number
+  textOutline: string
+  textOutlineWidth: number
+  textShadow: string
+  shapeKind: ShapeKind
+  lineStyle: LineStyle
+  fillColor: string
+  transparentFill: boolean
+  strokeColor: string
+  strokeWidth: number
+  shapeOpacity: number
+  cropOriginalSnapshot?: string
+}
+
+const defaultPageEditorSettings: PageEditorSettings = {
+  zoom: 1,
+  brightness: 0,
+  contrast: 0,
+  saturation: 0,
+  drawingColor: '#222222',
+  brushSize: 12,
+  activeDrawingMode: 'pencil',
+  cropRatio: 'Free',
+  cropRotation: 0,
+  resizeWidth: 1200,
+  resizeHeight: 800,
+  keepRatio: true,
+  scaleArtwork: true,
+  textValue: 'Your text here',
+  fontFamily: 'Georgia',
+  fontSize: 72,
+  textColor: '#273a32',
+  textBackground: '#ffffff',
+  textOpacity: 100,
+  textOutline: '#ffffff',
+  textOutlineWidth: 0,
+  textShadow: 'none',
+  shapeKind: 'rect',
+  lineStyle: 'straight',
+  fillColor: '#b9e4d1',
+  transparentFill: false,
+  strokeColor: '#27332f',
+  strokeWidth: 2,
+  shapeOpacity: 90,
 }
 
 type CanvasTable = {
@@ -253,6 +320,12 @@ function getImageBrushScale(image: FabricImage) {
 }
 
 type PersistedEditorDraft = EditorSnapshot & {
+  addedPages?: AddedEditorPage[]
+  pageOneSnapshot?: string
+  pageOnePreview?: string
+  activePageId?: number | null
+  scenePageId?: number | null
+  imageSources?: Record<string, string>
   projectName: string
   activeTool: EditorTool
   zoom: number
@@ -298,9 +371,21 @@ function App() {
   const uploadInputRef = useRef<HTMLInputElement>(null)
   const addedPageActionsRef = useRef<AddedPageActions | null>(null)
 
-  const canvasRef = useRef<Canvas | null>(null)
+  const activeCanvasRef = useRef<Canvas | null>(null)
+  const pageCanvasesRef = useRef(new Map<number | null, Canvas>())
+  const pageCanvasElementsRef = useRef(new Map<number, HTMLCanvasElement>())
+  const pageCanvasCleanupRef = useRef(new Map<number, () => void>())
+  const initializedPageCanvasesRef = useRef(new Set<Canvas>())
+  const pageEditorStateRef = useRef(new Map<number | null, Pick<EditorSnapshot, 'editor' | 'settings'>>())
   const historyRef = useRef<string[]>([])
   const historyIndexRef = useRef(-1)
+  const pageHistoryRef = useRef(new Map<number | null, { history: string[]; index: number }>())
+  const activePageIdRef = useRef<number | null>(null)
+  const loadedPageIdRef = useRef<number | null>(null)
+  const pageSwitchInProgressRef = useRef(false)
+  const pendingPageSwitchRef = useRef<number | null | undefined>(undefined)
+  const pendingInitialPageIdRef = useRef<number | null | undefined>(undefined)
+  const switchActivePageRef = useRef<(pageId: number | null) => Promise<void>>(async () => {})
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const suppressHistoryRef = useRef(false)
   const cropObjectRef = useRef<Rect | null>(null)
@@ -353,6 +438,10 @@ function App() {
     [],
   )
 
+  const setPageCanvasElement = useCallback((pageId: number, element: HTMLCanvasElement | null) => {
+    if (element) pageCanvasElementsRef.current.set(pageId, element)
+  }, [])
+
   const setStageElement = useCallback(
     (element: HTMLDivElement | null) => {
       stageElementRef.current = element
@@ -384,6 +473,7 @@ function App() {
   const [projectName, setProjectName] = useState('Untitled design')
   const [isRenaming, setIsRenaming] = useState(false)
   const [hasDocument, setHasDocument] = useState(false)
+  const [hasDeletedPageOneImage, setHasDeletedPageOneImage] = useState(false)
   const [selectedObject, setSelectedObject] = useState<FabricObject | null>(null)
   const [objects, setObjects] = useState<FabricObject[]>([])
   const [historyVersion, setHistoryVersion] = useState(0)
@@ -393,6 +483,16 @@ function App() {
   const [selectedIsImage, setSelectedIsImage] = useState(false)
   const [imageThumbnail, setImageThumbnail] = useState('')
   const [addedPages, setAddedPages] = useState<AddedEditorPage[]>([])
+  const [activePageId, setActivePageId] = useState<number | null>(null)
+  const [pageSwitching, setPageSwitching] = useState(false)
+  const [pageOneSnapshot, setPageOneSnapshot] = useState<string | undefined>()
+  const pageOneSnapshotRef = useRef<string | undefined>(undefined)
+  const [pageOnePreview, setPageOnePreview] = useState('')
+  useEffect(() => {
+    if (!hasImage && addedPages.length === 0 && hasDeletedPageOneImage) {
+      setHasDeletedPageOneImage(false)
+    }
+  }, [addedPages.length, hasDeletedPageOneImage, hasImage])
   const [zoom, setZoom] = useState(1)
   const [fitScale, setFitScale] = useState(1)
   const [draggingFile, setDraggingFile] = useState(false)
@@ -479,10 +579,46 @@ function App() {
   const [exportBusy, setExportBusy] = useState(false)
   const [shareBusy, setShareBusy] = useState(false)
 
+  const pageEditorSettingsRef = useRef<PageEditorSettings>(defaultPageEditorSettings)
+
+  useEffect(() => {
+    pageEditorSettingsRef.current = {
+      zoom,
+      brightness,
+      contrast,
+      saturation,
+      drawingColor,
+      brushSize,
+      activeDrawingMode,
+      cropRatio,
+      cropRotation,
+      resizeWidth,
+      resizeHeight,
+      keepRatio,
+      scaleArtwork,
+      textValue,
+      fontFamily,
+      fontSize,
+      textColor,
+      textBackground,
+      textOpacity,
+      textOutline,
+      textOutlineWidth,
+      textShadow,
+      shapeKind,
+      lineStyle,
+      fillColor,
+      transparentFill,
+      strokeColor,
+      strokeWidth,
+      shapeOpacity,
+    }
+  }, [activeDrawingMode, brightness, brushSize, contrast, cropRatio, cropRotation, drawingColor, fillColor, fontFamily, fontSize, keepRatio, lineStyle, resizeHeight, resizeWidth, saturation, scaleArtwork, shapeKind, shapeOpacity, strokeColor, strokeWidth, textBackground, textColor, textOpacity, textOutline, textOutlineWidth, textShadow, textValue, transparentFill, zoom])
+
   
 
   const syncObjects = useCallback(() => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
 
     const canvasObjects = canvas.getObjects()
@@ -513,16 +649,41 @@ function App() {
     setSelectedIsImage(active === imageObjectRef.current)
   }, [])
 
+  const clearTransientDrawingState = useCallback((canvas: Canvas) => {
+    if (drawingPreviewFrameRef.current !== null) {
+      cancelAnimationFrame(drawingPreviewFrameRef.current)
+      drawingPreviewFrameRef.current = null
+    }
+    const previews = canvas.getObjects().filter(
+      (object) => object.get('name') === '__pixel_studio_drawing_preview__',
+    )
+    if (previews.length > 0) {
+      const wasSuppressingHistory = suppressHistoryRef.current
+      suppressHistoryRef.current = true
+      canvas.remove(...previews)
+      suppressHistoryRef.current = wasSuppressingHistory
+    }
+    drawingPreviewCanvasRef.current = null
+    drawingPreviewImageRef.current = null
+    gesturePointsRef.current = []
+    isGestureDrawingRef.current = false
+  }, [])
+
   const serializeEditorSnapshot = useCallback((canvas: Canvas) => {
     const base = JSON.parse(serializeCanvas(canvas))
 
     return JSON.stringify({
       ...base,
+      pageId: loadedPageIdRef.current,
       editor: {
         filterId: selectedFilterRef.current,
         filterIntensity: filterIntensityRef.current,
         backgroundRemoved: backgroundRemovedRef.current,
         backgroundColor: backgroundColorRef.current,
+      },
+      settings: {
+        ...pageEditorSettingsRef.current,
+        cropOriginalSnapshot: cropOriginalSnapshotRef.current ?? undefined,
       },
     })
   }, [])
@@ -534,7 +695,7 @@ function App() {
 
   const recordHistory = useCallback(
     (immediate = false) => {
-      const canvas = canvasRef.current
+      const canvas = activeCanvasRef.current
       if (!canvas || suppressHistoryRef.current) return
 
       if (historyTimerRef.current) {
@@ -544,6 +705,9 @@ function App() {
       const saveSnapshot = () => {
         historyTimerRef.current = null
         const current = serializeEditorSnapshot(canvas)
+        console.log('Active Page ID:', activePageIdRef.current)
+        console.log('Active Canvas:', canvas)
+        console.log('Editing Target Page:', loadedPageIdRef.current)
         const history = historyRef.current.slice(
           0,
           historyIndexRef.current + 1,
@@ -559,6 +723,10 @@ function App() {
 
         historyRef.current = history
         historyIndexRef.current = history.length - 1
+        pageHistoryRef.current.set(activePageIdRef.current, {
+          history: [...history],
+          index: historyIndexRef.current,
+        })
 
         syncHistoryControls()
         setHistoryVersion((value) => value + 1)
@@ -574,6 +742,108 @@ function App() {
     [serializeEditorSnapshot, syncHistoryControls, syncObjects],
   )
 
+  const attachPageCanvasListeners = useCallback((canvas: Canvas) => {
+    const changed = () => {
+      if (activeCanvasRef.current !== canvas) return
+      syncObjects()
+      recordHistory()
+    }
+    const disposeRemovedThreeDObject = (event: { target?: FabricObject }) => {
+      if (event.target instanceof FabricImage) disposeThreeDRotationRuntime(canvas, event.target)
+    }
+    const syncText = (event: { target?: FabricObject }) => {
+      if (event.target instanceof IText) syncParentShapeForText(canvas, event.target)
+      changed()
+    }
+    const constrainShape = (event: { target?: FabricObject }) => {
+      const target = event.target
+      if (activeCanvasRef.current !== canvas || !target || !isShapeObject(target)) return
+      constrainShapeToImage(canvas, imageObjectRef.current, target)
+      syncTextWithShape(canvas, target)
+      syncImageWithShape(canvas, target)
+    }
+    const onPathCreated = (event: { path: FabricObject }) => {
+      if (activeCanvasRef.current !== canvas || activeToolRef.current !== 'draw-remove') return
+      if (activeDrawingModeRef.current === 'lasso') {
+        event.path.set('name', '__pixel_studio_lasso_preview__')
+        lassoPreviewObjectsRef.current.push(event.path)
+      }
+    }
+
+    canvas.on('selection:created', changed)
+    canvas.on('selection:updated', changed)
+    canvas.on('selection:cleared', changed)
+    canvas.on('object:added', changed)
+    canvas.on('object:modified', changed)
+    canvas.on('object:removed', changed)
+    canvas.on('object:removed', disposeRemovedThreeDObject)
+    canvas.on('text:changed', syncText)
+    canvas.on('object:moving', constrainShape)
+    canvas.on('object:scaling', constrainShape)
+    canvas.on('object:rotating', constrainShape)
+    canvas.on('path:created', onPathCreated)
+
+    return () => {
+      canvas.off('selection:created', changed)
+      canvas.off('selection:updated', changed)
+      canvas.off('selection:cleared', changed)
+      canvas.off('object:added', changed)
+      canvas.off('object:modified', changed)
+      canvas.off('object:removed', changed)
+      canvas.off('object:removed', disposeRemovedThreeDObject)
+      canvas.off('text:changed', syncText)
+      canvas.off('object:moving', constrainShape)
+      canvas.off('object:scaling', constrainShape)
+      canvas.off('object:rotating', constrainShape)
+      canvas.off('path:created', onPathCreated)
+    }
+  }, [recordHistory, syncObjects])
+
+  const ensurePageCanvas = useCallback((pageId: number | null) => {
+    const existing = pageCanvasesRef.current.get(pageId)
+    if (existing) return existing
+    if (pageId === null) return null
+    const element = pageCanvasElementsRef.current.get(pageId)
+    if (!element) return null
+    const page = addedPages.find((item) => item.id === pageId)
+    const canvas = new Canvas(element, {
+      width: page?.width ?? DEFAULT_PAGE_WIDTH,
+      height: page?.height ?? DEFAULT_PAGE_HEIGHT,
+      preserveObjectStacking: true,
+      selection: true,
+      backgroundColor: 'rgba(0,0,0,0)',
+    })
+    pageCanvasesRef.current.set(pageId, canvas)
+    pageCanvasCleanupRef.current.set(pageId, attachPageCanvasListeners(canvas))
+    return canvas
+  }, [addedPages, attachPageCanvasListeners])
+
+  useEffect(() => {
+    addedPages.forEach((page) => ensurePageCanvas(page.id))
+    const activePageIds = new Set(addedPages.map((page) => page.id))
+    for (const [pageId, canvas] of pageCanvasesRef.current) {
+      if (pageId === null || activePageIds.has(pageId)) continue
+      pageCanvasCleanupRef.current.get(pageId)?.()
+      pageCanvasCleanupRef.current.delete(pageId)
+      pageCanvasElementsRef.current.delete(pageId)
+      initializedPageCanvasesRef.current.delete(canvas)
+      pageCanvasesRef.current.delete(pageId)
+      void canvas.dispose()
+    }
+  }, [addedPages, ensurePageCanvas])
+
+  useEffect(() => () => {
+    for (const [pageId, canvas] of pageCanvasesRef.current) {
+      if (pageId === null) continue
+      pageCanvasCleanupRef.current.get(pageId)?.()
+      void canvas.dispose()
+    }
+    pageCanvasesRef.current.clear()
+    pageCanvasCleanupRef.current.clear()
+    pageCanvasElementsRef.current.clear()
+    initializedPageCanvasesRef.current.clear()
+  }, [])
+
   useEffect(() => {
     activeToolRef.current = activeTool
     activeDrawingModeRef.current = activeDrawingMode
@@ -582,7 +852,7 @@ function App() {
   }, [activeTool, activeDrawingMode, drawingColor, brushSize])
 
   useEffect(() => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
     const isDrawingMode = activeTool === 'draw-remove' && hasImage && activeDrawingMode === 'lasso'
     if (activeTool === 'draw-remove') {
@@ -605,7 +875,7 @@ function App() {
       canvas.selection = true
       canvas.skipTargetFind = false
     }
-  }, [activeTool, activeDrawingMode, drawingColor, brushSize, hasDocument, hasImage])
+  }, [activeTool, activeDrawingMode, drawingColor, brushSize, fabricCanvas, hasDocument, hasImage])
 
   useEffect(() => {
     const element = canvasElementRef.current
@@ -619,7 +889,8 @@ function App() {
       backgroundColor: 'rgba(0,0,0,0)',
     })
 
-    canvasRef.current = canvas
+    activeCanvasRef.current = canvas
+    pageCanvasesRef.current.set(null, canvas)
     setFabricCanvas(canvas)
 
     historyRef.current = [serializeEditorSnapshot(canvas)]
@@ -632,6 +903,7 @@ function App() {
         if (disposed || !draft || userEditedBeforeDraftLoadRef.current) return
 
         suppressHistoryRef.current = true
+        restoreImageSourceTokens(draft.imageSources ?? {})
         canvas.setDimensions({ width: draft.width, height: draft.height })
         await canvas.loadFromJSON(draft.scene)
         if (disposed) return
@@ -639,14 +911,39 @@ function App() {
         let mainImage = canvas.getObjects().find(
           (item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME,
         )
-        if (!(mainImage instanceof FabricImage)) {
+        if (!(mainImage instanceof FabricImage) && canvas.getObjects().length === 0) {
           canvas.clear()
           canvas.setDimensions({ width: 1200, height: 800 })
           canvas.backgroundColor = 'rgba(0,0,0,0)'
           mainImage = undefined
-          void deleteProjectDraft().catch(() => {
-            setNotice('Saved project data could not be cleared from browser storage.')
+        }
+
+        const isLegacyImageOnlyDocument = mainImage instanceof FabricImage &&
+          canvas.getObjects().length === 1 &&
+          (draft.width !== DEFAULT_PAGE_WIDTH || draft.height !== DEFAULT_PAGE_HEIGHT) &&
+          mainImage.width === draft.width &&
+          mainImage.height === draft.height &&
+          (mainImage.left ?? 0) === 0 &&
+          (mainImage.top ?? 0) === 0 &&
+          mainImage.scaleX === 1 &&
+          mainImage.scaleY === 1 &&
+          (mainImage.cropX ?? 0) === 0 &&
+          (mainImage.cropY ?? 0) === 0
+        if (isLegacyImageOnlyDocument && mainImage instanceof FabricImage) {
+          const imageWidth = mainImage.width ?? draft.width
+          const imageHeight = mainImage.height ?? draft.height
+          const imageScale = Math.min(
+            DEFAULT_PAGE_WIDTH / imageWidth,
+            DEFAULT_PAGE_HEIGHT / imageHeight,
+          )
+          mainImage.set({
+            left: (DEFAULT_PAGE_WIDTH - imageWidth * imageScale) / 2,
+            top: (DEFAULT_PAGE_HEIGHT - imageHeight * imageScale) / 2,
+            scaleX: imageScale,
+            scaleY: imageScale,
           })
+          mainImage.setCoords()
+          canvas.setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT })
         }
 
         restartAnimatedStickers(canvas)
@@ -655,13 +952,64 @@ function App() {
         imageObjectRef.current = mainImage instanceof FabricImage ? mainImage : null
         imageSourceRef.current = imageObjectRef.current?.getSrc() ?? ''
         setDimensions(imageObjectRef.current
-          ? { width: draft.width, height: draft.height }
+          ? isLegacyImageOnlyDocument
+            ? { width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT }
+            : { width: draft.width, height: draft.height }
           : { width: 1200, height: 800 })
         setHasDocument(Boolean(imageObjectRef.current))
         setImageThumbnail(imageObjectRef.current
           ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
           : '')
         setProjectName(draft.projectName)
+        const restoredPages = draft.addedPages ?? []
+        setAddedPages(restoredPages)
+        pageOneSnapshotRef.current = draft.pageOneSnapshot
+        setPageOneSnapshot(draft.pageOneSnapshot)
+        const persistedActivePageId = draft.activePageId ?? null
+        const persistedActivePage = restoredPages.find((page) => page.id === persistedActivePageId)
+        const persistedSceneMatchesPage = draft.scenePageId === persistedActivePageId
+        const persistedPageSnapshot = persistedActivePage?.snapshot
+          ? JSON.parse(persistedActivePage.snapshot) as EditorSnapshot
+          : undefined
+        const persistedPageSnapshotMatches = persistedPageSnapshot?.pageId === persistedActivePageId
+        const restoredActivePageId = persistedActivePageId !== null &&
+          (!persistedSceneMatchesPage || !persistedPageSnapshotMatches)
+          ? null
+          : persistedActivePageId
+        if (restoredActivePageId !== null) {
+          if (draft.pageOneSnapshot) {
+            const pageOneState = JSON.parse(draft.pageOneSnapshot) as EditorSnapshot
+            canvas.setDimensions({ width: pageOneState.width, height: pageOneState.height })
+            await canvas.loadFromJSON(restoreScene(pageOneState))
+            pageEditorStateRef.current.set(null, { editor: pageOneState.editor, settings: pageOneState.settings })
+          } else {
+            canvas.clear()
+            canvas.setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT })
+            canvas.backgroundColor = 'rgba(0,0,0,0)'
+            pageEditorStateRef.current.set(null, {
+              editor: { filterId: 'original', filterIntensity: 100, backgroundRemoved: false, backgroundColor: '#ffffff' },
+              settings: { ...defaultPageEditorSettings, resizeWidth: DEFAULT_PAGE_WIDTH, resizeHeight: DEFAULT_PAGE_HEIGHT },
+            })
+          }
+          const pageOneImage = canvas.getObjects().find(
+            (object) => object instanceof FabricImage && object.get('name') !== BACKGROUND_IMAGE_NAME,
+          )
+          imageObjectRef.current = pageOneImage instanceof FabricImage ? pageOneImage : null
+          imageSourceRef.current = imageObjectRef.current?.getSrc() ?? ''
+          setDimensions({ width: canvas.getWidth(), height: canvas.getHeight() })
+          setHasDocument(canvas.getObjects().length > 0)
+          setImageThumbnail(imageObjectRef.current ? canvas.toDataURL({ format: 'png', multiplier: 0.12 }) : '')
+          activePageIdRef.current = null
+          loadedPageIdRef.current = null
+          setActivePageId(null)
+          pendingInitialPageIdRef.current = restoredActivePageId
+          setPageOnePreview(draft.pageOnePreview ?? canvas.toDataURL({ format: 'png', multiplier: 0.3 }))
+        } else {
+          activePageIdRef.current = null
+          loadedPageIdRef.current = null
+          setActivePageId(null)
+          setPageOnePreview(draft.pageOnePreview ?? canvas.toDataURL({ format: 'png', multiplier: 0.3 }))
+        }
         setActiveTool(String(draft.activeTool) === 'shadow' ? 'shadows' : draft.activeTool === 'select' ? 'crop' : draft.activeTool)
         setZoom(draft.zoom)
         setSelectedFilter(draft.selectedFilter)
@@ -699,6 +1047,41 @@ function App() {
         setStrokeColor(draft.strokeColor)
         setStrokeWidth(draft.strokeWidth)
         setShapeOpacity(draft.shapeOpacity)
+        pageEditorSettingsRef.current = draft.settings ?? {
+          ...defaultPageEditorSettings,
+          zoom: draft.zoom,
+          brightness: draft.brightness,
+          contrast: draft.contrast,
+          saturation: draft.saturation,
+          drawingColor: draft.drawingColor,
+          brushSize: draft.brushSize,
+          activeDrawingMode: draft.activeDrawingMode,
+          resizeWidth: draft.resizeWidth,
+          resizeHeight: draft.resizeHeight,
+          keepRatio: draft.keepRatio,
+          scaleArtwork: draft.scaleArtwork,
+          textValue: draft.textValue,
+          fontFamily: draft.fontFamily,
+          fontSize: draft.fontSize,
+          textColor: draft.textColor,
+          textBackground: draft.textBackground,
+          textOpacity: draft.textOpacity,
+          textOutline: draft.textOutline,
+          textOutlineWidth: draft.textOutlineWidth,
+          textShadow: draft.textShadow,
+          shapeKind: draft.shapeKind,
+          lineStyle: draft.lineStyle ?? 'straight',
+          fillColor: draft.fillColor,
+          transparentFill: draft.transparentFill,
+          strokeColor: draft.strokeColor,
+          strokeWidth: draft.strokeWidth,
+          shapeOpacity: draft.shapeOpacity,
+        }
+        if (persistedActivePageId !== null && restoredActivePageId === null && !draft.pageOneSnapshot) {
+          const pageOneSnapshot = serializeEditorSnapshot(canvas)
+          pageOneSnapshotRef.current = pageOneSnapshot
+          setPageOneSnapshot(pageOneSnapshot)
+        }
         setExportFormat(draft.exportFormat)
         setExportScale(draft.exportScale)
         setExportWatermark(draft.exportWatermark)
@@ -716,6 +1099,10 @@ function App() {
         syncObjects()
         historyRef.current = [serializeEditorSnapshot(canvas)]
         historyIndexRef.current = 0
+        pageHistoryRef.current.set(activePageIdRef.current, {
+          history: historyRef.current,
+          index: historyIndexRef.current,
+        })
         syncHistoryControls()
       })
       .catch(() => {
@@ -730,6 +1117,7 @@ function App() {
       })
 
     const changed = () => {
+      if (activeCanvasRef.current !== canvas) return
       if (!suppressHistoryRef.current) userEditedBeforeDraftLoadRef.current = true
       syncObjects()
       recordHistory()
@@ -746,16 +1134,18 @@ function App() {
     }
     canvas.on('object:removed', disposeRemovedThreeDObject)
     canvas.on('text:changed', (event) => {
+      if (activeCanvasRef.current !== canvas) return
       if (event.target instanceof IText) syncParentShapeForText(canvas, event.target)
       changed()
     })
     canvas.on('text:changed', (event) => {
+      if (activeCanvasRef.current !== canvas) return
       if (event.target instanceof IText) syncParentShapeForText(canvas, event.target)
       changed()
     })
     const constrainShape = (event: { target?: FabricObject }) => {
       const target = event.target
-      if (target && isShapeObject(target)) {
+      if (activeCanvasRef.current === canvas && target && isShapeObject(target)) {
         constrainShapeToImage(canvas, imageObjectRef.current, target)
         syncTextWithShape(canvas, target)
         syncImageWithShape(canvas, target)
@@ -790,6 +1180,7 @@ function App() {
     const resizeObserver = new ResizeObserver(fitCanvas)
 
     canvas.renderAll()
+    initializedPageCanvasesRef.current.add(canvas)
 
     if (stageElementRef.current) {
       resizeObserver.observe(stageElementRef.current)
@@ -809,8 +1200,8 @@ function App() {
 
       void canvas.dispose()
 
-      if (canvasRef.current === canvas) {
-        canvasRef.current = null
+      if (activeCanvasRef.current === canvas) {
+        activeCanvasRef.current = null
         setFabricCanvas(null)
       }
     }
@@ -974,14 +1365,38 @@ function App() {
   }, [draftReady, fabricCanvas, historyVersion, textAnimationVersion])
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!draftReady || !canvas || !hasDocument) return
+    const canvas = activeCanvasRef.current
+    if (!draftReady || !canvas || (!hasDocument && addedPages.length === 0)) return
 
     const timer = window.setTimeout(() => {
+      const activePageSnapshot = activePageId === null
+        ? undefined
+        : serializeEditorSnapshot(canvas)
+      const activePagePreview = activePageId === null
+        ? undefined
+        : canvas.toDataURL({ format: 'png', multiplier: 0.3 })
+      const pagesWithActiveSnapshot = activePageId === null
+        ? addedPages
+        : addedPages.map((page) => page.id === activePageId
+          ? { ...page, snapshot: activePageSnapshot, imageUrl: activePagePreview }
+          : page)
       const draft: PersistedEditorDraft = {
         width: canvas.getWidth(),
         height: canvas.getHeight(),
         scene: canvas.toObject(['name', 'textAnimation', 'shapeId', 'textParentId', 'textParentWidth', 'textParentHeight', 'textParentFontSize', 'imageParentId']),
+        editor: {
+          filterId: selectedFilter,
+          filterIntensity,
+          backgroundRemoved,
+          backgroundColor,
+        },
+        settings: pageEditorSettingsRef.current,
+        addedPages: pagesWithActiveSnapshot,
+        pageOneSnapshot,
+        pageOnePreview,
+        activePageId,
+        scenePageId: activePageId,
+        imageSources: getImageSourceTokens(),
         projectName,
         activeTool,
         zoom,
@@ -1034,6 +1449,8 @@ function App() {
   }, [
     activeDrawingMode,
     activeTool,
+    activePageId,
+    addedPages,
     backgroundColor,
     backgroundRemoved,
     brightness,
@@ -1052,6 +1469,9 @@ function App() {
     historyVersion,
     keepRatio,
     projectName,
+    pageOneSnapshot,
+    pageOnePreview,
+    serializeEditorSnapshot,
     resizeHeight,
     resizeWidth,
     scaleArtwork,
@@ -1075,7 +1495,7 @@ function App() {
   ])
 
   useEffect(() => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
     const drawing = activeTool === 'shapes'
     const drawingOnCanvas = drawing || activeTool === 'draw-remove'
@@ -1159,7 +1579,7 @@ function App() {
       canvas.skipTargetFind = false
       canvas.selection = true
     }
-  }, [activeTool, fillColor, hasDocument, lineStyle, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, syncObjects, transparentFill])
+  }, [activeTool, fabricCanvas, fillColor, hasDocument, lineStyle, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, syncObjects, transparentFill])
 
   useEffect(() => {
     const timer = setTimeout(() => setNotice(''), 3200)
@@ -1167,7 +1587,7 @@ function App() {
   }, [notice])
 
   const resizeDisplay = useCallback(() => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const stage = stageElementRef.current
 
     if (!canvas || !stage) return
@@ -1190,7 +1610,7 @@ function App() {
     resizeDisplay()
   }
 
-  const restoreScene = (snapshot: EditorSnapshot) => {
+  function restoreScene(snapshot: EditorSnapshot) {
     const scene = snapshot.scene as { objects?: Array<{ src?: string }> }
 
     scene.objects?.forEach((object) => {
@@ -1202,6 +1622,57 @@ function App() {
 
     return scene
   }
+
+  const restoreEditorSettings = useCallback((snapshot: Pick<EditorSnapshot, 'editor' | 'settings'>) => {
+    const restoredBackgroundRemoved = snapshot.editor?.backgroundRemoved ?? false
+    const restoredBackgroundColor = snapshot.editor?.backgroundColor ?? '#ffffff'
+    const restoredFilter = snapshot.editor?.filterId ?? 'original'
+    const restoredIntensity = snapshot.editor?.filterIntensity ?? 100
+
+    backgroundRemovedRef.current = restoredBackgroundRemoved
+    backgroundColorRef.current = restoredBackgroundColor
+    selectedFilterRef.current = restoredFilter
+    filterIntensityRef.current = restoredIntensity
+    setBackgroundRemoved(restoredBackgroundRemoved)
+    setBackgroundColorState(restoredBackgroundColor)
+    setSelectedFilter(restoredFilter)
+    setFilterIntensity(restoredIntensity)
+
+    const settings = snapshot.settings
+    if (!settings) return
+    pageEditorSettingsRef.current = settings
+
+    setZoom(settings.zoom)
+    setBrightness(settings.brightness)
+    setContrast(settings.contrast)
+    setSaturation(settings.saturation)
+    setDrawingColor(settings.drawingColor)
+    setBrushSize(settings.brushSize)
+    setActiveDrawingMode(settings.activeDrawingMode)
+    setCropRatio(settings.cropRatio)
+    setCropRotation(settings.cropRotation)
+    setResizeWidth(settings.resizeWidth)
+    setResizeHeight(settings.resizeHeight)
+    setKeepRatio(settings.keepRatio)
+    setScaleArtwork(settings.scaleArtwork)
+    setTextValue(settings.textValue)
+    setFontFamily(settings.fontFamily)
+    setFontSize(settings.fontSize)
+    setTextColor(settings.textColor)
+    setTextBackground(settings.textBackground)
+    setTextOpacity(settings.textOpacity)
+    setTextOutline(settings.textOutline)
+    setTextOutlineWidth(settings.textOutlineWidth)
+    setTextShadow(settings.textShadow)
+    setShapeKind(settings.shapeKind)
+    setLineStyle(settings.lineStyle)
+    setFillColor(settings.fillColor)
+    setTransparentFill(settings.transparentFill)
+    setStrokeColor(settings.strokeColor)
+    setStrokeWidth(settings.strokeWidth)
+    setShapeOpacity(settings.shapeOpacity)
+    cropOriginalSnapshotRef.current = settings.cropOriginalSnapshot ?? null
+  }, [])
 
   const restoreTableState = useCallback((canvas: Canvas) => {
     const cells = canvas.getObjects().flatMap((object) => {
@@ -1289,7 +1760,7 @@ function App() {
   }, [tableSelectedColumn, tableSelectedRow, updateTableList])
 
   const deleteImage = () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
 
     const image = imageObjectRef.current
@@ -1306,6 +1777,14 @@ function App() {
     imageObjectRef.current = null
     setHasImage(false)
     setHasDocument(false)
+    setHasDeletedPageOneImage(addedPages.length > 0 && activePageIdRef.current === null)
+    if (activePageIdRef.current === null && addedPages.length > 0) {
+      void switchActivePage(addedPages[0].id)
+    } else if (activePageIdRef.current === null) {
+      loadedPageIdRef.current = null
+      activePageIdRef.current = null
+      setActivePageId(null)
+    }
     setImageThumbnail('')
     setCropActive(false)
     setDimensions({ width: 1200, height: 800 })
@@ -1327,9 +1806,11 @@ function App() {
     syncObjects()
     recordHistory(true)
     resizeDisplay()
-    void deleteProjectDraft().catch(() => {
-      setNotice('Deleted project data could not be cleared from browser storage.')
-    })
+    if (addedPages.length === 0) {
+      void deleteProjectDraft().catch(() => {
+        setNotice('Deleted project data could not be cleared from browser storage.')
+      })
+    }
   }
 
   const undo = useCallback(async () => {
@@ -1337,8 +1818,12 @@ function App() {
     if (historyIndexRef.current <= 0) return
 
     historyIndexRef.current -= 1
+    pageHistoryRef.current.set(activePageIdRef.current, {
+      history: [...historyRef.current],
+      index: historyIndexRef.current,
+    })
 
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
 
     suppressHistoryRef.current = true
@@ -1348,12 +1833,14 @@ function App() {
         historyRef.current[historyIndexRef.current],
       ) as EditorSnapshot
 
+      clearTransientDrawingState(canvas)
       canvas.setDimensions({
         width: snapshot.width,
         height: snapshot.height,
       })
 
       await canvas.loadFromJSON(restoreScene(snapshot))
+      clearTransientDrawingState(canvas)
       restoreTableState(canvas)
       restartAnimatedStickers(canvas)
       canvas.requestRenderAll()
@@ -1362,39 +1849,33 @@ function App() {
         width: snapshot.width,
         height: snapshot.height,
       })
-    const restoredBackgroundRemoved = snapshot.editor?.backgroundRemoved ?? false
-    const restoredBackgroundColor = snapshot.editor?.backgroundColor ?? '#ffffff'
-    backgroundRemovedRef.current = restoredBackgroundRemoved
-    backgroundColorRef.current = restoredBackgroundColor
-    setBackgroundRemoved(restoredBackgroundRemoved)
-    setBackgroundColorState(restoredBackgroundColor)
-    const restoredFilter = snapshot.editor?.filterId ?? 'original'
-    const restoredIntensity = snapshot.editor?.filterIntensity ?? 100
-    selectedFilterRef.current = restoredFilter
-    filterIntensityRef.current = restoredIntensity
-    setSelectedFilter(restoredFilter)
-    setFilterIntensity(restoredIntensity)
+      restoreEditorSettings(snapshot)
 
       resizeDisplay()
       syncObjects()
+      imageSourceRef.current = imageObjectRef.current?.getSrc() ?? ''
       setImageThumbnail(imageObjectRef.current
         ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
         : '')
-      setHasDocument(Boolean(imageObjectRef.current))
+      setHasDocument(canvas.getObjects().length > 0)
       syncHistoryControls()
       setHistoryVersion((value) => value + 1)
     } finally {
       suppressHistoryRef.current = false
     }
-  }, [recordHistory, resizeDisplay, restoreTableState, syncHistoryControls, syncObjects])
+  }, [clearTransientDrawingState, recordHistory, resizeDisplay, restoreEditorSettings, restoreTableState, syncHistoryControls, syncObjects])
 
   const redo = useCallback(async () => {
     if (historyTimerRef.current) recordHistory(true)
     if (historyIndexRef.current >= historyRef.current.length - 1) return
 
     historyIndexRef.current += 1
+    pageHistoryRef.current.set(activePageIdRef.current, {
+      history: [...historyRef.current],
+      index: historyIndexRef.current,
+    })
 
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
 
     suppressHistoryRef.current = true
@@ -1404,12 +1885,14 @@ function App() {
         historyRef.current[historyIndexRef.current],
       ) as EditorSnapshot
 
+      clearTransientDrawingState(canvas)
       canvas.setDimensions({
         width: snapshot.width,
         height: snapshot.height,
       })
 
       await canvas.loadFromJSON(restoreScene(snapshot))
+      clearTransientDrawingState(canvas)
       restoreTableState(canvas)
       restartAnimatedStickers(canvas)
       canvas.requestRenderAll()
@@ -1418,21 +1901,11 @@ function App() {
         width: snapshot.width,
         height: snapshot.height,
       })
-    const restoredBackgroundRemoved = snapshot.editor?.backgroundRemoved ?? false
-    const restoredBackgroundColor = snapshot.editor?.backgroundColor ?? '#ffffff'
-    backgroundRemovedRef.current = restoredBackgroundRemoved
-    backgroundColorRef.current = restoredBackgroundColor
-    setBackgroundRemoved(restoredBackgroundRemoved)
-    setBackgroundColorState(restoredBackgroundColor)
-    const restoredFilter = snapshot.editor?.filterId ?? 'original'
-    const restoredIntensity = snapshot.editor?.filterIntensity ?? 100
-    selectedFilterRef.current = restoredFilter
-    filterIntensityRef.current = restoredIntensity
-    setSelectedFilter(restoredFilter)
-    setFilterIntensity(restoredIntensity)
+      restoreEditorSettings(snapshot)
 
       resizeDisplay()
       syncObjects()
+      imageSourceRef.current = imageObjectRef.current?.getSrc() ?? ''
       setImageThumbnail(imageObjectRef.current
         ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
         : '')
@@ -1442,7 +1915,7 @@ function App() {
     } finally {
       suppressHistoryRef.current = false
     }
-  }, [recordHistory, resizeDisplay, restoreTableState, syncHistoryControls, syncObjects])
+  }, [clearTransientDrawingState, recordHistory, resizeDisplay, restoreEditorSettings, restoreTableState, syncHistoryControls, syncObjects])
 
   const uploadFile = async (file?: File) => {
     if (!file) return
@@ -1472,8 +1945,11 @@ function App() {
       setBackgroundColorState('#ffffff')
       setIsRemovingBackground(false)
       setBackgroundProgress('')
-      const { width, height } = imageDimensions
-      const canvas = canvasRef.current
+      const { width: imageWidth, height: imageHeight } = imageDimensions
+      const width = DEFAULT_PAGE_WIDTH
+      const height = DEFAULT_PAGE_HEIGHT
+      const imageScale = Math.min(width / imageWidth, height / imageHeight)
+      const canvas = activeCanvasRef.current
 
       if (!canvas) return
 
@@ -1500,7 +1976,21 @@ function App() {
 
       canvas.setDimensions({ width, height })
       canvas.backgroundColor = 'rgba(0,0,0,0)'
-      image.set({ left: 0, top: 0, originX: 'left', originY: 'top', selectable: false, evented: false, lockMovementX: true, lockMovementY: true, lockScalingX: true, lockScalingY: true, lockRotation: true })
+      image.set({
+        left: (width - imageWidth * imageScale) / 2,
+        top: (height - imageHeight * imageScale) / 2,
+        originX: 'left',
+        originY: 'top',
+        scaleX: imageScale,
+        scaleY: imageScale,
+        selectable: false,
+        evented: false,
+        lockMovementX: true,
+        lockMovementY: true,
+        lockScalingX: true,
+        lockScalingY: true,
+        lockRotation: true,
+      })
       image.set('name', file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Image')
       canvas.add(image)
       canvas.sendObjectToBack(image)
@@ -1513,6 +2003,7 @@ function App() {
 
       setDimensions({ width, height })
       setHasDocument(true)
+      setHasDeletedPageOneImage(false)
       setImageThumbnail(thumbnail)
       setBrightness(0)
       setContrast(0)
@@ -1542,7 +2033,7 @@ function App() {
   }
 
   const createText = (design: TextDesignOptions = {}) => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
     createTextObject(canvas, { value: textValue, fontFamily, fontSize, color: textColor, opacity: textOpacity, outline: textOutline, outlineWidth: textOutlineWidth, shadow: textShadow, ...design })
     recordHistory(true)
@@ -1550,14 +2041,14 @@ function App() {
   }
 
   const addShape = () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
     createShapeObject(canvas, { kind: shapeKind, lineStyle, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] })
     recordHistory(true)
   }
 
   const addTextInsideSelectedShape = () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const shape = canvas?.getActiveObject()
     if (!canvas || !shape || !isShapeObject(shape)) return
     createTextInsideShape(canvas, shape, { value: textValue, fontFamily, fontSize, color: textColor, opacity: textOpacity, outline: textOutline, outlineWidth: textOutlineWidth, shadow: textShadow })
@@ -1566,7 +2057,7 @@ function App() {
   }
 
   const addImageInsideSelectedShape = async (file: File) => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const shape = canvas?.getActiveObject()
     const shapeName = String(shape?.get('name') ?? '')
     if (!canvas || !shape || !isShapeObject(shape) || /^line|^arrow/i.test(shapeName)) return
@@ -1583,7 +2074,7 @@ function App() {
 
 
   const beginCrop = useCallback(() => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas || !hasImage || cropObjectRef.current) return
     cropOriginalSnapshotRef.current ??= serializeEditorSnapshot(canvas)
     const cropFrame = createCropFrame(canvas)
@@ -1607,14 +2098,14 @@ function App() {
   const changeCropRatio = (ratioName: string) => {
     setCropRatio(ratioName)
     const cropFrame = cropObjectRef.current
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!cropFrame || !canvas) return
     updateCropRatio(canvas, cropFrame, ratioName)
   }
 
   const flipImage = (axis: 'horizontal' | 'vertical') => {
     const image = imageObjectRef.current
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!image || !canvas) return
     const property = axis === 'horizontal' ? 'flipX' : 'flipY'
     image.set(property, !image[property])
@@ -1625,7 +2116,7 @@ function App() {
 
   const setImageRotation = (angle: number) => {
     const image = imageObjectRef.current
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!image || !canvas) return
     const nextAngle = Math.max(-180, Math.min(180, Math.round(angle)))
     const center = image.getCenterPoint()
@@ -1638,7 +2129,7 @@ function App() {
   }
 
   const applyCrop = () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const cropFrame = cropObjectRef.current
     if (!canvas) return
     if (!cropFrame) {
@@ -1663,7 +2154,7 @@ function App() {
   }
 
   const cancelCrop = useCallback((nextTool: EditorTool = 'crop') => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const cropFrame = cropObjectRef.current
     if (!canvas || !cropFrame) {
       cropOriginalSnapshotRef.current = null
@@ -1684,7 +2175,7 @@ function App() {
   }, [recordHistory])
 
   const resetCrop = async () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const originalSnapshot = cropOriginalSnapshotRef.current
 
     if (!canvas || !originalSnapshot) {
@@ -1735,7 +2226,7 @@ function App() {
   }
 
   const applyResize = () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
     const width = Math.min(12000, Math.max(1, Math.round(resizeWidth)))
     const height = Math.min(12000, Math.max(1, Math.round(resizeHeight)))
@@ -1769,9 +2260,9 @@ function App() {
   }
 
   const updateText = (property: TextProperty, value: string | number) => {
-    const active = canvasRef.current?.getActiveObject()
+    const active = activeCanvasRef.current?.getActiveObject()
     if (!(active instanceof IText)) return
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (property === 'shadow') {
       const shadow = value === 'none' ? null : new Shadow({ color: 'rgba(12, 20, 17, 0.48)', blur: value === 'soft' ? 12 : 3, offsetX: 2, offsetY: value === 'soft' ? 5 : 3 })
       active.set('shadow', shadow)
@@ -1783,7 +2274,7 @@ function App() {
       setTextAnimationVersion((version) => version + 1)
     }
     active.setCoords()
-    canvasRef.current?.requestRenderAll()
+    activeCanvasRef.current?.requestRenderAll()
     recordHistory()
     if (property === 'text') setTextValue(String(value))
   }
@@ -1841,7 +2332,7 @@ function App() {
     const image = imageObjectRef.current
     if (!image) return
     applyImageAdjustments(image, nextBrightness, nextContrast, nextSaturation, selectedFilterRef.current, filterIntensityRef.current, preview)
-    canvasRef.current?.requestRenderAll()
+    activeCanvasRef.current?.requestRenderAll()
     if (!preview) recordHistory()
   }
 
@@ -1883,7 +2374,7 @@ function App() {
   }
 
   const removeBackgroundFromImage = async () => {
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   const image = imageObjectRef.current
 
   if (
@@ -1950,7 +2441,7 @@ const changeBackgroundColor = (color: string) => {
   backgroundColorRef.current = color
   setBackgroundColorState(color)
 
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
 
   if (!canvas || !backgroundRemovedRef.current) return
 
@@ -1986,7 +2477,7 @@ const uploadBackground = async (file?: File) => {
     return
   }
 
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
 
   if (!canvas) return
 
@@ -2048,7 +2539,7 @@ const uploadBackground = async (file?: File) => {
 }
 
 const clearBackground = () => {
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
 
   if (!canvas || !backgroundRemovedRef.current) return
 
@@ -2069,7 +2560,7 @@ const clearBackground = () => {
 }
 
 const resetBackground = async () => {
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   const image = imageObjectRef.current
   const source = imageSourceRef.current
 
@@ -2126,7 +2617,7 @@ const resetBackground = async () => {
   }
 
   const deleteSelected = useCallback(() => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const active = canvas?.getActiveObject()
 
     if (!canvas || !active) return
@@ -2148,7 +2639,7 @@ const resetBackground = async () => {
   }, [recordHistory])
 
     const duplicateSelected = async () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const active = canvas?.getActiveObject()
     if (!canvas || !active) return
     const clone = await active.clone()
@@ -2161,14 +2652,14 @@ const resetBackground = async () => {
   }
 
   const selectLayer = (object: FabricObject) => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
     canvas.setActiveObject(object)
     canvas.requestRenderAll()
   }
 
   const moveLayer = (object: FabricObject, direction: 'forward' | 'backward') => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
     if (direction === 'forward') canvas.bringObjectForward(object)
     else if (object !== imageObjectRef.current) canvas.sendObjectBackwards(object)
@@ -2179,14 +2670,14 @@ const resetBackground = async () => {
   const updateShapeAppearance = (property: 'fill' | 'stroke' | 'strokeWidth' | 'opacity', value: string | number) => {
     if (!selectedObject || selectedIsImage || selectedObject instanceof IText || selectedObject === cropObjectRef.current) return
     selectedObject.set(property, value)
-    canvasRef.current?.requestRenderAll()
+    activeCanvasRef.current?.requestRenderAll()
     recordHistory()
   }
 
   const updateSelectedShadow = (shadow: Shadow | null, target?: FabricObject | null, size?: number, imageSize?: number) => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const active = target ?? selectedObject
-    if (!canvas || !active || active === cropObjectRef.current) return
+    if (!canvas || !active || !canvas.getObjects().includes(active) || active === cropObjectRef.current) return
     const name = active.get('name')
     if (name === '__pixel_studio_drawing_layer__' || name === BACKGROUND_IMAGE_NAME) return
     active.set('shadow', shadow)
@@ -2255,7 +2746,7 @@ const resetBackground = async () => {
           event.preventDefault()
           setTableSelectedText(nextText)
           const table = activeTableRef.current
-          const canvas = canvasRef.current
+          const canvas = activeCanvasRef.current
           const textbox = canvas?.getObjects().find(
             (object) => object.get('name') === tableTextName(table.id, tableSelectedRow, tableSelectedColumn),
           )
@@ -2298,7 +2789,7 @@ const resetBackground = async () => {
   }, [undo, redo, deleteSelected, recordHistory, syncTableLayout, tableEditing, tableSelectedColumn, tableSelectedRow, tableSelectedText])
 
   const openPreview = async () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
 
     const lassoPreviews = canvas.getObjects().filter(
@@ -2328,7 +2819,7 @@ const resetBackground = async () => {
   }
 
   const downloadDesign = async () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
     setExportBusy(true)
     try {
@@ -2379,7 +2870,7 @@ const resetBackground = async () => {
   }
 
   const shareDesign = async () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
 
     setShareBusy(true)
@@ -2455,7 +2946,7 @@ const resetBackground = async () => {
   }
 
   const getDrawingLayer = useCallback(() => {
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!canvas) return null
 
   const layer = canvas.getObjects().find(
@@ -2558,7 +3049,7 @@ const drawBrushPath = useCallback((context: CanvasRenderingContext2D, points: Ed
 
 const drawOnDrawingLayer = useCallback((points: EditPoint[], mode: 'pencil' | 'sketch' | 'marker' | 'highlighter' | 'eraser') => {
   const layer = getDrawingLayer()
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   const context = layer?.canvas.getContext('2d')
   if (!layer || !canvas || !context || points.length === 0) return
 
@@ -2568,7 +3059,7 @@ const drawOnDrawingLayer = useCallback((points: EditPoint[], mode: 'pencil' | 's
 }, [drawBrushPath, getDrawingLayer])
 
 const beginDrawingPreview = useCallback(() => {
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!canvas) return
 
   getDrawingLayer()
@@ -2596,7 +3087,7 @@ const beginDrawingPreview = useCallback(() => {
 const renderDrawingPreviewFrame = useCallback((points: EditPoint[], mode: 'pencil' | 'sketch' | 'marker' | 'highlighter') => {
   const previewCanvas = drawingPreviewCanvasRef.current
   const previewImage = drawingPreviewImageRef.current
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   const context = previewCanvas?.getContext('2d')
   if (!previewCanvas || !previewImage || !canvas || !context) return
 
@@ -2617,7 +3108,7 @@ const renderDrawingPreview = useCallback((points: EditPoint[], mode: 'pencil' | 
 const commitDrawingPreview = useCallback(() => {
   const previewCanvas = drawingPreviewCanvasRef.current
   const previewImage = drawingPreviewImageRef.current
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   const layer = getDrawingLayer()
   const context = layer?.canvas.getContext('2d')
   if (!previewCanvas || !previewImage || !canvas || !layer || !context) return
@@ -2638,7 +3129,7 @@ const paintMagicRemoval = useCallback((from: EditPoint, to: EditPoint) => {
   const context = magicContextRef.current
   const displayContext = magicDisplayContextRef.current
   const image = magicImageRef.current
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!preview || !context || !displayContext || !image || !canvas) return
 
   const fromPoint = toImagePoint(image, from)
@@ -2690,7 +3181,7 @@ const paintMagicRemoval = useCallback((from: EditPoint, to: EditPoint) => {
 }, [])
 
 const startMagicRemoval = useCallback((point: EditPoint) => {
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   const image = imageObjectRef.current
   if (magicRemovalInProgressRef.current) return false
   if (!canvas || !image) {
@@ -2738,7 +3229,7 @@ const startMagicRemoval = useCallback((point: EditPoint) => {
 const finishMagicRemoval = useCallback(async () => {
   const preview = magicCanvasRef.current
   const image = magicImageRef.current
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   const filters = magicFiltersRef.current
   magicCanvasRef.current = null
   magicContextRef.current = null
@@ -2770,7 +3261,7 @@ const applyPixelEdit = async (
   points: EditPoint[],
   mode: 'brush' | 'lasso',
 ) => {
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   const image = imageObjectRef.current
 
   if (!canvas || !image) {
@@ -2816,7 +3307,7 @@ const applyPixelEdit = async (
 }
 
 const removeLassoPreview = useCallback(() => {
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!canvas) return
 
   const previews = new Set([
@@ -2853,7 +3344,7 @@ const addTableCells = (
   lastColumn: number,
   borderColor = tableBorderColor,
 ) => {
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!canvas) return
 
   const cells: Rect[] = []
@@ -2898,22 +3389,22 @@ const selectTable = (id: number) => {
   setTableColumns(table.columns)
   setTableSelectedRow(0)
   setTableSelectedColumn(0)
-  const text = canvasRef.current?.getObjects().find(
+  const text = activeCanvasRef.current?.getObjects().find(
     (object) => object.get('name') === tableTextName(table.id, 0, 0),
   )
   setTableSelectedText(text instanceof Textbox ? text.text : '')
-  const cell = canvasRef.current?.getObjects().find(
+  const cell = activeCanvasRef.current?.getObjects().find(
     (object) => object.get('name') === tableCellName(table.id, 0, 0),
   )
   if (typeof cell?.stroke === 'string') setTableBorderColorState(cell.stroke)
   setActiveTool('draw-remove')
   setActiveDrawingMode('pencil')
   setTableEditing(true)
-  canvasRef.current?.requestRenderAll()
+  activeCanvasRef.current?.requestRenderAll()
 }
 
 const createTable = () => {
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!canvas) return
 
   const bounds = getImageBounds(canvas, imageObjectRef.current)
@@ -2981,7 +3472,7 @@ const createTable = () => {
 
 const addTableRow = () => {
   const table = activeTableRef.current
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!table || !canvas) return
   const bounds = getImageBounds(canvas, imageObjectRef.current)
   if (table.top + tableHeight(table) + table.cellHeight > bounds.top + bounds.height) {
@@ -2996,13 +3487,13 @@ const addTableRow = () => {
   setTableRows(table.rows)
   setTableSelectedRow(table.rows - 1)
   setTableSelectedText('')
-  canvasRef.current?.requestRenderAll()
+  activeCanvasRef.current?.requestRenderAll()
   recordHistory(true)
 }
 
 const addTableColumn = () => {
   const table = activeTableRef.current
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!table || !canvas) return
   const bounds = getImageBounds(canvas, imageObjectRef.current)
   if (table.left + tableWidth(table) + table.cellWidth > bounds.left + bounds.width) {
@@ -3017,13 +3508,13 @@ const addTableColumn = () => {
   setTableColumns(table.columns)
   setTableSelectedColumn(table.columns - 1)
   setTableSelectedText('')
-  canvasRef.current?.requestRenderAll()
+  activeCanvasRef.current?.requestRenderAll()
   recordHistory(true)
 }
 
 const removeTableRow = () => {
   const table = activeTableRef.current
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!table || !canvas || table.rows <= 1) return
 
   const removedRow = tableSelectedRow
@@ -3064,7 +3555,7 @@ const removeTableRow = () => {
 
 const removeTableColumn = () => {
   const table = activeTableRef.current
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!table || !canvas || table.columns <= 1) return
 
   const removedColumn = tableSelectedColumn
@@ -3105,7 +3596,7 @@ const removeTableColumn = () => {
 
 const deleteTable = () => {
   const table = activeTableRef.current
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!table || !canvas) return
 
   for (let row = 0; row < table.rows; row += 1) {
@@ -3142,20 +3633,20 @@ const beginTableEditing = () => {
   if (!activeTableRef.current) return
   setActiveTool('draw-remove')
   setTableEditing(true)
-  canvasRef.current?.requestRenderAll()
+  activeCanvasRef.current?.requestRenderAll()
   setActiveDrawingMode('pencil')
 }
 
 const finishTableEditing = () => {
   setTableEditing(false)
-  canvasRef.current?.requestRenderAll()
+  activeCanvasRef.current?.requestRenderAll()
   setActiveDrawingMode('pencil')
 }
 
 const selectTableRow = (row: number) => {
   setTableSelectedRow(row)
   const table = activeTableRef.current
-  const text = canvasRef.current?.getObjects().find(
+  const text = activeCanvasRef.current?.getObjects().find(
     (object) => object.get('name') === tableTextName(table?.id ?? -1, row, tableSelectedColumn),
   )
   setTableSelectedText(text instanceof Textbox ? text.text : '')
@@ -3164,7 +3655,7 @@ const selectTableRow = (row: number) => {
 const selectTableColumn = (column: number) => {
   setTableSelectedColumn(column)
   const table = activeTableRef.current
-  const text = canvasRef.current?.getObjects().find(
+  const text = activeCanvasRef.current?.getObjects().find(
     (object) => object.get('name') === tableTextName(table?.id ?? -1, tableSelectedRow, column),
   )
   setTableSelectedText(text instanceof Textbox ? text.text : '')
@@ -3172,7 +3663,7 @@ const selectTableColumn = (column: number) => {
 
 const selectTableCell = (row: number, column: number) => {
   const table = activeTableRef.current
-  const text = canvasRef.current?.getObjects().find(
+  const text = activeCanvasRef.current?.getObjects().find(
     (object) => object.get('name') === tableTextName(table?.id ?? -1, row, column),
   )
   setTableSelectedRow(row)
@@ -3183,7 +3674,7 @@ const selectTableCell = (row: number, column: number) => {
 const updateTableBorderColor = (color: string) => {
   setTableBorderColorState(color)
   const table = activeTableRef.current
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!table || !canvas) return
 
   for (let row = 0; row < table.rows; row += 1) {
@@ -3213,7 +3704,7 @@ const deleteSelection = async () => {
 }
 
  useEffect(() => {
-  const canvas = canvasRef.current
+  const canvas = activeCanvasRef.current
   if (!canvas) return
 
   const onMouseDown = (event: {
@@ -3326,7 +3817,7 @@ const deleteSelection = async () => {
     const point = event.scenePoint
     const tableGesture = tableGestureRef.current
     const table = activeTableRef.current
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const bounds = canvas ? getImageBounds(canvas, imageObjectRef.current) : null
     if (point && table && tableEditing && !tableGesture) {
       const isOverColumnDivider = point.y >= table.top &&
@@ -3475,13 +3966,13 @@ const deleteSelection = async () => {
     canvas.off('mouse:move', onMouseMove)
     canvas.off('mouse:up', onMouseUp)
   }
-}, [activeTool, beginDrawingPreview, commitDrawingPreview, drawOnDrawingLayer, finishMagicRemoval, hasDocument, paintMagicRemoval, recordHistory, renderDrawingPreview, renderDrawingPreviewFrame, startMagicRemoval, syncTableLayout, tableEditing])
+}, [activeTool, beginDrawingPreview, commitDrawingPreview, drawOnDrawingLayer, fabricCanvas, finishMagicRemoval, hasDocument, paintMagicRemoval, recordHistory, renderDrawingPreview, renderDrawingPreviewFrame, startMagicRemoval, syncTableLayout, tableEditing])
   
   const selectedText = selectedObject instanceof IText ? selectedObject : null
   const selectedIsShape = Boolean(selectedObject && !selectedIsImage && !(selectedObject instanceof IText) && !cropActive)
 
   const applyObjectAnimation = (effect: TextAnimation) => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const active = canvas?.getActiveObject()
     if (!canvas || !active || active === imageObjectRef.current) return
     active.set('textAnimation', effect)
@@ -3492,7 +3983,7 @@ const deleteSelection = async () => {
   }
 
   const removeSelectedAnimation = () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     const active = canvas?.getActiveObject()
     if (!canvas || !active) return
     active.set('textAnimation', 'none')
@@ -3503,7 +3994,7 @@ const deleteSelection = async () => {
   }
 
   const clearAnimations = () => {
-    const canvas = canvasRef.current
+    const canvas = activeCanvasRef.current
     if (!canvas) return
     for (const object of canvas.getObjects()) object.set('textAnimation', 'none')
     textAnimationStartTimesRef.current = new WeakMap<FabricObject, number>()
@@ -3511,6 +4002,204 @@ const deleteSelection = async () => {
     canvas.requestRenderAll()
     recordHistory(true)
   }
+
+  const switchActivePage = async (pageId: number | null) => {
+    const sourceCanvas = activeCanvasRef.current
+    if (!sourceCanvas) return
+    if (pageSwitchInProgressRef.current) {
+      pendingPageSwitchRef.current = pageId
+      return
+    }
+    if (pageId === loadedPageIdRef.current) {
+      activePageIdRef.current = pageId
+      setActivePageId(pageId)
+      return
+    }
+
+    pageSwitchInProgressRef.current = true
+    setPageSwitching(true)
+    try {
+      if (historyTimerRef.current) {
+        clearTimeout(historyTimerRef.current)
+        historyTimerRef.current = null
+      }
+      clearTransientDrawingState(sourceCanvas)
+      recordHistory(true)
+
+      const currentPageId = loadedPageIdRef.current
+      const currentSnapshot = serializeEditorSnapshot(sourceCanvas)
+      const currentPreview = sourceCanvas.toDataURL({ format: 'png', multiplier: 0.3 })
+      const currentEditorState = JSON.parse(currentSnapshot) as EditorSnapshot
+      pageEditorStateRef.current.set(currentPageId, {
+        editor: currentEditorState.editor,
+        settings: currentEditorState.settings,
+      })
+      if (currentPageId === null) {
+        pageOneSnapshotRef.current = currentSnapshot
+        setPageOneSnapshot(currentSnapshot)
+        setPageOnePreview(currentPreview)
+      } else {
+        setAddedPages((pages) => pages.map((page) => page.id === currentPageId
+          ? { ...page, snapshot: currentSnapshot, imageUrl: currentPreview }
+          : page))
+      }
+      pageHistoryRef.current.set(currentPageId, {
+        history: [...historyRef.current],
+        index: historyIndexRef.current,
+      })
+
+      const targetPage = pageId === null
+        ? undefined
+        : addedPages.find((page) => page.id === pageId)
+      if (pageId !== null && !targetPage) return
+      const targetCanvas = ensurePageCanvas(pageId)
+      if (!targetCanvas) throw new Error('The selected page canvas is not ready.')
+      activeCanvasRef.current = targetCanvas
+      activePageIdRef.current = pageId
+      setFabricCanvas(targetCanvas)
+      setActivePageId(pageId)
+
+      let targetSnapshot = pageId === null
+        ? pageOneSnapshotRef.current
+        : targetPage?.snapshot
+      if (targetSnapshot) {
+        const snapshot = JSON.parse(targetSnapshot) as EditorSnapshot
+        if (snapshot.pageId !== pageId && (pageId !== null || snapshot.pageId !== undefined)) {
+          targetSnapshot = undefined
+        }
+      }
+      suppressHistoryRef.current = true
+
+      if (targetSnapshot && !initializedPageCanvasesRef.current.has(targetCanvas)) {
+        const snapshot = JSON.parse(targetSnapshot) as EditorSnapshot
+        targetCanvas.setDimensions({ width: snapshot.width, height: snapshot.height })
+        await targetCanvas.loadFromJSON(restoreScene(snapshot))
+        clearTransientDrawingState(targetCanvas)
+        restoreEditorSettings(snapshot)
+        pageEditorStateRef.current.set(pageId, { editor: snapshot.editor, settings: snapshot.settings })
+        setDimensions({ width: snapshot.width, height: snapshot.height })
+        initializedPageCanvasesRef.current.add(targetCanvas)
+      } else if (!initializedPageCanvasesRef.current.has(targetCanvas) && targetPage?.imageUrl) {
+        const response = await fetch(targetPage.imageUrl)
+        if (!response.ok) throw new Error('Could not load the selected page image.')
+        const imageBlob = await response.blob()
+        const imageFile = new File([imageBlob], targetPage.fileName ?? 'Page image', {
+          type: imageBlob.type || 'image/png',
+        })
+        await uploadFile(imageFile)
+        if (!targetCanvas.getObjects().some((object) => object instanceof FabricImage)) {
+          throw new Error('Could not load the selected page image.')
+        }
+        restoreEditorSettings({
+          editor: {
+            filterId: 'original',
+            filterIntensity: 100,
+            backgroundRemoved: backgroundRemovedRef.current,
+            backgroundColor: '#ffffff',
+          },
+          settings: defaultPageEditorSettings,
+        })
+        pageEditorStateRef.current.set(pageId, {
+          editor: { filterId: 'original', filterIntensity: 100, backgroundRemoved: false, backgroundColor: '#ffffff' },
+          settings: defaultPageEditorSettings,
+        })
+        initializedPageCanvasesRef.current.add(targetCanvas)
+      } else if (!initializedPageCanvasesRef.current.has(targetCanvas)) {
+        targetCanvas.clear()
+        targetCanvas.setDimensions({
+          width: targetPage?.width ?? DEFAULT_PAGE_WIDTH,
+          height: targetPage?.height ?? DEFAULT_PAGE_HEIGHT,
+        })
+        targetCanvas.backgroundColor = 'rgba(0,0,0,0)'
+        imageSourceRef.current = ''
+        imageObjectRef.current = null
+        setDimensions({ width: targetCanvas.getWidth(), height: targetCanvas.getHeight() })
+        restoreEditorSettings({
+          editor: { filterId: 'original', filterIntensity: 100, backgroundRemoved: false, backgroundColor: '#ffffff' },
+          settings: { ...defaultPageEditorSettings, resizeWidth: targetCanvas.getWidth(), resizeHeight: targetCanvas.getHeight() },
+        })
+        pageEditorStateRef.current.set(pageId, {
+          editor: { filterId: 'original', filterIntensity: 100, backgroundRemoved: false, backgroundColor: '#ffffff' },
+          settings: { ...defaultPageEditorSettings, resizeWidth: targetCanvas.getWidth(), resizeHeight: targetCanvas.getHeight() },
+        })
+        initializedPageCanvasesRef.current.add(targetCanvas)
+      } else if (targetSnapshot) {
+        const editorState = pageEditorStateRef.current.get(pageId) ?? JSON.parse(targetSnapshot) as EditorSnapshot
+        restoreEditorSettings(editorState)
+      }
+
+      loadedPageIdRef.current = pageId
+      setDimensions({ width: targetCanvas.getWidth(), height: targetCanvas.getHeight() })
+      const mainImage = targetCanvas.getObjects().find(
+        (object) => object instanceof FabricImage && object.get('name') !== BACKGROUND_IMAGE_NAME,
+      )
+      imageObjectRef.current = mainImage instanceof FabricImage ? mainImage : null
+      imageSourceRef.current = imageObjectRef.current?.getSrc() ?? ''
+      cropObjectRef.current = targetCanvas.getObjects().find((object) => object.get('name') === 'Crop area') as Rect | undefined ?? null
+      setCropActive(Boolean(cropObjectRef.current))
+      drawingLayerCanvasRef.current = null
+      drawingLayerImageRef.current = null
+      lassoPreviewObjectsRef.current = []
+      activeTableRef.current = null
+      restoreTableState(targetCanvas)
+      restartAnimatedStickers(targetCanvas)
+      targetCanvas.requestRenderAll()
+      syncObjects()
+      setHasDocument(targetCanvas.getObjects().length > 0)
+      setImageThumbnail(imageObjectRef.current
+        ? targetCanvas.toDataURL({ format: 'png', multiplier: 0.12 })
+        : '')
+      resizeDisplay()
+
+      const savedHistory = pageHistoryRef.current.get(pageId)
+      if (savedHistory) {
+        historyRef.current = [...savedHistory.history]
+        historyIndexRef.current = savedHistory.index
+      } else {
+        historyRef.current = [serializeEditorSnapshot(targetCanvas)]
+        historyIndexRef.current = 0
+      }
+      pageHistoryRef.current.set(pageId, {
+        history: historyRef.current,
+        index: historyIndexRef.current,
+      })
+      if (pageId === null) {
+        setPageOnePreview(targetCanvas.toDataURL({ format: 'png', multiplier: 0.3 }))
+      }
+      console.log('Active Page ID:', pageId)
+      console.log('Active Canvas:', targetCanvas)
+      console.log('Editing Target Page:', pageId)
+      syncHistoryControls()
+      setHistoryVersion((version) => version + 1)
+    } catch (error) {
+      const loadedPageId = loadedPageIdRef.current
+      const loadedCanvas = pageCanvasesRef.current.get(loadedPageId) ?? sourceCanvas
+      activePageIdRef.current = loadedPageId
+      activeCanvasRef.current = loadedCanvas
+      setActivePageId(loadedPageId)
+      setFabricCanvas(loadedCanvas)
+      setNotice(error instanceof Error ? error.message : 'Could not switch to that page.')
+    } finally {
+      suppressHistoryRef.current = false
+      pageSwitchInProgressRef.current = false
+      setPageSwitching(false)
+      const pendingPageId = pendingPageSwitchRef.current
+      pendingPageSwitchRef.current = undefined
+      if (pendingPageId !== undefined && pendingPageId !== loadedPageIdRef.current) {
+        void switchActivePage(pendingPageId)
+      }
+    }
+  }
+
+  useEffect(() => {
+    switchActivePageRef.current = switchActivePage
+  })
+  useEffect(() => {
+    const pageId = pendingInitialPageIdRef.current
+    if (pageId === undefined || !pageCanvasesRef.current.has(pageId)) return
+    pendingInitialPageIdRef.current = undefined
+    void switchActivePageRef.current(pageId)
+  }, [addedPages, fabricCanvas])
 
   const contextValue: EditorContextValue = {
     fabricCanvas,
@@ -3542,6 +4231,7 @@ const deleteSelection = async () => {
       dimensions,
       hasDocument,
       hasImage,
+      hasDeletedPageOneImage,
       imageThumbnail,
       selected: selectedObject,
       objects,
@@ -3554,8 +4244,24 @@ const deleteSelection = async () => {
     pages: {
       items: addedPages,
       setItems: setAddedPages,
+      activeId: activePageId,
+      setActiveId: setActivePageId,
+      switching: pageSwitching,
+      pageOnePreview,
       replace: (pageId) => addedPageActionsRef.current?.replace(pageId),
       delete: (pageId) => addedPageActionsRef.current?.delete(pageId),
+      select: async (pageId) => {
+        await switchActivePage(pageId)
+      },
+      getSnapshot: (pageId) => {
+        if (pageId === loadedPageIdRef.current) {
+          const currentCanvas = activeCanvasRef.current
+          return currentCanvas ? serializeEditorSnapshot(currentCanvas) : undefined
+        }
+        return pageId === null
+          ? pageOneSnapshotRef.current
+          : addedPages.find((page) => page.id === pageId)?.snapshot
+      },
       registerActions: registerAddedPageActions,
     },
     history: {
@@ -3710,6 +4416,7 @@ const deleteSelection = async () => {
           <ToolPanel />
           <EditorWorkspace
             setCanvasElement={setCanvasElement}
+            setPageCanvasElement={setPageCanvasElement}
             setStageElement={setStageElement}
           />
         </section>
