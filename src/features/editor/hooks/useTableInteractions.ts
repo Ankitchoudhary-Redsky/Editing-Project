@@ -1,10 +1,11 @@
 import { useCallback, useEffect } from 'react'
-import { Textbox } from 'fabric'
+import { Point, Textbox } from 'fabric'
 import type { UseTableInteractionsOptions } from '../model/types'
 import {
   fitTableTextbox,
   findTableObject,
   getImageBounds,
+  getTableGroup,
   tableColumnOffset,
   tableHeight,
   tableRowOffset,
@@ -182,16 +183,29 @@ export function useTableInteractions({
           Math.min(maxColumnWidth, gesture.columnWidths[gesture.resizeIndex] + deltaX),
         )
       } else {
-        table.left = Math.max(bounds?.left ?? 0, Math.min(
-          (bounds?.left ?? 0) + (bounds?.width ?? targetCanvas.getWidth()) - tableWidth(table),
+        const previousLeft = table.left
+        const previousTop = table.top
+        table.left = Math.max(0, Math.min(
+          targetCanvas.getWidth() - tableWidth(table),
           gesture.left + deltaX,
         ))
-        table.top = Math.max(bounds?.top ?? 0, Math.min(
-          (bounds?.top ?? 0) + (bounds?.height ?? targetCanvas.getHeight()) - tableHeight(table),
+        table.top = Math.max(0, Math.min(
+          targetCanvas.getHeight() - tableHeight(table),
           gesture.top + deltaY,
         ))
+        const group = getTableGroup(targetCanvas, table.id)
+        if (group) {
+          const position = group.getXY()
+          group.setXY(new Point(
+            position.x + table.left - previousLeft,
+            position.y + table.top - previousTop,
+          ))
+          group.setCoords()
+        } else {
+          syncTableLayout(targetCanvas, table)
+        }
       }
-      syncTableLayout(targetCanvas, table)
+      if (gesture.mode !== 'move') syncTableLayout(targetCanvas, table)
       targetCanvas.requestRenderAll()
     }
 
