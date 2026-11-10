@@ -5,7 +5,7 @@ export function ResizePanel() {
   const { canvas, resize } = useEditor()
   return (
     <div className="panel-content">
-      <fieldset className="panel-control-group" disabled={!canvas.hasImage}>
+      <fieldset className="panel-control-group" disabled={!canvas.hasDocument}>
         <div className="dimensions-fields">
           <label className="field-label">Width<input type="number" min="1" max="12000" value={resize.width} onChange={(event) => resize.setWidth(Number(event.target.value))} /></label>
           <span className="dimension-x">×</span>
@@ -17,7 +17,7 @@ export function ResizePanel() {
         <div className="preset-grid">{resizePresets.map(({ label, width, height }) => <button key={label} className="preset-button" onClick={() => { resize.setWidth(width); resize.setHeight(height); resize.setKeepRatio(false) }}><span className={`preset-shape ${label.toLowerCase()}`} /><span>{label}</span></button>)}</div>
         <button className="primary-button full-button" onClick={resize.apply}>Apply dimensions</button>
       </fieldset>
-      <p className="panel-note">{canvas.hasImage ? 'Canvas size is separate from artwork scaling. Artwork is cropped by the document edges.' : 'Upload an image to resize it.'}</p>
+      <p className="panel-note">{canvas.hasDocument ? 'Canvas size is separate from artwork scaling. Artwork is cropped by the document edges.' : 'Add a layer to resize the canvas.'}</p>
     </div>
   )
 }

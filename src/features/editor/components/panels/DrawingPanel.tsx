@@ -12,7 +12,7 @@ const brushModes = [
 ] as const
 export function DrawingPanel() {
   const { canvas, drawing, table, tools } = useEditor()
-  const isDisabled = !canvas.hasImage
+  const isDisabled = !canvas.hasDocument
   const [brushMenuOpen, setBrushMenuOpen] = useState(false)
   const [brushMenuPosition, setBrushMenuPosition] = useState({ left: 8, top: 8 })
   const brushTriggerRef = useRef<HTMLButtonElement>(null)
@@ -57,7 +57,6 @@ export function DrawingPanel() {
     drawing.setActiveMode(mode)
     tools.setActive('draw-remove')
   }
-console.log("brushMenuOpen", brushMenuOpen)
   return (
     <div className="panel-content">
       <div className="drawing-mode-grid" role="group" aria-label="Drawing mode">
@@ -74,7 +73,7 @@ console.log("brushMenuOpen", brushMenuOpen)
               className={isActive ? 'drawing-mode-button active' : 'drawing-mode-button'}
               aria-pressed={isActive}
               aria-expanded={mode.id === 'pencil' ? brushMenuOpen : undefined}
-              disabled={isDisabled || table.editing}
+              disabled={isDisabled || table.editing || ((mode.id === 'magic-remover' || mode.id === 'lasso') && !canvas.hasImage)}
               onClick={() => mode.id === 'pencil' ? toggleBrushMenu() : chooseBrush(mode.id as DrawingMode)}
             >
               <span className="drawing-mode-icon">
@@ -120,8 +119,11 @@ console.log("brushMenuOpen", brushMenuOpen)
         document.body,
       )}
       <p className="panel-note">
-        {table.editing ? 'Table editing' : isDisabled ? 'Upload an image to enable drawing tools.' : drawingModeDescriptions[drawing.activeMode]}
+        {table.editing ? 'Table editing' : isDisabled ? 'Add a layer to enable drawing tools.' : (drawing.activeMode === 'magic-remover' || drawing.activeMode === 'lasso') && !canvas.hasImage ? 'Add an image layer for pixel removal or freehand selection.' : drawingModeDescriptions[drawing.activeMode]}
       </p>
+      {canvas.hasDocument && !canvas.hasImage && (
+        <p className="panel-note">Object removal and freehand selection require an image layer.</p>
+      )}
       {drawing.activeMode !== 'lasso' && !table.editing && (
         <>
           {drawing.activeMode !== 'eraser' && drawing.activeMode !== 'magic-remover' && (
@@ -150,10 +152,10 @@ console.log("brushMenuOpen", brushMenuOpen)
       )}
       {drawing.activeMode === 'lasso' && (
         <div className="drawing-selection-actions">
-          <button type="button" className="secondary-button" disabled={isDisabled} onClick={drawing.clearSelection}>
+          <button type="button" className="secondary-button" disabled={!canvas.hasImage} onClick={drawing.clearSelection}>
             Clear selection
           </button>
-          <button type="button" className="primary-button" disabled={isDisabled} onClick={() => void drawing.deleteSelection()}>
+          <button type="button" className="primary-button" disabled={!canvas.hasImage} onClick={() => void drawing.deleteSelection()}>
             Delete selection
           </button>
         </div>

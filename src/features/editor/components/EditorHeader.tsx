@@ -33,9 +33,9 @@ export function EditorHeader() {
         <button className="icon-button" title="Undo" aria-label="Undo" disabled={!history.canUndo} onClick={history.undo}><Undo2 size={18} /></button>
         <button className="icon-button" title="Redo" aria-label="Redo" disabled={!history.canRedo} onClick={history.redo}><Redo2 size={18} /></button>
         <span className="action-divider" />
-        <button className="preview-button" onClick={preview.show} disabled={!canvas.hasImage} ><Eye size={16} /> Preview</button>
-        <button className="preview-button" onClick={() => void exportState.share()} disabled={!canvas.hasImage || exportState.shareBusy} title="Share edited image"><Share2 size={16} /> {exportState.shareBusy ? 'Preparing…' : 'Share'}</button>
-        <button className="download-button" onClick={() => exportState.setOpen(true)} disabled={!canvas.hasImage}><Download size={16} /> Export</button>
+        <button className="preview-button" onClick={preview.show} disabled={!canvas.hasDocument} ><Eye size={16} /> Preview</button>
+        <button className="preview-button" onClick={() => void exportState.share()} disabled={!canvas.hasDocument || exportState.shareBusy} title="Share edited image"><Share2 size={16} /> {exportState.shareBusy ? 'Preparing…' : 'Share'}</button>
+        <button className="download-button" onClick={() => exportState.setOpen(true)} disabled={!canvas.hasDocument}><Download size={16} /> Export</button>
       </div>
     </header>
   )

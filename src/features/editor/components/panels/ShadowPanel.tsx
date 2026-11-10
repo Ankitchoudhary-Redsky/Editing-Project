@@ -1,5 +1,6 @@
 import { FabricImage, Shadow, type FabricObject } from 'fabric'
 import { useEditor } from '../../EditorContext'
+import { BACKGROUND_IMAGE_NAME, DRAWING_LAYER_NAME } from '../../model/constants'
 import { objectName } from '../../model/objectName'
 
 const presets = [
@@ -77,7 +78,7 @@ function getShadowSettings(shadow: Shadow | null | undefined, shadowSize = 50) {
 
 function isEditableObject(object: FabricObject | null) {
   const name = object?.get('name')
-  return Boolean(object && name !== '__pixel_studio_drawing_layer__' && name !== '__pixel_studio_background_image__')
+  return Boolean(object && name !== DRAWING_LAYER_NAME && name !== BACKGROUND_IMAGE_NAME)
 }
 
 export function ShadowPanel() {
@@ -85,7 +86,7 @@ export function ShadowPanel() {
   const selected = isEditableObject(canvas.selected)
     ? canvas.selected
     : canvas.objects.find((object) => isEditableObject(object)) ?? null
-  const enabled = canvas.hasImage && Boolean(selected)
+  const enabled = canvas.hasDocument && Boolean(selected)
   const shadowSize = selected ? Number(selected.get('shadowSize') ?? 50) : 50
   const imageSize = selected ? Number(selected.get('shadowArtworkSize') ?? 100) : 100
   const settings = { ...getShadowSettings(selected?.shadow, shadowSize), imageSize }
@@ -125,8 +126,8 @@ export function ShadowPanel() {
   return (
     <div className="panel-content shadow-panel">
       {!canvas.selected && selected && <p className="panel-note shadow-selection-note">Applying to {objectName(selected, canvas.objects.indexOf(selected))}. Select another layer from Layers to change the target.</p>}
-      {!canvas.hasImage && <p className="panel-note shadow-selection-note">Upload an image to enable shadow controls.</p>}
-      {canvas.hasImage && !selected && <p className="panel-note shadow-selection-note">Add or select a layer to apply a shadow.</p>}
+      {!canvas.hasDocument && <p className="panel-note shadow-selection-note">Add a layer to enable shadow controls.</p>}
+      {canvas.hasDocument && !selected && <p className="panel-note shadow-selection-note">Select a text, shape, or image layer to apply a shadow.</p>}
           <section className="shadow-section">
             <div className="shadow-heading-row">
               <div><span className="field-label">Shadow style</span><p>Choose a preset</p></div>

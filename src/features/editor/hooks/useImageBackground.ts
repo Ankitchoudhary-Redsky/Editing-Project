@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react'
+import { Rect } from 'fabric'
 import { BACKGROUND_IMAGE_NAME } from '../model/constants'
 import { loadLocalImage } from '../operations/loadLocalImage'
 import { removeImageBackground } from '../operations/removeImageBackground'
@@ -76,21 +77,32 @@ export function useImageBackground({
     backgroundColorRef.current = color
     setBackgroundColor(color)
     const canvas = canvasRef.current
-    if (!canvas || !backgroundRemovedRef.current) return
+    if (!canvas) return
     canvas.getObjects()
       .filter((item) => item.get('name') === BACKGROUND_IMAGE_NAME)
       .forEach((item) => canvas.remove(item))
-    canvas.backgroundColor = color
+    const backgroundLayer = new Rect({
+      name: BACKGROUND_IMAGE_NAME,
+      left: 0,
+      top: 0,
+      width: canvas.getWidth(),
+      height: canvas.getHeight(),
+      fill: color,
+      selectable: true,
+      evented: true,
+    })
+    canvas.backgroundColor = 'rgba(0,0,0,0)'
+    canvas.add(backgroundLayer)
+    canvas.sendObjectToBack(backgroundLayer)
+    const subject = imageObjectRef.current
+    if (subject) canvas.bringObjectToFront(subject)
     canvas.requestRenderAll()
     recordHistory(true)
+    syncObjects()
   }
 
   const uploadBackground = async (file?: File) => {
     if (!file) return
-    if (!backgroundRemovedRef.current) {
-      setNotice('Remove the original background first.')
-      return
-    }
     if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
       setNotice('Choose a PNG, JPG, or WebP background image.')
       return
@@ -101,9 +113,15 @@ export function useImageBackground({
     }
 
     const canvas = canvasRef.current
+    const subject = imageObjectRef.current
     if (!canvas) return
+    if (subject && !backgroundRemovedRef.current) {
+      setNotice('Remove the original background first.')
+      return
+    }
     try {
       const { image } = await loadLocalImage(file)
+      if (canvasRef.current !== canvas || imageObjectRef.current !== subject || !backgroundRemovedRef.current) return
       canvas.getObjects()
         .filter((item) => item.get('name') === BACKGROUND_IMAGE_NAME)
         .forEach((item) => canvas.remove(item))
@@ -121,13 +139,12 @@ export function useImageBackground({
         originY: 'top',
         scaleX: canvas.getWidth() / originalWidth,
         scaleY: canvas.getHeight() / originalHeight,
-        selectable: false,
-        evented: false,
+        selectable: true,
+        evented: true,
       })
       canvas.backgroundColor = 'rgba(0,0,0,0)'
       canvas.add(image)
       canvas.sendObjectToBack(image)
-      const subject = imageObjectRef.current
       if (subject) canvas.bringObjectToFront(subject)
       canvas.requestRenderAll()
       recordHistory(true)
@@ -140,10 +157,10 @@ export function useImageBackground({
 
   const clearBackground = () => {
     const canvas = canvasRef.current
-    if (!canvas || !backgroundRemovedRef.current) return
-    canvas.getObjects()
-      .filter((item) => item.get('name') === BACKGROUND_IMAGE_NAME)
-      .forEach((item) => canvas.remove(item))
+    if (!canvas) return
+    const backgrounds = canvas.getObjects().filter((item) => item.get('name') === BACKGROUND_IMAGE_NAME)
+    if (!backgrounds.length) return
+    backgrounds.forEach((item) => canvas.remove(item))
     canvas.backgroundColor = 'rgba(0,0,0,0)'
     canvas.requestRenderAll()
     recordHistory(true)

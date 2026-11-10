@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
-import { Canvas } from 'fabric'
+import { Canvas, type FabricObject } from 'fabric'
+import { EditableThreeDShape, disposeSharedThreeDRenderer } from '../operations/EditableThreeDShape'
+import { EditableThreeDEmoji } from '../operations/EditableThreeDEmoji'
 
 function calculateFitScale(canvas: Canvas, stage: HTMLDivElement) {
   const bounds = stage.getBoundingClientRect()
@@ -85,8 +87,13 @@ export function useFabricCanvas({
       }
       const selectionChanged = () => callbacksRef.current.syncSelection()
   const userInteracted = () => callbacksRef.current.onUserInteraction?.()
+      const releaseThreeDObject = (event: { target?: FabricObject }) => {
+        if (event.target instanceof EditableThreeDShape) event.target.releaseThreeDResources()
+        if (event.target instanceof EditableThreeDEmoji) event.target.releaseThreeDResources()
+      }
 
   canvas.on('mouse:down', userInteracted)
+      canvas.on('object:removed', releaseThreeDObject)
       canvas.on('selection:created', selectionChanged)
       canvas.on('selection:updated', selectionChanged)
       canvas.on('selection:cleared', selectionChanged)
@@ -96,6 +103,7 @@ export function useFabricCanvas({
       canvas.on('text:changed', changed)
       detachListeners = () => {
         canvas?.off('mouse:down', userInteracted)
+        canvas?.off('object:removed', releaseThreeDObject)
         canvas?.off('selection:created', selectionChanged)
         canvas?.off('selection:updated', selectionChanged)
         canvas?.off('selection:cleared', selectionChanged)
@@ -120,6 +128,11 @@ export function useFabricCanvas({
       if (cancelled) {
         resizeObserver.disconnect()
         detachListeners()
+        canvas.getObjects().forEach((object) => {
+          if (object instanceof EditableThreeDShape) object.releaseThreeDResources()
+          if (object instanceof EditableThreeDEmoji) object.releaseThreeDResources()
+        })
+        disposeSharedThreeDRenderer()
         disposePromiseRef.current = Promise.resolve(canvas.dispose())
         await disposePromiseRef.current
       }
@@ -133,6 +146,11 @@ export function useFabricCanvas({
       if (!canvas) return
       const activeCanvas = canvas
       detachListeners?.()
+      activeCanvas.getObjects().forEach((object) => {
+        if (object instanceof EditableThreeDShape) object.releaseThreeDResources()
+        if (object instanceof EditableThreeDEmoji) object.releaseThreeDResources()
+      })
+      disposeSharedThreeDRenderer()
       if (canvasRef.current === activeCanvas) {
         canvasRef.current = null
         setFabricCanvas(null)

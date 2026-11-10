@@ -539,6 +539,8 @@
   border-color: #d4e6d9;
   background: #f0f7f2;
 }
+.layer-row.hidden .layer-select { opacity: 0.55; }
+.layer-rename-input { flex: 1; min-width: 0; height: 28px; padding: 0 6px; border: 1px solid #94b7a0; border-radius: 4px; color: #34443b; font: inherit; font-size: 11px; }
 .layer-select {
   display: flex;
   flex: 1;
@@ -580,6 +582,7 @@
   height: 25px;
   color: #869089;
 }
+.layer-mini:disabled { opacity: 0.45; cursor: default; }
 .delete-mini:hover {
   color: #b5574d;
 }

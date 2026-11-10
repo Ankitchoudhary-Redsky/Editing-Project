@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { FabricImage, IText, Shadow, type FabricObject } from 'fabric'
 import type { TextDesignOptions, TextProperty, UseObjectEditingOptions } from '../model/types'
-import { shapeNames } from '../model/constants'
+import { BACKGROUND_IMAGE_NAME, DRAWING_LAYER_NAME, shapeNames } from '../model/constants'
 import { objectName } from '../model/objectName'
 import { addImageInsideShape, constrainShapeToImage, createShapeObject, isShapeObject, syncImageWithShape } from '../operations/shapeObjects'
 import { createTextInsideShape, createTextObject, syncParentShapeForText, syncTextWithShape, updateLinkedTextFontSize } from '../operations/textObjects'
@@ -150,7 +150,7 @@ export function useObjectEditing({
     const canvas = canvasRef.current
     const active = canvas?.getActiveObject()
     if (!canvas || !active) return
-    if (active === imageObjectRef.current) imageObjectRef.current = null
+    if (active === imageObjectRef.current) {imageObjectRef.current = null;}
     canvas.remove(active)
     canvas.discardActiveObject()
     canvas.requestRenderAll()
@@ -173,9 +173,46 @@ export function useObjectEditing({
 
   const selectLayer = (object: FabricObject) => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || object.get('layerLocked') === true) return
     canvas.setActiveObject(object)
     canvas.requestRenderAll()
+  }
+
+  const setLayerVisibility = (object: FabricObject, visible: boolean) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    object.set('visible', visible)
+    if (!visible && canvas.getActiveObject() === object) canvas.discardActiveObject()
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const setLayerLocked = (object: FabricObject, locked: boolean) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const isPrimaryImage = object === imageObjectRef.current
+    object.set({
+      layerLocked: locked,
+      selectable: !locked && !isPrimaryImage,
+      evented: !locked && !isPrimaryImage,
+      lockMovementX: locked || isPrimaryImage,
+      lockMovementY: locked || isPrimaryImage,
+      lockScalingX: locked || isPrimaryImage,
+      lockScalingY: locked || isPrimaryImage,
+      lockRotation: locked || isPrimaryImage,
+    })
+    if (locked && canvas.getActiveObject() === object) canvas.discardActiveObject()
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const renameLayer = (object: FabricObject, name: string) => {
+    const canvas = canvasRef.current
+    const normalizedName = name.trim()
+    if (!canvas || !normalizedName) return
+    object.set('name', normalizedName)
+    canvas.requestRenderAll()
+    recordHistory(true)
   }
 
   const moveLayer = (object: FabricObject, direction: 'forward' | 'backward') => {
@@ -206,7 +243,7 @@ export function useObjectEditing({
     const canvas = canvasRef.current
     if (!canvas || !target || target === cropObjectRef.current) return
     const name = target.get('name')
-    if (name === '__pixel_studio_drawing_layer__' || name === '__pixel_studio_background_image__') return
+    if (name === DRAWING_LAYER_NAME || name === BACKGROUND_IMAGE_NAME) return
     target.set('shadow', shadow)
     if (size !== undefined) target.set('shadowSize', size)
     if (imageSize !== undefined && target instanceof FabricImage) {
@@ -240,6 +277,9 @@ export function useObjectEditing({
     deleteSelected,
     duplicateSelected,
     selectLayer,
+    setLayerVisibility,
+    setLayerLocked,
+    renameLayer,
     moveLayer,
     updateShapeAppearance,
     updateShadow,

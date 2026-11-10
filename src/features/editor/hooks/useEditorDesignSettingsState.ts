@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { DrawingMode, FilterId, LineStyle, ShapeKind } from '../model/types'
+import type { DrawingMode, FilterId, LineStyle, ShapeKind, ShapeToolMode, ThreeDShapeKind } from '../model/types'
 
 export function useEditorDesignSettingsState() {
   const [textValue, setTextValue] = useState('Your text here')
@@ -12,7 +12,9 @@ export function useEditorDesignSettingsState() {
   const [textOutlineWidth, setTextOutlineWidth] = useState(0)
   const [textShadow, setTextShadow] = useState('none')
   const [shapeKind, setShapeKind] = useState<ShapeKind>('rect')
-    const [lineStyle, setLineStyle] = useState<LineStyle>('straight')
+  const [threeDShapeKind, setThreeDShapeKind] = useState<ThreeDShapeKind>('cube')
+  const [shapeToolMode, setShapeToolMode] = useState<ShapeToolMode>('2d')
+  const [lineStyle, setLineStyle] = useState<LineStyle>('straight')
   const [fillColor, setFillColor] = useState('#b9e4d1')
   const [transparentFill, setTransparentFill] = useState(false)
   const [strokeColor, setStrokeColor] = useState('#27332f')
@@ -30,7 +32,7 @@ export function useEditorDesignSettingsState() {
   const [drawingColor, setDrawingColor] = useState('#222222')
   const [brushSize, setBrushSize] = useState(12)
   const [activeDrawingMode, setActiveDrawingMode] = useState<DrawingMode>('pencil')
-
+  
   return {
     textValue, setTextValue,
     fontFamily, setFontFamily,
@@ -42,7 +44,9 @@ export function useEditorDesignSettingsState() {
     textOutlineWidth, setTextOutlineWidth,
     textShadow, setTextShadow,
     shapeKind, setShapeKind,
-      lineStyle, setLineStyle,
+    threeDShapeKind, setThreeDShapeKind,
+    shapeToolMode, setShapeToolMode,
+    lineStyle, setLineStyle,
     fillColor, setFillColor,
     transparentFill, setTransparentFill,
     strokeColor, setStrokeColor,

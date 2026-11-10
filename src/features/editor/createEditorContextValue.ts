@@ -87,8 +87,12 @@ export function createEditorContextValue({
     shapes: {
       selected: ui.selectedObject,
       isSelectedShape: features.objectEditing.selectedIsShape,
+      mode: settings.shapeToolMode,
+      setMode: settings.setShapeToolMode,
       kind: settings.shapeKind,
       setKind: settings.setShapeKind,
+      threeDKind: settings.threeDShapeKind,
+      setThreeDKind: settings.setThreeDShapeKind,
       lineStyle: settings.lineStyle,
       setLineStyle: settings.setLineStyle,
       fill: settings.fillColor,
@@ -109,6 +113,9 @@ export function createEditorContextValue({
       updateAppearance: features.objectEditing.updateShapeAppearance,
       moveLayer: features.objectEditing.moveLayer,
       selectLayer: features.objectEditing.selectLayer,
+      setLayerVisibility: features.objectEditing.setLayerVisibility,
+      setLayerLocked: features.objectEditing.setLayerLocked,
+      renameLayer: features.objectEditing.renameLayer,
     },
     shadows: {
       update: features.objectEditing.updateShadow,

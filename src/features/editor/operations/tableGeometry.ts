@@ -2,7 +2,7 @@ import { Canvas, FabricImage, FabricObject, Group, Point, Textbox } from 'fabric
 import type { CanvasTable } from '../model/table'
 
 FabricObject.customProperties = Array.from(
-  new Set([...FabricObject.customProperties, 'name']),
+  new Set([...FabricObject.customProperties, 'name', 'layerLocked', 'shapeKind']),
 )
 
 export function getImageBounds(canvas: Canvas, image: FabricImage | null) {

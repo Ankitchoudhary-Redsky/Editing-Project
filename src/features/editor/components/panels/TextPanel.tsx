@@ -15,7 +15,7 @@ export function TextPanel() {
   const { canvas, text } = useEditor()
   return (
     <div className="panel-content">
-      <fieldset className="panel-control-group" disabled={!canvas.hasImage}>
+      <fieldset className="panel-control-group" disabled={!canvas.hasDocument}>
         <button className="primary-button full-button" onClick={() => text.add()}><Plus size={16} /> Add a text box</button>
         <section className="text-design-section" aria-label="Ready-made text designs">
           <span className="field-label">Ready-made designs</span>

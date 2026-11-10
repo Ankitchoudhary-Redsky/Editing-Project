@@ -35,6 +35,7 @@ export function useEditorDraftRestoration({
     setTextOutlineWidth,
     setTextShadow,
     setShapeKind,
+    setThreeDShapeKind,
     setLineStyle,
     setFillColor,
     setTransparentFill,
@@ -42,7 +43,6 @@ export function useEditorDraftRestoration({
     setStrokeWidth,
     setShapeOpacity,
   } = designSettings
-
   return useCallback((
     draft: PersistedEditorDraft,
     restoreResize: (settings: ResizeSettings) => void,
@@ -72,6 +72,7 @@ export function useEditorDraftRestoration({
     setTextOutlineWidth(draft.textOutlineWidth)
     setTextShadow(draft.textShadow)
     setShapeKind(draft.shapeKind)
+    setThreeDShapeKind(draft.threeDShapeKind ?? 'cube')
     setLineStyle(draft.lineStyle)
     setFillColor(draft.fillColor)
     setTransparentFill(draft.transparentFill)
@@ -119,6 +120,7 @@ export function useEditorDraftRestoration({
     setTextOutlineWidth,
     setTextShadow,
     setTextValue,
+    setThreeDShapeKind,
     setTransparentFill,
     setVideoAudio,
     setZoom,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { Canvas, FabricImage, Rect, type FabricObject } from 'fabric'
 import type { FilterId, EditorTool, UseEditorCanvasCoreOptions } from '../model/types'
-import { BACKGROUND_IMAGE_NAME, serializeCanvas } from '../model/constants'
+import { BACKGROUND_IMAGE_NAME, DRAWING_LAYER_NAME, serializeCanvas } from '../model/constants'
 import { useFabricCanvas } from './useFabricCanvas'
 import { useHistoryRecorder } from './useHistoryRecorder'
 
@@ -53,7 +53,9 @@ export function useEditorCanvasCore({
 
     const currentObjects = canvas.getObjects()
     const image = currentObjects.find(
-      (item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME,
+      (item) => item instanceof FabricImage &&
+        item.get('name') !== BACKGROUND_IMAGE_NAME &&
+        item.get('name') !== DRAWING_LAYER_NAME,
     )
     if (image && (
       image.selectable || image.evented || !image.lockMovementX || !image.lockMovementY ||
@@ -70,12 +72,15 @@ export function useEditorCanvasCore({
       })
     }
     const imageObject = image instanceof FabricImage ? image : null
-    if (imageObjectRef.current !== imageObject) imageObjectRef.current = imageObject
+    if (imageObjectRef.current !== imageObject) {
+      imageObjectRef.current = imageObject
+      imageSourceRef.current = imageObject?.getSrc() ?? ''
+    }
     setCropRotation(image instanceof FabricImage ? Math.round(image.angle || 0) : 0)
     setHasImage(Boolean(image))
-    setHasDocument(Boolean(image))
     if (!(image instanceof FabricImage)) setImageThumbnail('')
     const visibleObjects = currentObjects.filter((item) => item !== cropObjectRef.current)
+    setHasDocument(visibleObjects.length > 0)
     const previousObjects = syncedObjectsRef.current
     if (
       visibleObjects.length !== previousObjects.length ||

@@ -34,7 +34,7 @@ export function ToolPanel() {
               key={id}
               type="button"
               className={`panel-subtool ${tools.active === id ? 'active' : ''}`}
-              disabled={(id === 'crop' || id === 'resize') && !canvas.hasImage}
+              disabled={(id === 'crop' || id === 'resize') && !canvas.hasDocument}
               aria-pressed={tools.active === id}
               onClick={() => {
                 tools.setActive(id)

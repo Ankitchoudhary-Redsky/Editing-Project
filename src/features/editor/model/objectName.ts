@@ -1,7 +1,9 @@
 import { Circle, FabricImage, IText, Line, Triangle, type FabricObject } from 'fabric'
+import { BACKGROUND_IMAGE_NAME } from './constants'
 
 export function objectName(object: FabricObject, index: number) {
   const customName = (object as FabricObject & { name?: string }).name
+  if (customName === BACKGROUND_IMAGE_NAME) return 'Background'
   if (customName) return customName
   if (object instanceof FabricImage) return 'Image'
   if (object instanceof IText) return object.text?.split('\n')[0]?.slice(0, 22) || 'Text'

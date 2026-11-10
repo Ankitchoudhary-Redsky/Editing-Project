@@ -16,7 +16,9 @@ import type { useTextAnimation } from '../hooks/useTextAnimation'
 export type EditorMode = 'image' | 'video'
 export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers' | 'shadows' | 'video-upload' | 'video-trim' | 'animate'
 export type DrawingMode = 'pencil' | 'sketch' | 'marker' | 'highlighter' | 'eraser' | 'magic-remover' | 'lasso'
-export type ShapeKind = 'rect' | 'roundRect' | 'circle' | 'ellipse' | 'line' | 'arrow' | 'triangle' | 'star' | 'pentagon'
+export type ShapeKind = 'rect' | 'roundRect' | 'square' | 'circle' | 'ellipse' | 'line' | 'dashedLine' | 'dottedLine' | 'arrow' | 'doubleArrow' | 'curvedArrow' | 'triangle' | 'rightTriangle' | 'diamond' | 'star' | 'pentagon' | 'hexagon' | 'octagon' | 'heart' | 'cross' | 'plus' | 'minus' | 'chevron' | 'parallelogram' | 'speechBubble' | 'cloud' | 'ring' | 'donut' | 'arc'
+export type ThreeDShapeKind = 'sphere' | 'cube' | 'box' | 'roundedBox' | 'cylinder' | 'cone' | 'torus' | 'torusKnot' | 'capsule' | 'plane' | 'circle' | 'ring' | 'tetrahedron' | 'octahedron' | 'dodecahedron' | 'icosahedron' | 'diamond' | 'pyramid' | 'triangularPrism' | 'pentagonalPrism' | 'hexagonalPrism' | 'starExtrusion' | 'heartExtrusion' | 'arrow' | 'heart' | 'star' | 'sparkle' | 'check' | 'lightning' | 'cloud' | 'speech' | 'plus' | 'cross' | 'play' | 'flower' | 'crown' | 'hexagon'
+export type ShapeToolMode = '2d' | '3d'
 export type LineStyle = 'straight' | 'curve-up' | 'curve-down'
 
 export type ExportFormat = 'png' | 'jpeg' | 'gif' | 'mp4'
@@ -158,8 +160,11 @@ export type UseShapeDrawingOptions = {
   canvasRef: MutableRefObject<Canvas | null>
   imageObjectRef: MutableRefObject<FabricImage | null>
   activeTool: EditorTool
+  shapeToolMode: ShapeToolMode
+  setActiveTool: (tool: EditorTool) => void
   hasDocument: boolean
   shapeKind: ShapeKind
+  threeDShapeKind: ThreeDShapeKind
   lineStyle: LineStyle
   fillColor: string
   transparentFill: boolean
@@ -315,8 +320,12 @@ export interface EditorContextValue {
   shapes: {
     selected: FabricObject | null
     isSelectedShape: boolean
+    mode: ShapeToolMode
+    setMode: Dispatch<SetStateAction<ShapeToolMode>>
     kind: ShapeKind
     setKind: Dispatch<SetStateAction<ShapeKind>>
+    threeDKind: ThreeDShapeKind
+    setThreeDKind: Dispatch<SetStateAction<ThreeDShapeKind>>
     lineStyle: LineStyle
     setLineStyle: Dispatch<SetStateAction<LineStyle>>
     fill: string
@@ -337,6 +346,9 @@ export interface EditorContextValue {
     updateAppearance: (property: 'fill' | 'stroke' | 'strokeWidth' | 'opacity', value: string | number) => void
     moveLayer: (object: FabricObject, direction: 'forward' | 'backward') => void
     selectLayer: (object: FabricObject) => void
+    setLayerVisibility: (object: FabricObject, visible: boolean) => void
+    setLayerLocked: (object: FabricObject, locked: boolean) => void
+    renameLayer: (object: FabricObject, name: string) => void
   }
   shadows: {
     update: (shadow: Shadow | null, target?: FabricObject | null, size?: number, imageSize?: number) => void
@@ -487,6 +499,7 @@ export type PersistedEditorDraft = EditorSnapshot & {
   textOutlineWidth: number
   textShadow: string
   shapeKind: ShapeKind
+  threeDShapeKind: ThreeDShapeKind
   lineStyle: LineStyle
   fillColor: string
   transparentFill: boolean
@@ -710,6 +723,7 @@ export type EditorFeatureState = {
   isRemovingBackground: boolean
   backgroundProgress: string
   backgroundColor: string
+  shapeToolMode: ShapeToolMode
   textValue: string
   fontFamily: string
   fontSize: number
@@ -720,6 +734,7 @@ export type EditorFeatureState = {
   textOutlineWidth: number
   textShadow: string
   shapeKind: ShapeKind
+  threeDShapeKind: ThreeDShapeKind
   lineStyle: LineStyle
   fillColor: string
   transparentFill: boolean

@@ -75,7 +75,6 @@ export function useEditorSnapshotController({
     resizeDisplay()
     syncObjects()
     imageSourceRef.current = imageObjectRef.current?.getSrc() ?? ''
-    setHasDocument(Boolean(imageObjectRef.current))
     setImageThumbnail(imageObjectRef.current
       ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
       : '')
@@ -91,7 +90,6 @@ export function useEditorSnapshotController({
     selectedFilterRef,
     setDimensions,
     setFilterIntensity,
-    setHasDocument,
     setImageThumbnail,
     setSelectedFilter,
     syncObjects,
