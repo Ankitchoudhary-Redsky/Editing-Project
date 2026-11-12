@@ -35,7 +35,7 @@ import type { DrawingMode,
   EditorContextValue,
   EditorMode, EditorTool, ShapeKind, ShapeToolMode, ThreeDShapeKind, LineStyle, TextProperty, FilterId, EditPoint,
   VideoAudioDraft, VideoClipDraft, VideoPreviewData,
-  ExportFormat, TextAnimation, TextDesignOptions,
+  ExportFormat, PageImageTransform, TextAnimation, TextDesignOptions,
 } from './features/editor/model/types'
 import { hasTransparentPixels, removeImageBackground } from './features/editor/operations/removeImageBackground'
 import { editImagePixels } from './features/editor/operations/editImagePixels'
@@ -318,10 +318,26 @@ function getImageBrushScale(image: FabricImage) {
   return (scaleX + scaleY) / 2
 }
 
+function hasPageCanvasContent(canvas: Canvas) {
+  return canvas.getObjects().some(
+    (object) => object.get('name') !== 'Crop area' && object.visible !== false,
+  )
+}
+
+function hasSerializedPageContent(snapshot: string) {
+  try {
+    const parsed = JSON.parse(snapshot) as { scene?: { objects?: unknown[] } }
+    return Boolean(parsed.scene?.objects?.length)
+  } catch {
+    return true
+  }
+}
+
 type PersistedEditorDraft = EditorSnapshot & {
   addedPages?: AddedEditorPage[]
   pageOneSnapshot?: string
   pageOnePreview?: string
+  hasDeletedPageOneImage?: boolean
   activePageId?: number | null
   scenePageId?: number | null
   imageSources?: Record<string, string>
@@ -364,6 +380,20 @@ type PersistedEditorDraft = EditorSnapshot & {
   exportWatermark: boolean
 }
 
+type PageHistoryState = { history: string[]; index: number }
+type PageImageMoveTransaction = {
+  sourcePageId: number | null
+  targetPageId: number | null
+  image: FabricImage
+  sourceTransform: PageImageTransform
+  targetTransform: PageImageTransform
+  sourceHistoryBefore: PageHistoryState
+  sourceHistoryAfter: PageHistoryState
+  targetHistoryBefore: PageHistoryState
+  targetHistoryAfter: PageHistoryState
+  phase: 'moved' | 'undone'
+}
+
 function App() {
   const canvasElementRef = useRef<HTMLCanvasElement>(null)
   const stageElementRef = useRef<HTMLDivElement>(null)
@@ -379,10 +409,13 @@ function App() {
   const historyRef = useRef<string[]>([])
   const historyIndexRef = useRef(-1)
   const pageHistoryRef = useRef(new Map<number | null, { history: string[]; index: number }>())
+  const pageImageMovesRef = useRef<PageImageMoveTransaction[]>([])
+  const pageImageMoveIndexRef = useRef(-1)
   const activePageIdRef = useRef<number | null>(null)
   const loadedPageIdRef = useRef<number | null>(null)
   const pageSwitchInProgressRef = useRef(false)
   const pendingPageSwitchRef = useRef<number | null | undefined>(undefined)
+  const pageSwitchWaitersRef = useRef<Array<() => void>>([])
   const pendingInitialPageIdRef = useRef<number | null | undefined>(undefined)
   const switchActivePageRef = useRef<(pageId: number | null) => Promise<void>>(async () => {})
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -622,12 +655,27 @@ function App() {
     canvasObjects.forEach((object) => {
       if (object instanceof IText || isShapeObject(object)) attachDeleteControl(object)
     })
-    const image = canvasObjects.find((item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME)
-    image?.set({ selectable: false, evented: false, lockMovementX: true, lockMovementY: true, lockScalingX: true, lockScalingY: true, lockRotation: true })
+    const image = canvasObjects.find((item) =>
+      item instanceof FabricImage &&
+      item.get('name') !== BACKGROUND_IMAGE_NAME &&
+      item.get('pageImageLayer') !== true,
+    )
+    const hasCanvasImage = canvasObjects.some(
+      (item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME,
+    )
+    image?.set({
+      selectable: true,
+      evented: true,
+      lockMovementX: false,
+      lockMovementY: false,
+      lockScalingX: false,
+      lockScalingY: false,
+      lockRotation: false,
+    })
     imageObjectRef.current = image instanceof FabricImage ? image : null
     setCropRotation(image instanceof FabricImage ? Math.round(image.angle || 0) : 0)
 
-    setHasImage(Boolean(image))
+    setHasImage(hasCanvasImage)
     setObjects(
       canvasObjects.filter((item) => item !== cropObjectRef.current),
     )
@@ -958,7 +1006,12 @@ function App() {
           ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
           : '')
         setProjectName(draft.projectName)
-        const restoredPages = draft.addedPages ?? []
+        setHasDeletedPageOneImage(Boolean(draft.hasDeletedPageOneImage))
+        const restoredPages = (draft.addedPages ?? []).map((page) =>
+          page.snapshot && !hasSerializedPageContent(page.snapshot)
+            ? { ...page, imageUrl: undefined }
+            : page,
+        )
         setAddedPages(restoredPages)
         pageOneSnapshotRef.current = draft.pageOneSnapshot
         setPageOneSnapshot(draft.pageOneSnapshot)
@@ -969,11 +1022,36 @@ function App() {
           ? JSON.parse(persistedActivePage.snapshot) as EditorSnapshot
           : undefined
         const persistedPageSnapshotMatches = persistedPageSnapshot?.pageId === persistedActivePageId
-        const restoredActivePageId = persistedActivePageId !== null &&
+        let restoredActivePageId = persistedActivePageId !== null &&
           (!persistedSceneMatchesPage || !persistedPageSnapshotMatches)
           ? null
           : persistedActivePageId
-        if (restoredActivePageId !== null) {
+
+        const savedActivePageHasContent = persistedActivePageId === null
+          ? hasSerializedPageContent(JSON.stringify({ scene: draft.scene }))
+          : Boolean(
+              (persistedActivePage?.snapshot && hasSerializedPageContent(persistedActivePage.snapshot)) ||
+              persistedActivePage?.imageUrl,
+            )
+        const mainPageHasContent = !draft.hasDeletedPageOneImage && (
+          persistedActivePageId === null
+            ? hasSerializedPageContent(JSON.stringify({ scene: draft.scene }))
+            : Boolean(draft.pageOneSnapshot && hasSerializedPageContent(draft.pageOneSnapshot))
+        )
+        if (!savedActivePageHasContent) {
+          if (mainPageHasContent) {
+            restoredActivePageId = null
+          } else {
+            const firstPageWithContent = restoredPages.find((page) =>
+              page.snapshot
+                ? hasSerializedPageContent(page.snapshot)
+                : Boolean(page.imageUrl),
+            )
+            if (firstPageWithContent) restoredActivePageId = firstPageWithContent.id
+          }
+        }
+
+        if (restoredActivePageId !== null || persistedActivePageId !== null) {
           if (draft.pageOneSnapshot) {
             const pageOneState = JSON.parse(draft.pageOneSnapshot) as EditorSnapshot
             canvas.setDimensions({ width: pageOneState.width, height: pageOneState.height })
@@ -999,7 +1077,7 @@ function App() {
           activePageIdRef.current = null
           loadedPageIdRef.current = null
           setActivePageId(null)
-          pendingInitialPageIdRef.current = restoredActivePageId
+          pendingInitialPageIdRef.current = restoredActivePageId ?? undefined
           setPageOnePreview(draft.pageOnePreview ?? canvas.toDataURL({ format: 'png', multiplier: 0.3 }))
         } else {
           activePageIdRef.current = null
@@ -1369,7 +1447,7 @@ function App() {
       const activePageSnapshot = activePageId === null
         ? undefined
         : serializeEditorSnapshot(canvas)
-      const activePagePreview = activePageId === null
+      const activePagePreview = activePageId === null || !hasPageCanvasContent(canvas)
         ? undefined
         : canvas.toDataURL({ format: 'png', multiplier: 0.3 })
       const pagesWithActiveSnapshot = activePageId === null
@@ -1391,6 +1469,7 @@ function App() {
         addedPages: pagesWithActiveSnapshot,
         pageOneSnapshot,
         pageOnePreview,
+        hasDeletedPageOneImage,
         activePageId,
         scenePageId: activePageId,
         imageSources: getImageSourceTokens(),
@@ -1468,6 +1547,7 @@ function App() {
     projectName,
     pageOneSnapshot,
     pageOnePreview,
+    hasDeletedPageOneImage,
     serializeEditorSnapshot,
     resizeHeight,
     resizeWidth,
@@ -1774,12 +1854,12 @@ function App() {
     }
   }, [tableSelectedColumn, tableSelectedRow, updateTableList])
 
-  const deleteImage = () => {
+  const deleteImage = (force = false) => {
     const canvas = activeCanvasRef.current
     if (!canvas) return
 
     const image = imageObjectRef.current
-    if (!image) return
+    if (!image && !force) return
 
     suppressHistoryRef.current = true
     canvas.clear()
@@ -1828,8 +1908,343 @@ function App() {
     }
   }
 
+  const deleteFirstPage = () => {
+    if (activePageIdRef.current === null) {
+      deleteImage(true)
+      return
+    }
+    void switchActivePage(null).then(() => deleteImage(true))
+  }
+
+  const addImageLayerToPage = async (pageId: number | null, file: File) => {
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setNotice('Choose a PNG, JPG, or WebP image.')
+      return
+    }
+    if (file.size > 30 * 1024 * 1024) {
+      setNotice('Images must be smaller than 30 MB.')
+      return
+    }
+    if (loadedPageIdRef.current !== pageId) await switchActivePage(pageId)
+    const canvas = activeCanvasRef.current
+    if (!canvas || loadedPageIdRef.current !== pageId) return
+
+    try {
+      const { image } = await loadLocalImage(file)
+      if (activeCanvasRef.current !== canvas) return
+
+      const scale = Math.min(
+        1,
+        (canvas.getWidth() * 0.75) / Math.max(1, image.width ?? 1),
+        (canvas.getHeight() * 0.75) / Math.max(1, image.height ?? 1),
+      )
+      image.set({
+        left: (canvas.getWidth() - (image.width ?? 1) * scale) / 2,
+        top: (canvas.getHeight() - (image.height ?? 1) * scale) / 2,
+        originX: 'left',
+        originY: 'top',
+        scaleX: scale,
+        scaleY: scale,
+        selectable: true,
+        evented: true,
+        lockMovementX: false,
+        lockMovementY: false,
+        lockScalingX: false,
+        lockScalingY: false,
+        lockRotation: false,
+      })
+      image.set('name', file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Image')
+      canvas.add(image)
+      canvas.setActiveObject(image)
+      canvas.requestRenderAll()
+      setHasDocument(true)
+      syncObjects()
+      recordHistory(true)
+      const preview = canvas.toDataURL({ format: 'png', multiplier: 0.3 })
+      if (pageId === null) {
+        setPageOnePreview(preview)
+      } else {
+        setAddedPages((pages) => pages.map((page) => page.id === pageId
+          ? {
+              ...page,
+              imageUrl: preview,
+              width: canvas.getWidth(),
+              height: canvas.getHeight(),
+              snapshot: serializeEditorSnapshot(canvas),
+            }
+          : page))
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not add that image to the page.')
+    }
+  }
+
+  const moveImageObjectBetweenPages = async (
+    sourcePageId: number | null,
+    targetPageId: number | null,
+    image: FabricImage,
+    transform: PageImageTransform,
+  ) => {
+    if (sourcePageId === targetPageId) return
+    if (targetPageId !== null && !addedPages.some((page) => page.id === targetPageId)) return
+    if (loadedPageIdRef.current !== sourcePageId) await switchActivePage(sourcePageId)
+
+    const sourceCanvas = activeCanvasRef.current
+    if (
+      !sourceCanvas ||
+      loadedPageIdRef.current !== sourcePageId ||
+      !sourceCanvas.getObjects().includes(image)
+    ) return
+
+    recordHistory(true)
+    const sourceHistoryBefore = { history: [...historyRef.current], index: historyIndexRef.current }
+    image.set(transform)
+    image.setCoords()
+    sourceCanvas.discardActiveObject()
+    sourceCanvas.remove(image)
+    sourceCanvas.requestRenderAll()
+    syncObjects()
+    setHasDocument(sourceCanvas.getObjects().length > 0)
+    recordHistory(true)
+    const sourceHistoryAfter = { history: [...historyRef.current], index: historyIndexRef.current }
+
+    const sourceSnapshot = serializeEditorSnapshot(sourceCanvas)
+    const sourcePreview = hasPageCanvasContent(sourceCanvas)
+      ? sourceCanvas.toDataURL({ format: 'png', multiplier: 0.3 })
+      : undefined
+    if (sourcePageId === null) {
+      pageOneSnapshotRef.current = sourceSnapshot
+      setPageOneSnapshot(sourceSnapshot)
+      setPageOnePreview(sourcePreview ?? '')
+    } else {
+      setAddedPages((pages) => pages.map((page) => page.id === sourcePageId
+        ? { ...page, snapshot: sourceSnapshot, imageUrl: sourcePreview }
+        : page))
+    }
+
+    await switchActivePage(targetPageId)
+    const targetCanvas = activeCanvasRef.current
+    if (!targetCanvas || loadedPageIdRef.current !== targetPageId) {
+      sourceCanvas.add(image)
+      image.set(transform)
+      sourceCanvas.requestRenderAll()
+      return
+    }
+    const targetHistoryBefore = { history: [...historyRef.current], index: historyIndexRef.current }
+
+    const imageWidth = Math.max(1, image.width ?? 1) * Math.abs(transform.scaleX)
+    const imageHeight = Math.max(1, image.height ?? 1) * Math.abs(transform.scaleY)
+    const angle = transform.angle * Math.PI / 180
+    const rotatedWidth = imageWidth * Math.abs(Math.cos(angle)) + imageHeight * Math.abs(Math.sin(angle))
+    const rotatedHeight = imageWidth * Math.abs(Math.sin(angle)) + imageHeight * Math.abs(Math.cos(angle))
+    const fitScale = Math.min(
+      1,
+      targetCanvas.getWidth() / Math.max(1, rotatedWidth),
+      targetCanvas.getHeight() / Math.max(1, rotatedHeight),
+    )
+
+    image.set({
+      ...transform,
+      left: targetCanvas.getWidth() / 2,
+      top: targetCanvas.getHeight() / 2,
+      scaleX: transform.scaleX * fitScale,
+      scaleY: transform.scaleY * fitScale,
+      originX: 'center',
+      originY: 'center',
+      selectable: true,
+      evented: true,
+      lockMovementX: false,
+      lockMovementY: false,
+      lockScalingX: false,
+      lockScalingY: false,
+      lockRotation: false,
+      pageImageLayer: true,
+    })
+    image.setCoords()
+    const bounds = image.getBoundingRect()
+    const shiftX = bounds.left < 0
+      ? -bounds.left
+      : bounds.left + bounds.width > targetCanvas.getWidth()
+        ? targetCanvas.getWidth() - bounds.left - bounds.width
+        : 0
+    const shiftY = bounds.top < 0
+      ? -bounds.top
+      : bounds.top + bounds.height > targetCanvas.getHeight()
+        ? targetCanvas.getHeight() - bounds.top - bounds.height
+        : 0
+    image.set({ left: (image.left ?? 0) + shiftX, top: (image.top ?? 0) + shiftY })
+    image.setCoords()
+    targetCanvas.add(image)
+    targetCanvas.setActiveObject(image)
+    targetCanvas.requestRenderAll()
+    setHasDocument(true)
+    syncObjects()
+    recordHistory(true)
+    const targetHistoryAfter = { history: [...historyRef.current], index: historyIndexRef.current }
+    const targetTransform: PageImageTransform = {
+      left: image.left ?? 0,
+      top: image.top ?? 0,
+      scaleX: image.scaleX ?? 1,
+      scaleY: image.scaleY ?? 1,
+      angle: image.angle ?? 0,
+      skewX: image.skewX ?? 0,
+      skewY: image.skewY ?? 0,
+      flipX: image.flipX ?? false,
+      flipY: image.flipY ?? false,
+      originX: image.originX,
+      originY: image.originY,
+      selectable: image.selectable,
+      evented: image.evented,
+      lockMovementX: image.lockMovementX,
+      lockMovementY: image.lockMovementY,
+      lockScalingX: image.lockScalingX,
+      lockScalingY: image.lockScalingY,
+      lockRotation: image.lockRotation,
+      pageImageLayer: image.get('pageImageLayer') === true,
+    }
+    pageImageMovesRef.current = pageImageMovesRef.current.slice(0, pageImageMoveIndexRef.current + 1)
+    pageImageMovesRef.current.push({
+      sourcePageId,
+      targetPageId,
+      image,
+      sourceTransform: transform,
+      targetTransform,
+      sourceHistoryBefore,
+      sourceHistoryAfter,
+      targetHistoryBefore,
+      targetHistoryAfter,
+      phase: 'moved',
+    })
+    pageImageMoveIndexRef.current = pageImageMovesRef.current.length - 1
+
+    const targetSnapshot = serializeEditorSnapshot(targetCanvas)
+    const targetPreview = targetCanvas.toDataURL({ format: 'png', multiplier: 0.3 })
+    if (targetPageId === null) {
+      pageOneSnapshotRef.current = targetSnapshot
+      setPageOneSnapshot(targetSnapshot)
+      setPageOnePreview(targetPreview)
+    } else {
+      setAddedPages((pages) => pages.map((page) => page.id === targetPageId
+        ? {
+            ...page,
+            imageUrl: targetPreview,
+            width: targetCanvas.getWidth(),
+            height: targetCanvas.getHeight(),
+            snapshot: targetSnapshot,
+          }
+        : page))
+    }
+  }
+
+  const applyPageImageMoveHistory = useCallback(async (move: PageImageMoveTransaction, forward: boolean) => {
+    const sourceCanvas = pageCanvasesRef.current.get(move.sourcePageId)
+    const targetCanvas = pageCanvasesRef.current.get(move.targetPageId)
+    if (!sourceCanvas || !targetCanvas) return false
+
+    const fromCanvas = forward ? sourceCanvas : targetCanvas
+    const toCanvas = forward ? targetCanvas : sourceCanvas
+    const targetTransform = forward ? move.targetTransform : move.sourceTransform
+    const activePageId = activePageIdRef.current
+
+    suppressHistoryRef.current = true
+    try {
+      fromCanvas.discardActiveObject()
+      fromCanvas.remove(move.image)
+      move.image.set(targetTransform)
+      move.image.setCoords()
+      toCanvas.add(move.image)
+      if (activePageId === (forward ? move.targetPageId : move.sourcePageId)) {
+        toCanvas.setActiveObject(move.image)
+      }
+      fromCanvas.requestRenderAll()
+      toCanvas.requestRenderAll()
+
+      const sourceHistory = forward ? move.sourceHistoryAfter : move.sourceHistoryBefore
+      const targetHistory = forward ? move.targetHistoryAfter : move.targetHistoryBefore
+      pageHistoryRef.current.set(move.sourcePageId, {
+        history: [...sourceHistory.history],
+        index: sourceHistory.index,
+      })
+      pageHistoryRef.current.set(move.targetPageId, {
+        history: [...targetHistory.history],
+        index: targetHistory.index,
+      })
+      if (activePageId === move.sourcePageId) {
+        historyRef.current = [...sourceHistory.history]
+        historyIndexRef.current = sourceHistory.index
+      } else if (activePageId === move.targetPageId) {
+        historyRef.current = [...targetHistory.history]
+        historyIndexRef.current = targetHistory.index
+      }
+
+      const savePage = (pageId: number | null, canvas: Canvas) => {
+        const snapshotValue = JSON.parse(serializeEditorSnapshot(canvas)) as EditorSnapshot & { pageId?: number | null }
+        snapshotValue.pageId = pageId
+        const snapshot = JSON.stringify(snapshotValue)
+        const preview = hasPageCanvasContent(canvas)
+          ? canvas.toDataURL({ format: 'png', multiplier: 0.3 })
+          : undefined
+        if (pageId === null) {
+          pageOneSnapshotRef.current = snapshot
+          setPageOneSnapshot(snapshot)
+          setPageOnePreview(preview ?? '')
+        } else {
+          setAddedPages((pages) => pages.map((page) => page.id === pageId
+            ? {
+                ...page,
+                snapshot,
+                imageUrl: preview,
+                width: canvas.getWidth(),
+                height: canvas.getHeight(),
+              }
+            : page))
+        }
+      }
+
+      savePage(move.sourcePageId, sourceCanvas)
+      savePage(move.targetPageId, targetCanvas)
+
+      const activeCanvas = activeCanvasRef.current
+      if (activeCanvas) {
+        const snapshot = JSON.parse(serializeEditorSnapshot(activeCanvas)) as EditorSnapshot
+        setDimensions({ width: activeCanvas.getWidth(), height: activeCanvas.getHeight() })
+        restoreEditorSettings(snapshot)
+        syncObjects()
+        setHasDocument(activeCanvas.getObjects().length > 0)
+        setImageThumbnail(imageObjectRef.current
+          ? activeCanvas.toDataURL({ format: 'png', multiplier: 0.12 })
+          : '')
+      }
+      syncHistoryControls()
+      setHistoryVersion((version) => version + 1)
+      return true
+    } finally {
+      suppressHistoryRef.current = false
+    }
+  }, [restoreEditorSettings, serializeEditorSnapshot, syncHistoryControls, syncObjects])
+
   const undo = useCallback(async () => {
     if (historyTimerRef.current) recordHistory(true)
+    const latestMove = pageImageMovesRef.current[pageImageMoveIndexRef.current]
+    const activePageId = activePageIdRef.current
+    if (
+      latestMove?.phase === 'moved' &&
+      (activePageId === latestMove.sourcePageId || activePageId === latestMove.targetPageId) &&
+      historyIndexRef.current === (activePageId === latestMove.sourcePageId
+        ? latestMove.sourceHistoryAfter.index
+        : latestMove.targetHistoryAfter.index)
+    ) {
+      if (await applyPageImageMoveHistory(latestMove, false)) {
+        latestMove.phase = 'undone'
+        pageImageMoveIndexRef.current -= 1
+        const previousHistory = activePageId === latestMove.sourcePageId
+          ? latestMove.sourceHistoryBefore
+          : latestMove.targetHistoryBefore
+        setCanUndo(previousHistory.index > 0)
+        setCanRedo(true)
+      }
+      return
+    }
     if (historyIndexRef.current <= 0) return
 
     historyIndexRef.current -= 1
@@ -1878,10 +2293,27 @@ function App() {
     } finally {
       suppressHistoryRef.current = false
     }
-  }, [clearTransientDrawingState, recordHistory, resizeDisplay, restoreEditorSettings, restoreTableState, syncHistoryControls, syncObjects])
+  }, [applyPageImageMoveHistory, clearTransientDrawingState, recordHistory, resizeDisplay, restoreEditorSettings, restoreTableState, syncHistoryControls, syncObjects])
 
   const redo = useCallback(async () => {
     if (historyTimerRef.current) recordHistory(true)
+    const nextMove = pageImageMovesRef.current[pageImageMoveIndexRef.current + 1]
+    const activePageId = activePageIdRef.current
+    if (
+      nextMove?.phase === 'undone' &&
+      (activePageId === nextMove.sourcePageId || activePageId === nextMove.targetPageId) &&
+      historyIndexRef.current === (activePageId === nextMove.sourcePageId
+        ? nextMove.sourceHistoryBefore.index
+        : nextMove.targetHistoryBefore.index)
+    ) {
+      if (await applyPageImageMoveHistory(nextMove, true)) {
+        nextMove.phase = 'moved'
+        pageImageMoveIndexRef.current += 1
+        setCanUndo(true)
+        setCanRedo(pageImageMoveIndexRef.current < pageImageMovesRef.current.length - 1)
+      }
+      return
+    }
     if (historyIndexRef.current >= historyRef.current.length - 1) return
 
     historyIndexRef.current += 1
@@ -1930,7 +2362,7 @@ function App() {
     } finally {
       suppressHistoryRef.current = false
     }
-  }, [clearTransientDrawingState, recordHistory, resizeDisplay, restoreEditorSettings, restoreTableState, syncHistoryControls, syncObjects])
+  }, [applyPageImageMoveHistory, clearTransientDrawingState, recordHistory, resizeDisplay, restoreEditorSettings, restoreTableState, syncHistoryControls, syncObjects])
 
   const uploadFile = async (file?: File) => {
     if (!file) return
@@ -1998,13 +2430,13 @@ function App() {
         originY: 'top',
         scaleX: imageScale,
         scaleY: imageScale,
-        selectable: false,
-        evented: false,
-        lockMovementX: true,
-        lockMovementY: true,
-        lockScalingX: true,
-        lockScalingY: true,
-        lockRotation: true,
+        selectable: true,
+        evented: true,
+        lockMovementX: false,
+        lockMovementY: false,
+        lockScalingX: false,
+        lockScalingY: false,
+        lockRotation: false,
       })
       image.set('name', file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Image')
       canvas.add(image)
@@ -2018,7 +2450,9 @@ function App() {
 
       setDimensions({ width, height })
       setHasDocument(true)
-      setHasDeletedPageOneImage(false)
+      if (activePageIdRef.current === null) {
+        setHasDeletedPageOneImage(false)
+      }
       setImageThumbnail(thumbnail)
       setBrightness(0)
       setContrast(0)
@@ -4049,6 +4483,8 @@ const deleteSelection = async () => {
     if (!sourceCanvas) return
     if (pageSwitchInProgressRef.current) {
       pendingPageSwitchRef.current = pageId
+      await new Promise<void>((resolve) => pageSwitchWaitersRef.current.push(resolve))
+      if (loadedPageIdRef.current !== pageId) await switchActivePage(pageId)
       return
     }
     if (pageId === loadedPageIdRef.current) {
@@ -4069,7 +4505,9 @@ const deleteSelection = async () => {
 
       const currentPageId = loadedPageIdRef.current
       const currentSnapshot = serializeEditorSnapshot(sourceCanvas)
-      const currentPreview = sourceCanvas.toDataURL({ format: 'png', multiplier: 0.3 })
+      const currentPreview = hasPageCanvasContent(sourceCanvas)
+        ? sourceCanvas.toDataURL({ format: 'png', multiplier: 0.3 })
+        : undefined
       const currentEditorState = JSON.parse(currentSnapshot) as EditorSnapshot
       pageEditorStateRef.current.set(currentPageId, {
         editor: currentEditorState.editor,
@@ -4078,7 +4516,7 @@ const deleteSelection = async () => {
       if (currentPageId === null) {
         pageOneSnapshotRef.current = currentSnapshot
         setPageOneSnapshot(currentSnapshot)
-        setPageOnePreview(currentPreview)
+        setPageOnePreview(currentPreview ?? '')
       } else {
         setAddedPages((pages) => pages.map((page) => page.id === currentPageId
           ? { ...page, snapshot: currentSnapshot, imageUrl: currentPreview }
@@ -4228,6 +4666,8 @@ const deleteSelection = async () => {
       pendingPageSwitchRef.current = undefined
       if (pendingPageId !== undefined && pendingPageId !== loadedPageIdRef.current) {
         void switchActivePage(pendingPageId)
+      } else {
+        pageSwitchWaitersRef.current.splice(0).forEach((resolve) => resolve())
       }
     }
   }
@@ -4289,6 +4729,9 @@ const deleteSelection = async () => {
       setActiveId: setActivePageId,
       switching: pageSwitching,
       pageOnePreview,
+      deleteFirst: deleteFirstPage,
+      addImageLayer: addImageLayerToPage,
+      moveImageObject: moveImageObjectBetweenPages,
       replace: (pageId) => addedPageActionsRef.current?.replace(pageId),
       delete: (pageId) => addedPageActionsRef.current?.delete(pageId),
       select: async (pageId) => {
@@ -4473,6 +4916,13 @@ const deleteSelection = async () => {
         onDrop={handleDrop}
       >
         <EditorHeader />
+
+        {!draftReady && (
+          <div className="draft-restore-overlay" role="status" aria-live="polite">
+            <span className="draft-restore-spinner" aria-hidden="true" />
+            <span>Restoring your design…</span>
+          </div>
+        )}
 
         <input
           ref={setUploadInputElement}

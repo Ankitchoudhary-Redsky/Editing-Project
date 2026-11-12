@@ -141,6 +141,7 @@ export function restoreImageSourceTokens(sources: Record<string, string>) {
 export function serializeCanvas(canvas: Canvas) {
   const scene = canvas.toObject([
     'name',
+    'pageImageLayer',
     'textAnimation',
     'shapeId',
     'textParentId',

@@ -23,6 +23,27 @@ export type LineStyle = 'straight' | 'curve-up' | 'curve-down'
 
 export type ExportFormat = 'png' | 'jpeg' | 'gif' | 'mp4'
 export type TextAnimation = 'none' | 'fade' | 'pulse' | 'bounce' | 'typewriter' | 'from-top' | 'from-bottom' | 'from-left' | 'from-right' | 'pop' | 'wipe' | 'blur' | 'succession' | 'breathe' | 'baseline' | 'drift' | 'tectonic' | 'tumble' | 'neon' | 'scrapbook' | 'stomp'
+export type PageImageTransform = {
+  left: number
+  top: number
+  scaleX: number
+  scaleY: number
+  angle: number
+  skewX: number
+  skewY: number
+  flipX: boolean
+  flipY: boolean
+  originX: FabricImage['originX']
+  originY: FabricImage['originY']
+  selectable: boolean
+  evented: boolean
+  lockMovementX: boolean
+  lockMovementY: boolean
+  lockScalingX: boolean
+  lockScalingY: boolean
+  lockRotation: boolean
+  pageImageLayer: boolean
+}
 
 export type EditorUiState = ReturnType<typeof useEditorUiState>
 
@@ -267,6 +288,14 @@ export interface EditorContextValue {
     setActiveId: Dispatch<SetStateAction<number | null>>
     switching: boolean
     pageOnePreview: string
+    deleteFirst: () => void
+    addImageLayer: (pageId: number | null, file: File) => Promise<void>
+    moveImageObject: (
+      sourcePageId: number | null,
+      targetPageId: number | null,
+      image: FabricImage,
+      transform: PageImageTransform,
+    ) => Promise<void>
     replace: (pageId: number) => void
     delete: (pageId: number) => void
     select: (pageId: number | null) => Promise<void>

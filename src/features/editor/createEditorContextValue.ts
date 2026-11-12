@@ -45,6 +45,11 @@ export function createEditorContextValue({
       setActiveId: () => {},
       switching: false,
       pageOnePreview: '',
+      deleteFirst: () => {},
+      addImageLayer: async (pageId, file) => { void pageId; void file },
+      moveImageObject: async (sourcePageId, targetPageId, image, transform) => {
+        void sourcePageId; void targetPageId; void image; void transform
+      },
       replace: (pageId) => { void pageId },
       delete: (pageId) => { void pageId },
       select: async (pageId) => { void pageId },

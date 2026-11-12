@@ -6,6 +6,24 @@ import { editorCopy } from '../../model/editorCopy'
 export function UploadPanel() {
   const { canvas, fabricCanvas, tools, pages } = useEditor()
 
+  const openPageOneUpload = async () => {
+    await pages.select(null)
+    tools.openFilePicker()
+  }
+
+  const deletePageOneImage = () => pages.deleteFirst()
+
+  const selectPageAndScroll = async (pageId: number | null) => {
+    await pages.select(pageId)
+    const pageSelector = pageId === null
+      ? '[data-editor-page-id="first"]'
+      : `[data-editor-page-id="${pageId}"]`
+    document.querySelector<HTMLElement>(pageSelector)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    })
+  }
+
   const handleUploadDragOver = (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault()
     event.stopPropagation()
@@ -19,7 +37,11 @@ export function UploadPanel() {
     void tools.uploadFile(event.dataTransfer.files[0])
   }
 
-  const showPageOne = canvas.hasImage || canvas.hasDocument || pages.items.length > 0 || canvas.hasDeletedPageOneImage
+  const showPageOne = !canvas.hasDeletedPageOneImage && (
+    canvas.hasImage || canvas.hasDocument || pages.items.length > 0
+  )
+  const showPageOneDelete = pages.items.length > 0 || (pages.activeId === null && canvas.hasDocument)
+  const addedPageNumberOffset = canvas.hasDeletedPageOneImage ? 1 : 2
   const uploadedPages = [
     ...(showPageOne
       ? [{
@@ -33,7 +55,7 @@ export function UploadPanel() {
         }]
       : []),
     ...pages.items.flatMap((page, index) => {
-      const pageNumber = index + 2
+      const pageNumber = index + addedPageNumberOffset
       return page.imageUrl
       ? [{
           id: `page-${page.id}`,
@@ -76,7 +98,7 @@ export function UploadPanel() {
                   className="uploaded-item-select"
                   aria-pressed={pages.activeId === page.pageId}
                   aria-label={`Go to Page ${page.pageNumber}`}
-                  onClick={() => pages.select(page.pageId)}
+                  onClick={() => void selectPageAndScroll(page.pageId)}
                 >
                   {page.imageUrl ? (
                     <img
@@ -87,23 +109,23 @@ export function UploadPanel() {
                         const sourcePage = page.pageId === null
                           ? undefined
                           : pages.items.find((item) => item.id === page.pageId)
-                        const imageUrl = sourcePage?.imageUrl ?? (
-                          page.pageId === null && fabricCanvas
-                            ? fabricCanvas.toDataURL({ format: 'png', multiplier: 1 })
-                            : undefined
-                        )
+                        const imageUrl = page.pageId === pages.activeId && fabricCanvas
+                          ? fabricCanvas.toDataURL({ format: 'png', multiplier: 1 })
+                          : page.imageUrl
                         if (!imageUrl) {
                           event.preventDefault()
                           return
                         }
 
                         event.dataTransfer.effectAllowed = 'copy'
-                        event.dataTransfer.setData('application/x-estudio-page-image', JSON.stringify({
+                        const payload = JSON.stringify({
                           imageUrl,
                           fileName: sourcePage?.fileName ?? page.fileName,
                           width: sourcePage?.width ?? page.width,
                           height: sourcePage?.height ?? page.height,
-                        }))
+                        })
+                        event.dataTransfer.setData('application/x-estudio-page-image', payload)
+                        event.dataTransfer.setData('text/plain', payload)
                       }}
                     />
                   ) : (
@@ -116,11 +138,11 @@ export function UploadPanel() {
                 </button>
                 {page.pageId === null ? (
                   <>
-                    <button className="mini-button" disabled={pages.switching} onClick={tools.openFilePicker} title={canvas.hasImage ? 'Replace image' : 'Upload image'}>
+                    <button className="mini-button" disabled={pages.switching} onClick={openPageOneUpload} title={canvas.hasImage ? 'Replace image' : 'Upload image'}>
                       {canvas.hasImage ? <RotateCcw size={15} /> : <ImagePlus size={15} />}
                     </button>
-                    {canvas.hasImage && (
-                      <button className="mini-button" disabled={pages.switching} onClick={tools.deleteImage} title="Delete image">
+                    {showPageOneDelete && (
+                      <button className="mini-button" disabled={pages.switching} onClick={deletePageOneImage} title="Delete page">
                         <Trash size={15} />
                       </button>
                     )}

@@ -19,6 +19,32 @@
   letter-spacing: 0;
 }
 
+.draft-restore-overlay {
+  position: absolute;
+  z-index: 1000;
+  inset: 64px 0 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: #53645b;
+  background: rgba(248, 250, 248, 0.94);
+  font-size: 13px;
+}
+
+.draft-restore-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #d5e2da;
+  border-top-color: #34785d;
+  border-radius: 50%;
+  animation: draft-restore-spin 0.8s linear infinite;
+}
+
+@keyframes draft-restore-spin {
+  to { transform: rotate(360deg); }
+}
+
 .topbar {
   display: flex;
   flex: 0 0 64px;
