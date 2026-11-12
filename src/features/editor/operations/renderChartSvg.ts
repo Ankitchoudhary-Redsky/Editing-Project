@@ -20,12 +20,15 @@ export function renderChartSvg(config: ChartConfig, width = 760, height = 480) {
   const legendEntries = isPie
     ? safeLabels.map((name, index) => ({ name, color: colors[index % colors.length] }))
     : series.map((item) => ({ name: item.name, color: item.color }))
+  const legendSpacing = !sideLegend && legendEntries.length > 1
+    ? Math.min(config.legendSpacing, Math.max(0, (plot.w - 120) / (legendEntries.length - 1)))
+    : config.legendSpacing
   const legendItems = legendEntries.map((item, index) => {
-    const x = sideLegend ? 0 : index * config.legendSpacing
+    const x = sideLegend ? 0 : index * legendSpacing
     const y = sideLegend ? index * 25 : 0
     return `<g transform="translate(${x},${y})"><circle r="6" fill="${item.color}"/><text x="11" y="4" ${font}>${esc(item.name)}</text></g>`
   }).join('')
-  const legendWidth = Math.max(0, legendEntries.length - 1) * config.legendSpacing + 120
+  const legendWidth = Math.max(0, legendEntries.length - 1) * legendSpacing + 120
   const legendX = config.legendPosition === 'left' ? 12 : config.legendPosition === 'right' ? width - 150 : config.legendAlign === 'left' ? plot.x : config.legendAlign === 'right' ? plot.x + plot.w - legendWidth : plot.x + (plot.w - legendWidth) / 2
   const legendY = config.legendPosition === 'bottom' ? height - 33 : config.legendPosition === 'top' ? 78 : plot.y + 8
   const legend = config.showLegend && legendEntries.length ? `<g transform="translate(${legendX},${legendY})">${legendItems}</g>` : ''

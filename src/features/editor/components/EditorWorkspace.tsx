@@ -1,6 +1,6 @@
 import type { DragEvent } from "react";
 import { useEffect, useRef, useState } from "react";
-import {
+import { CopyPlus,
   Eraser,
   Fullscreen,
   LockKeyhole,
@@ -9,7 +9,7 @@ import {
   MoveHorizontal,
   MoveVertical,
   Paintbrush,
-  Pencil,
+  Pencil, Trash2,
   UnlockKeyhole,
   Upload,
 } from "lucide-react";
@@ -98,16 +98,79 @@ function CanvasSurface({
     </div>
   );
 }
-// type EditorWorkspaceProps = {
-//   setCanvasElement: (element: HTMLCanvasElement | null) => void;
-//   setStageElement: (element: HTMLDivElement | null) => void;
-// };
+
+function FloatingObjectToolbar({
+  stageRef,
+}: {
+  stageRef: React.RefObject<HTMLDivElement | null>
+}) {
+  const { canvas, fabricCanvas, shapes } = useEditor()
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
+
+  useEffect(() => {
+    const active = canvas.selected
+    const stage = stageRef.current
+    const fabricElement = fabricCanvas?.getElement()
+    if (!active || !stage || !fabricCanvas || !fabricElement || active.get('name') === 'Crop area') {
+      setPosition(null)
+      return
+    }
+
+    const updatePosition = () => {
+      const activeBounds = active.getBoundingRect()
+      const stageBounds = stage.getBoundingClientRect()
+      const canvasBounds = fabricElement.getBoundingClientRect()
+      const canvasOffsetX = canvasBounds.left - stageBounds.left
+      const canvasOffsetY = canvasBounds.top - stageBounds.top
+      const scaleX = canvasBounds.width / fabricCanvas.getWidth()
+      const scaleY = canvasBounds.height / fabricCanvas.getHeight()
+      const right = canvasOffsetX + (activeBounds.left + activeBounds.width) * scaleX
+      const top = canvasOffsetY + activeBounds.top * scaleY - 10
+      const toolbarWidth = 104
+
+      setPosition({
+        left: Math.max(toolbarWidth + 8, Math.min(stageBounds.width - 8, right)),
+        top: Math.max(8, top),
+      })
+    }
+
+    updatePosition()
+    fabricCanvas.on('after:render', updatePosition)
+    window.addEventListener('resize', updatePosition)
+    return () => {
+      fabricCanvas.off('after:render', updatePosition)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [canvas.selected, fabricCanvas, stageRef])
+
+  if (!position) return null
+
+
+
+  return (
+    <div
+      className="floating-object-toolbar"
+      style={{ left: position.left, top: position.top }}
+      onPointerDown={(event) => event.stopPropagation()}
+      role="toolbar"
+      aria-label="Selected object actions"
+    >
+      <button type="button" title="Duplicate" aria-label="Duplicate selected object" onClick={() => void shapes.duplicate()}>
+        <CopyPlus size={19} strokeWidth={2} />
+      </button>
+      <button type="button" className="floating-delete-button" title="Delete" aria-label="Delete selected object" onClick={shapes.delete}>
+        <Trash2 size={19} strokeWidth={2} />
+      </button>
+    </div>
+  )
+}
 
 export function EditorWorkspace({
   historyVersion,
   setCanvasElement,
   setStageElement,
 }: EditorWorkspaceProps & { historyVersion: number }) {
+  const stageRef = useRef<HTMLDivElement | null>(null)
   const {
     canvas,
     fabricCanvas,
@@ -146,6 +209,12 @@ export function EditorWorkspace({
   const setZoom = canvas.setZoom;
 
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+
+
+        useEffect(() => {
+      console.log('Active object changed:', fabricCanvas?.toJSON());
+      console.log("Active another object changed", fabricCanvas?.getActiveObject());
+    },[]);
 
   useEffect(() => {
     if (!canvas.hasImage || !fabricCanvas || tools.active !== "music") return;
@@ -210,7 +279,10 @@ export function EditorWorkspace({
     >
       <div
         className="stage"
-        ref={setStageElement}
+        ref={(element) => {
+          stageRef.current = element
+          setStageElement(element)
+        }}
         onDragOver={handleDragOver}
         onDragLeave={() => tools.setDraggingFile(false)}
         onDrop={handleDrop}
@@ -226,7 +298,7 @@ export function EditorWorkspace({
             cursorIcon={CursorIcon}
             isResizeCursor={Boolean(resizeCursor)}
           />
-          {(!canvas.hasDocument || uploadingInitialImage) &&
+          {(! canvas.hasDocument || uploadingInitialImage) &&
             editorMode.active === "image" && (
               <UploadLanding
                 restoring={false}
@@ -238,6 +310,7 @@ export function EditorWorkspace({
               />
             )}
         </div>
+        <FloatingObjectToolbar stageRef={stageRef} />
 
         {editorMode.active === "video" && tools.active !== "music" && (
           <div className="video-workspace-preview">
@@ -287,103 +360,104 @@ export function EditorWorkspace({
           </div>
         )}
       </div>
+        { canvas.hasDocument && (
+        <div className="workspace-footer">
+          <span>
+            <span className="status-dot" />{" "}
+            {editorMode.active === "video"
+              ? videoClip.file
+                ? "Video loaded"
+                : "No video selected"
+              : canvas.selected
+                ? `${objectName(canvas.selected, 0)} selected`
+                : canvas.hasDocument
+                  ? "Ready to edit"
+                  : "No image selected"}
+          </span>
 
-      <div className="workspace-footer">
-        <span>
-          <span className="status-dot" />{" "}
-          {editorMode.active === "video"
-            ? videoClip.file
-              ? "Video loaded"
-              : "No video selected"
-            : canvas.selected
-              ? `${objectName(canvas.selected, 0)} selected`
-              : canvas.hasDocument
-                ? "Ready to edit"
-                : "No image selected"}
-        </span>
+          <div className="footer-zoom">
+            <button
+              className={`zoom-button image-resize-lock${canvas.imageResizeLocked ? " active" : ""}`}
+              onClick={canvas.toggleImageResizeLock}
+              aria-label={
+                canvas.imageResizeLocked
+                  ? "Unlock image movement and resizing"
+                  : "Lock image movement and resizing"
+              }
+              title={
+                canvas.imageResizeLocked
+                  ? "Unlock image movement and resizing"
+                  : "Lock image movement and resizing"
+              }
+              disabled={!canvas.hasImage}
+            >
+              {canvas.imageResizeLocked ? (
+                <LockKeyhole size={15} />
+              ) : (
+                <UnlockKeyhole size={15} />
+              )}
+            </button>
 
-        <div className="footer-zoom">
+            <button
+              className="zoom-button"
+              onClick={() => canvas.setZoom(Math.max(0.1, canvas.zoom - 0.1))}
+              aria-label="Zoom out"
+              disabled={canvas.zoom <= 0.1}
+            >
+              −
+            </button>
+
+            <input
+              className="zoom-slider"
+              type="range"
+              min="0.1"
+              max="3"
+              step="0.05"
+              value={canvas.zoom}
+              onChange={(event) => canvas.setZoom(Number(event.target.value))}
+              aria-label="Canvas zoom"
+            />
+
+            <button
+              className="zoom-button"
+              onClick={() => canvas.setZoom(Math.min(3, canvas.zoom + 0.1))}
+              aria-label="Zoom in"
+              disabled={canvas.zoom >= 3}
+            >
+              +
+            </button>
+
+            <button
+              className="zoom-percentage"
+              onClick={() => canvas.setZoom(1)}
+              title="Reset zoom to 100%"
+            >
+              {Math.round(canvas.zoom * 100)}%
+            </button>
+          </div>
+
+          <span className="workspace-document-status">
+            Local document · {canvas.dimensions.width} ×{" "}
+            {canvas.dimensions.height}
+          </span>
           <button
-            className={`zoom-button image-resize-lock${canvas.imageResizeLocked ? " active" : ""}`}
-            onClick={canvas.toggleImageResizeLock}
+            className="zoom-button fullscreen-toggle"
+            type="button"
+            onClick={() => setShowFullScreen((current) => !current)}
             aria-label={
-              canvas.imageResizeLocked
-                ? "Unlock image movement and resizing"
-                : "Lock image movement and resizing"
+              showFullScreen
+                ? "Exit canvas focus mode"
+                : "Enter canvas focus mode"
             }
+            aria-pressed={showFullScreen}
             title={
-              canvas.imageResizeLocked
-                ? "Unlock image movement and resizing"
-                : "Lock image movement and resizing"
+              showFullScreen ? "Exit canvas focus mode (Esc)" : "Expand canvas"
             }
-            disabled={!canvas.hasImage}
           >
-            {canvas.imageResizeLocked ? (
-              <LockKeyhole size={15} />
-            ) : (
-              <UnlockKeyhole size={15} />
-            )}
-          </button>
-
-          <button
-            className="zoom-button"
-            onClick={() => canvas.setZoom(Math.max(0.1, canvas.zoom - 0.1))}
-            aria-label="Zoom out"
-            disabled={canvas.zoom <= 0.1}
-          >
-            −
-          </button>
-
-          <input
-            className="zoom-slider"
-            type="range"
-            min="0.1"
-            max="3"
-            step="0.05"
-            value={canvas.zoom}
-            onChange={(event) => canvas.setZoom(Number(event.target.value))}
-            aria-label="Canvas zoom"
-          />
-
-          <button
-            className="zoom-button"
-            onClick={() => canvas.setZoom(Math.min(3, canvas.zoom + 0.1))}
-            aria-label="Zoom in"
-            disabled={canvas.zoom >= 3}
-          >
-            +
-          </button>
-
-          <button
-            className="zoom-percentage"
-            onClick={() => canvas.setZoom(1)}
-            title="Reset zoom to 100%"
-          >
-            {Math.round(canvas.zoom * 100)}%
+            {showFullScreen ? <Minimize2 size={16} /> : <Fullscreen size={16} />}
           </button>
         </div>
-
-        <span className="workspace-document-status">
-          Local document · {canvas.dimensions.width} ×{" "}
-          {canvas.dimensions.height}
-        </span>
-        <button
-          className="zoom-button fullscreen-toggle"
-          type="button"
-          onClick={() => setShowFullScreen((current) => !current)}
-          aria-label={
-            showFullScreen
-              ? "Exit canvas focus mode"
-              : "Enter canvas focus mode"
-          }
-          aria-pressed={showFullScreen}
-          title={
-            showFullScreen ? "Exit canvas focus mode (Esc)" : "Expand canvas"
-          }
-        >
-          {showFullScreen ? <Minimize2 size={16} /> : <Fullscreen size={16} />}
-        </button>
-      </div>
+      )}
 
       {fabricCanvas && (
         <ImageMusicVideoExport

@@ -25,7 +25,7 @@ export type EditorMode = "image" | "video";
 
 export type EditorTool =
   | "upload"
-  | "select"
+  | 'library' | "select"
   | "crop"
   | "resize"
   | "text"
@@ -1123,6 +1123,7 @@ export type UseObjectEditingOptions = {
   setActiveTool: (tool: EditorTool) => void;
   setTextValue: (value: string) => void;
   recordHistory: (immediate?: boolean) => void;
+  syncObjects: () => void;
 };
 
 export type UsePixelDrawingOptions = {

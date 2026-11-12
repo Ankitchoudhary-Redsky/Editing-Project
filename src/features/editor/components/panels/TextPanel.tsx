@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   AlignCenter,
   AlignLeft,
@@ -14,6 +15,62 @@ const textDesigns: Array<{
   sample: string;
   design: TextDesignOptions;
 }> = [
+  {
+    name: "Happy Birthday",
+    sample: "HAPPY BIRTHDAY",
+    design: {
+      value: "Happy Birthday!",
+      fontFamily: "Arial",
+      fontSize: 46,
+      color: "#fff4d6",
+      fontWeight: "bold",
+      outline: "#d94f73",
+      outlineWidth: 2,
+      textAlign: "center",
+      shadow: "strong",
+    },
+  },
+  {
+    name: "Let's Celebrate",
+    sample: "Celebrate!",
+    design: {
+      value: "Let's Celebrate!",
+      fontFamily: "Georgia",
+      fontSize: 46,
+      color: "#f6c85f",
+      fontStyle: "italic",
+      textAlign: "center",
+      shadow: "soft",
+    },
+  },
+  {
+    name: "Party Time",
+    sample: "PARTY TIME!",
+    design: {
+      value: "Party Time!",
+      fontFamily: "Arial",
+      fontSize: 50,
+      color: "#ff78a6",
+      fontWeight: "bold",
+      outline: "#632c66",
+      outlineWidth: 2,
+      textAlign: "center",
+      shadow: "strong",
+    },
+  },
+  {
+    name: "Make a Wish",
+    sample: "Make a Wish",
+    design: {
+      value: "Make a Wish",
+      fontFamily: "Georgia",
+      fontSize: 44,
+      color: "#fff7e8",
+      fontStyle: "italic",
+      textAlign: "center",
+      shadow: "soft",
+    },
+  },
   {
     name: "Bold headline",
     sample: "HEADLINE",
@@ -98,6 +155,7 @@ const textDesigns: Array<{
 
 export function TextPanel() {
   const { canvas, text } = useEditor();
+  const [showAllDesigns, setShowAllDesigns] = useState(false);
   return (
     <div className="panel-content">
       <fieldset className="panel-control-group" disabled={!canvas.hasImage}>
@@ -113,7 +171,7 @@ export function TextPanel() {
         >
           <span className="field-label">Ready-made designs</span>
           <div className="text-design-grid">
-            {textDesigns.map(({ name, sample, design }) => (
+            {textDesigns.slice(0, showAllDesigns ? textDesigns.length : 4).map(({ name, sample, design }) => (
               <button
                 key={name}
                 type="button"
@@ -144,6 +202,14 @@ export function TextPanel() {
               </button>
             ))}
           </div>
+          <button
+            className="secondary-button full-button"
+            type="button"
+            aria-expanded={showAllDesigns}
+            onClick={() => setShowAllDesigns((expanded) => !expanded)}
+          >
+            {showAllDesigns ? "See less" : "See more"}
+          </button>
         </section>
         {text.selected && (
           <div className="control-section">

@@ -84,10 +84,13 @@ export function useEditorFeatureControllers({
     setActiveTool: actions.setActiveTool,
     setTextValue: actions.setTextValue,
     recordHistory: actions.recordHistory,
+    syncObjects: actions.syncObjects,
   });
 
   const framesLayout = useFramesLayout({
+    canvas,
     canvasRef: refs.canvasRef,
+    imageObjectRef: refs.imageObjectRef,
     dimensions: state.dimensions,
     setDimensions: actions.setDimensions,
     recordHistory: actions.recordHistory,

@@ -23,6 +23,7 @@ export function EditorShell({
   const handleDragLeave = (event: DragEvent<HTMLElement>) => {
     if (event.currentTarget === event.target) tools.setDraggingFile(false);
   };
+  
 
   return (
     <main

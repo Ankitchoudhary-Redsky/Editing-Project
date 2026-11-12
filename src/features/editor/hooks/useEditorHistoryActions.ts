@@ -67,7 +67,7 @@ export function useEditorHistoryActions({
         setImageThumbnail(imageObjectRef.current
           ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
           : '')
-        setHasDocument(Boolean(imageObjectRef.current))
+        setHasDocument(canvas.getObjects().length > 0)
         syncHistoryControls()
         touchHistory()
       } finally {

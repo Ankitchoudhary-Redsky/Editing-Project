@@ -18,6 +18,18 @@ const layouts: Array<{ id: GridLayoutId; label: string; cells: number }> = [
   { id: "three-columns", label: "Three columns", cells: 3 },
   { id: "feature-left", label: "Feature left", cells: 3 },
   { id: "feature-top", label: "Feature top", cells: 3 },
+  { id: "three-rows", label: "Three rows", cells: 3 },
+  { id: "four-columns", label: "Four columns", cells: 4 },
+  { id: "six-grid", label: "Six photos", cells: 6 },
+  { id: "feature-right", label: "Feature right", cells: 3 },
+  { id: "feature-bottom", label: "Feature bottom", cells: 3 },
+  { id: "filmstrip", label: "Filmstrip", cells: 4 },
+  { id: "mosaic", label: "Mosaic", cells: 4 },
+  { id: "nine-grid", label: "Nine photos", cells: 9 },
+  { id: "feature-center", label: "Feature center", cells: 5 },
+  { id: "staggered-five", label: "Staggered five", cells: 5 },
+  { id: "six-portrait", label: "Six portrait", cells: 6 },
+  { id: "feature-strip-five", label: "Feature strip", cells: 5 },
 ];
 
 export function FramesLayoutPanel() {
@@ -27,6 +39,7 @@ export function FramesLayoutPanel() {
     useState<(typeof frameStyles)[number]["id"]>("clean");
   const [frameColor, setFrameColor] = useState("#ffffff");
   const [layout, setLayout] = useState<GridLayoutId>("four-grid");
+  const [showAllLayouts, setShowAllLayouts] = useState(false);
   const [gap, setGap] = useState(14);
   const [background, setBackground] = useState("#f4f3ef");
   const [targetCellId, setTargetCellId] = useState<string | null>(null);
@@ -125,7 +138,7 @@ export function FramesLayoutPanel() {
           <span>Grid layouts</span>
         </div>
         <div className="grid-layout-choices">
-          {layouts.map(({ id, label, cells }) => (
+          {layouts.slice(0, showAllLayouts ? layouts.length : 4).map(({ id, label, cells }) => (
             <button
               key={id}
               type="button"
@@ -145,6 +158,14 @@ export function FramesLayoutPanel() {
             </button>
           ))}
         </div>
+        <button
+          className="secondary-button full-button"
+          type="button"
+          aria-expanded={showAllLayouts}
+          onClick={() => setShowAllLayouts((expanded) => !expanded)}
+        >
+          {showAllLayouts ? "See less" : "See more"}
+        </button>
         <label className="range-field">
           <span>
             Cell spacing <b>{gap}px</b>

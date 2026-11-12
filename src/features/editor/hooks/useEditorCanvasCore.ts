@@ -52,6 +52,15 @@ export function useEditorCanvasCore({
     if (!canvas) return;
 
     const active = canvas.getActiveObject() ?? null;
+    active?.set({
+      borderColor: '#2c7660',
+      borderScaleFactor: 1.35,
+      cornerColor: '#ffffff',
+      cornerStrokeColor: '#2c7660',
+      cornerSize: 8,
+      cornerStyle: 'circle',
+      transparentCorners: false,
+    })
     setSelectedObject(active);
     setSelectedIsImage(active === imageObjectRef.current);
   }, [setSelectedIsImage, setSelectedObject]);
@@ -79,6 +88,8 @@ export function useEditorCanvasCore({
       });
       image.setCoords();
     }
+    if (imageResizeLocked && canvas.getActiveObject() === image)
+      canvas.discardActiveObject();
     const imageObject = image instanceof FabricImage ? image : null;
     if (imageObjectRef.current !== imageObject)
       imageObjectRef.current = imageObject;
@@ -172,7 +183,8 @@ export function useEditorCanvasCore({
 
   useEffect(() => {
     activeToolRef.current = activeTool;
-  }, [activeTool]);
+    syncObjects()
+  }, [activeTool, syncObjects]);
 
   return {
     canvasRef,

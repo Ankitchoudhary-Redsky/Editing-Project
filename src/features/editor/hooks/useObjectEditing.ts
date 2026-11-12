@@ -15,7 +15,7 @@ import { shapeNames } from "../model/constants";
 import { objectName } from "../model/objectName";
 import {
   addImageInsideShape,
-  constrainShapeToImage,
+  constrainShapeToCanvas,
   createShapeObject,
   isShapeObject,
   syncImageWithShape,
@@ -55,13 +55,14 @@ export function useObjectEditing({
   setActiveTool,
   setTextValue,
   recordHistory,
+  syncObjects,
 }: UseObjectEditingOptions) {
   useEffect(() => {
     if (!canvas) return;
     const constrainAndSync = (event: { target?: FabricObject }) => {
       const target = event.target;
       if (target && isShapeObject(target)) {
-        constrainShapeToImage(canvas, imageObjectRef.current, target);
+        constrainShapeToCanvas(canvas, target);
         syncImageWithShape(canvas, target);
         syncTextWithShape(canvas, target);
       } else if (target instanceof IText) {
@@ -198,21 +199,32 @@ export function useObjectEditing({
     const canvas = canvasRef.current;
     const active = canvas?.getActiveObject();
     if (!canvas || !active) return;
-    if (active === imageObjectRef.current) imageObjectRef.current = null;
+    if (active === imageObjectRef.current) {
+      canvas
+        .getObjects()
+        .filter((object) => object.get("name") === "editor-frame-overlay")
+        .forEach((object) => canvas.remove(object));
+      imageObjectRef.current = null;
+    }
     canvas.remove(active);
     canvas.discardActiveObject();
     canvas.requestRenderAll();
+    syncObjects();
     recordHistory(true);
-  }, [canvasRef, imageObjectRef, recordHistory]);
+  }, [canvasRef, imageObjectRef, recordHistory, syncObjects]);
 
   const duplicateSelected = async () => {
     const canvas = canvasRef.current;
     const active = canvas?.getActiveObject();
     if (!canvas || !active) return;
-    const clone = await active.clone();
+    const clone = await active.clone([
+      "chartConfigJson",
+      "chartType",
+      "chartConfig",
+    ]);
     clone.set({ left: (active.left ?? 0) + 24, top: (active.top ?? 0) + 24 });
     clone.set("name", `${objectName(active, 0)} copy`);
-    constrainShapeToImage(canvas, imageObjectRef.current, clone);
+    constrainShapeToCanvas(canvas, clone);
     canvas.add(clone);
     canvas.setActiveObject(clone);
     canvas.requestRenderAll();
@@ -256,10 +268,17 @@ export function useObjectEditing({
     if (!activeCanvas || !objects.length) return;
     activeCanvas.discardActiveObject();
     objects.forEach((object) => {
-      if (object === imageObjectRef.current) imageObjectRef.current = null;
+      if (object === imageObjectRef.current) {
+        activeCanvas
+          .getObjects()
+          .filter((item) => item.get("name") === "editor-frame-overlay")
+          .forEach((item) => activeCanvas.remove(item));
+        imageObjectRef.current = null;
+      }
       activeCanvas.remove(object);
     });
     activeCanvas.requestRenderAll();
+    syncObjects();
     recordHistory(true);
   };
 
@@ -287,7 +306,7 @@ export function useObjectEditing({
       const source = objects[index];
       copy.set({ left: (source.left ?? 0) + 24, top: (source.top ?? 0) + 24 });
       copy.set("name", `${objectName(source, index)} copy`);
-      constrainShapeToImage(activeCanvas, imageObjectRef.current, copy);
+      constrainShapeToCanvas(activeCanvas, copy);
       activeCanvas.add(copy);
     });
     selectLayers(copies);

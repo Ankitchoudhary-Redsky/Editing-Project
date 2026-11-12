@@ -1,6 +1,7 @@
 export const editorHeadings = {
   toolPanels: {
     upload: 'Upload',
+    library: 'Library',
     select: 'Select',
     crop: 'Crop',
     resize: 'Resize',

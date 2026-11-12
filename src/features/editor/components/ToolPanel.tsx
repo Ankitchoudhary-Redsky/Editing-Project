@@ -3,6 +3,7 @@ import { editorToolCategories } from "../model/constants";
 import { editorHeadings } from "../model/editorCopy";
 import { AdjustmentsPanel } from "./panels/AdjustmentsPanel";
 import { UploadPanel } from "./panels/UploadPanel";
+import { LibraryPanel } from './panels/LibraryPanel'
 import { CropPanel } from "./panels/CropPanel";
 import { ResizePanel } from "./panels/ResizePanel";
 import { TextPanel } from "./panels/TextPanel";
@@ -64,6 +65,7 @@ export function ToolPanel() {
         </nav>
       )}
       {tools.active === "upload" && <UploadPanel />}
+      {tools.active === 'library' && <LibraryPanel />}
       {tools.active === "crop" && <CropPanel />}
       {tools.active === "resize" && <ResizePanel />}
       {tools.active === "text" && <TextPanel />}

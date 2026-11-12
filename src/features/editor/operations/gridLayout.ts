@@ -1,4 +1,4 @@
-export type GridLayoutId = 'side-by-side' | 'stacked' | 'four-grid' | 'three-columns' | 'feature-left' | 'feature-top'
+export type GridLayoutId = 'side-by-side' | 'stacked' | 'four-grid' | 'three-columns' | 'feature-left' | 'feature-top' | 'three-rows' | 'four-columns' | 'six-grid' | 'feature-right' | 'feature-bottom' | 'filmstrip' | 'mosaic' | 'nine-grid' | 'feature-center' | 'staggered-five' | 'six-portrait' | 'feature-strip-five'
 
 export type GridCellBounds = { id: string; index: number; left: number; top: number; width: number; height: number }
 
@@ -33,6 +33,87 @@ const layoutCells: Record<GridLayoutId, NormalizedCell[]> = {
     { x: 0, y: 0, width: 1, height: 0.58 },
     { x: 0, y: 0.58, width: 0.5, height: 0.42 },
     { x: 0.5, y: 0.58, width: 0.5, height: 0.42 },
+  ],
+  'three-rows': [
+    { x: 0, y: 0, width: 1, height: 1 / 3 },
+    { x: 0, y: 1 / 3, width: 1, height: 1 / 3 },
+    { x: 0, y: 2 / 3, width: 1, height: 1 / 3 },
+  ],
+  'four-columns': [
+    { x: 0, y: 0, width: 0.25, height: 1 },
+    { x: 0.25, y: 0, width: 0.25, height: 1 },
+    { x: 0.5, y: 0, width: 0.25, height: 1 },
+    { x: 0.75, y: 0, width: 0.25, height: 1 },
+  ],
+  'six-grid': [
+    { x: 0, y: 0, width: 1 / 3, height: 0.5 },
+    { x: 1 / 3, y: 0, width: 1 / 3, height: 0.5 },
+    { x: 2 / 3, y: 0, width: 1 / 3, height: 0.5 },
+    { x: 0, y: 0.5, width: 1 / 3, height: 0.5 },
+    { x: 1 / 3, y: 0.5, width: 1 / 3, height: 0.5 },
+    { x: 2 / 3, y: 0.5, width: 1 / 3, height: 0.5 },
+  ],
+  'feature-right': [
+    { x: 0, y: 0, width: 0.38, height: 0.5 },
+    { x: 0, y: 0.5, width: 0.38, height: 0.5 },
+    { x: 0.38, y: 0, width: 0.62, height: 1 },
+  ],
+  'feature-bottom': [
+    { x: 0, y: 0, width: 0.5, height: 0.42 },
+    { x: 0.5, y: 0, width: 0.5, height: 0.42 },
+    { x: 0, y: 0.42, width: 1, height: 0.58 },
+  ],
+  filmstrip: [
+    { x: 0, y: 0, width: 1, height: 0.64 },
+    { x: 0, y: 0.64, width: 1 / 3, height: 0.36 },
+    { x: 1 / 3, y: 0.64, width: 1 / 3, height: 0.36 },
+    { x: 2 / 3, y: 0.64, width: 1 / 3, height: 0.36 },
+  ],
+  mosaic: [
+    { x: 0, y: 0, width: 0.58, height: 1 },
+    { x: 0.58, y: 0, width: 0.42, height: 1 / 3 },
+    { x: 0.58, y: 1 / 3, width: 0.42, height: 1 / 3 },
+    { x: 0.58, y: 2 / 3, width: 0.42, height: 1 / 3 },
+  ],
+  'nine-grid': [
+    { x: 0, y: 0, width: 1 / 3, height: 1 / 3 },
+    { x: 1 / 3, y: 0, width: 1 / 3, height: 1 / 3 },
+    { x: 2 / 3, y: 0, width: 1 / 3, height: 1 / 3 },
+    { x: 0, y: 1 / 3, width: 1 / 3, height: 1 / 3 },
+    { x: 1 / 3, y: 1 / 3, width: 1 / 3, height: 1 / 3 },
+    { x: 2 / 3, y: 1 / 3, width: 1 / 3, height: 1 / 3 },
+    { x: 0, y: 2 / 3, width: 1 / 3, height: 1 / 3 },
+    { x: 1 / 3, y: 2 / 3, width: 1 / 3, height: 1 / 3 },
+    { x: 2 / 3, y: 2 / 3, width: 1 / 3, height: 1 / 3 },
+  ],
+  'feature-center': [
+    { x: 0, y: 0, width: 0.25, height: 0.5 },
+    { x: 0, y: 0.5, width: 0.25, height: 0.5 },
+    { x: 0.25, y: 0, width: 0.5, height: 1 },
+    { x: 0.75, y: 0, width: 0.25, height: 0.5 },
+    { x: 0.75, y: 0.5, width: 0.25, height: 0.5 },
+  ],
+  'staggered-five': [
+    { x: 0, y: 0, width: 0.5, height: 0.5 },
+    { x: 0.5, y: 0, width: 0.5, height: 0.5 },
+    { x: 0, y: 0.5, width: 1 / 3, height: 0.5 },
+    { x: 1 / 3, y: 0.5, width: 1 / 3, height: 0.5 },
+    { x: 2 / 3, y: 0.5, width: 1 / 3, height: 0.5 },
+  ],
+  'six-portrait': [
+    { x: 0, y: 0, width: 0.5, height: 1 / 3 },
+    { x: 0, y: 1 / 3, width: 0.5, height: 1 / 3 },
+    { x: 0, y: 2 / 3, width: 0.5, height: 1 / 3 },
+    { x: 0.5, y: 0, width: 0.5, height: 1 / 3 },
+    { x: 0.5, y: 1 / 3, width: 0.5, height: 1 / 3 },
+    { x: 0.5, y: 2 / 3, width: 0.5, height: 1 / 3 },
+  ],
+  'feature-strip-five': [
+    { x: 0, y: 0, width: 1, height: 0.64 },
+    { x: 0, y: 0.64, width: 0.25, height: 0.36 },
+    { x: 0.25, y: 0.64, width: 0.25, height: 0.36 },
+    { x: 0.5, y: 0.64, width: 0.25, height: 0.36 },
+    { x: 0.75, y: 0.64, width: 0.25, height: 0.36 },
   ],
 }
 

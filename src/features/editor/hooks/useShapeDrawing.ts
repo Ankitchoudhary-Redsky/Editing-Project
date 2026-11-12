@@ -3,15 +3,13 @@ import { type FabricObject, type TPointerEvent } from "fabric";
 import { shapeNames } from "../model/constants";
 import {
   buildShapeObject,
-  constrainShapeToImage,
+  constrainShapeToCanvas,
 } from "../operations/shapeObjects";
-import { getImageBounds } from "../operations/tableGeometry";
 import type { UseShapeDrawingOptions } from "../model/types";
 
 export function useShapeDrawing({
   canvas: canvasInstance,
   canvasRef,
-  imageObjectRef,
   activeTool,
   hasDocument,
   shapeKind,
@@ -35,23 +33,23 @@ export function useShapeDrawing({
     if (!canvas) return;
     const drawing = activeTool === "shapes";
     canvas.selection = !drawing;
-    canvas.skipTargetFind = false;
+    canvas.skipTargetFind = drawing;
+    if (drawing) canvas.discardActiveObject();
     canvas.defaultCursor = drawing ? "crosshair" : "default";
     // canvas.hoverCursor = 'move'
     canvas.hoverCursor = drawing ? "crosshair" : "move";
 
     const handlePointerDown = (event: { e: TPointerEvent }) => {
-      if (!drawing || !hasDocument || canvas.findTarget(event.e)) return;
-      const bounds = getImageBounds(canvas, imageObjectRef.current);
+      if (!drawing || !hasDocument) return;
       const pointer = canvas.getPointer(event.e);
       const start = {
         x: Math.max(
-          bounds.left,
-          Math.min(bounds.left + bounds.width, pointer.x),
+          0,
+          Math.min(canvas.getWidth(), pointer.x),
         ),
         y: Math.max(
-          bounds.top,
-          Math.min(bounds.top + bounds.height, pointer.y),
+          0,
+          Math.min(canvas.getHeight(), pointer.y),
         ),
       };
       shapeDrawingRef.current = { start, preview: null };
@@ -77,16 +75,15 @@ export function useShapeDrawing({
     const handlePointerMove = (event: { e: TPointerEvent }) => {
       const drawingState = shapeDrawingRef.current;
       if (!drawing || !drawingState) return;
-      const bounds = getImageBounds(canvas, imageObjectRef.current);
       const pointer = canvas.getPointer(event.e);
       const point = {
         x: Math.max(
-          bounds.left,
-          Math.min(bounds.left + bounds.width, pointer.x),
+          0,
+          Math.min(canvas.getWidth(), pointer.x),
         ),
         y: Math.max(
-          bounds.top,
-          Math.min(bounds.top + bounds.height, pointer.y),
+          0,
+          Math.min(canvas.getHeight(), pointer.y),
         ),
       };
       const left = Math.min(drawingState.start.x, point.x);
@@ -114,7 +111,7 @@ export function useShapeDrawing({
           directionY: point.y < drawingState.start.y ? -1 : 1,
         },
       );
-      constrainShapeToImage(canvas, imageObjectRef.current, preview);
+      constrainShapeToCanvas(canvas, preview);
       drawingState.preview = preview;
       canvas.add(preview);
       canvas.requestRenderAll();
@@ -162,7 +159,7 @@ export function useShapeDrawing({
     canvasRef,
     fillColor,
     hasDocument,
-    imageObjectRef,
+   
     lineStyle,
     recordHistory,
     shapeKind,

@@ -75,7 +75,7 @@ export function useEditorSnapshotController({
     resizeDisplay()
     syncObjects()
     imageSourceRef.current = imageObjectRef.current?.getSrc() ?? ''
-    setHasDocument(Boolean(imageObjectRef.current))
+    setHasDocument(canvas.getObjects().length > 0)
     setImageThumbnail(imageObjectRef.current
       ? canvas.toDataURL({ format: 'png', multiplier: 0.12 })
       : '')

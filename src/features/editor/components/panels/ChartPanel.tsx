@@ -8,6 +8,7 @@ import {
   Search,
   Trash2,
   Undo2,
+  X,
 } from "lucide-react";
 import { FabricImage, type FabricObject } from "fabric";
 import { useEditor } from "../../EditorContext";
@@ -28,7 +29,15 @@ const svgUrl = (svg: string) =>
 function getChartConfig(
   object: FabricObject | null | undefined,
 ): ChartConfig | null {
-  if (object?.get("name") !== "Chart") return null;
+  if (!object) return null;
+  const serialized = object.get("chartConfigJson");
+  const legacy = object.get("chartConfig");
+  if (
+    object.get("name") !== "Chart" &&
+    typeof serialized !== "string" &&
+    (!legacy || typeof legacy !== "object")
+  )
+    return null;
   const normalize = (value: Partial<ChartConfig>) => {
     const type =
       typeof value.type === "string" && value.type in chartTypeLabels
@@ -40,7 +49,6 @@ function getChartConfig(
       type: type as ChartType,
     };
   };
-  const serialized = object.get("chartConfigJson");
   if (typeof serialized === "string") {
     try {
       return normalize(JSON.parse(serialized) as Partial<ChartConfig>);
@@ -48,7 +56,6 @@ function getChartConfig(
       return null;
     }
   }
-  const legacy = object.get("chartConfig");
   if (!legacy || typeof legacy !== "object") return null;
   const defaults = createChartConfig(
     typeof legacy.type === "string" && legacy.type in chartTypeLabels
@@ -493,6 +500,9 @@ export function ChartPanel() {
   }, [config]);
 
   useEffect(() => {
+    if (!selectedChart) return;
+    setTab("data");
+    setShowLibrary(false);
     const restored = getChartConfig(selectedChart);
     if (
       !restored ||
@@ -503,7 +513,6 @@ export function ChartPanel() {
     currentConfig.current = restored;
     setDataHistory([JSON.stringify(restored.rows)]);
     setDataHistoryIndex(0);
-    setShowLibrary(false);
   }, [selectedChart]);
 
   const updateSelectedImage = async (next: ChartConfig) => {
@@ -828,7 +837,23 @@ export function ChartPanel() {
             </div>
           )}
           {(!selectedChart || showLibrary) && (
-            <>
+            <div
+              className={`chart-library${selectedChart ? " chart-library-overlay" : ""}`}
+            >
+              {selectedChart && (
+                <div className="chart-library-heading">
+                  <strong>Chart types</strong>
+                  <button
+                    className="mini-button"
+                    type="button"
+                    title="Close chart types"
+                    aria-label="Close chart types"
+                    onClick={() => setShowLibrary(false)}
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              )}
               {!canvas.hasImage && (
                 <p className="panel-note">
                   Upload an image to enable chart options.
@@ -866,7 +891,7 @@ export function ChartPanel() {
                   </div>
                 </section>
               ))}
-            </>
+            </div>
           )}
           {selectedChart && (
             <>

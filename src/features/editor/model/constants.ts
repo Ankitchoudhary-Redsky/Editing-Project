@@ -8,6 +8,7 @@ import {
   Video,
   Scissors,
   Layers3,
+  Library,
   PanelsTopLeft,
   ChartNoAxesColumnIncreasing,
   Moon,
@@ -32,6 +33,7 @@ export const editorToolCategories: {
     defaultTool: "upload",
     tools: [{ id: "upload", label: "Images" }],
   },
+  { id: 'library', label: 'Library', icon: Library, defaultTool: 'library', tools: [{ id: 'library', label: 'Library' }] },
   {
     id: "transform",
     label: "Transform",

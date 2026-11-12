@@ -74,31 +74,56 @@ export function useImageUpload({
 
       imageSourceRef.current = source;
       suppressHistoryRef.current = true;
-      canvas.clear();
+      const hasLayout = canvas
+        .getObjects()
+        .some((object) => String(object.get("name") ?? "").startsWith("layout-"));
+      if (hasLayout) {
+        if (imageObjectRef.current) canvas.remove(imageObjectRef.current);
+        canvas
+          .getObjects()
+          .filter((object) => object.get("name") === "editor-frame-overlay")
+          .forEach((object) => canvas.remove(object));
+      } else {
+        canvas.clear();
+        resetTables();
+        resetDrawing();
+      }
       imageObjectRef.current = image;
-      resetTables();
-      resetDrawing();
-      canvas.setDimensions({ width, height });
-      canvas.backgroundColor = "rgba(0,0,0,0)";
+      if (!hasLayout) {
+        canvas.setDimensions({ width, height });
+        canvas.backgroundColor = "rgba(0,0,0,0)";
+      }
+      const scale = hasLayout
+        ? Math.min(canvas.getWidth() / width, canvas.getHeight() / height, 1)
+        : 1;
       image.set({
-        left: 0,
-        top: 0,
+        left: hasLayout ? (canvas.getWidth() - width * scale) / 2 : 0,
+        top: hasLayout ? (canvas.getHeight() - height * scale) / 2 : 0,
+        scaleX: scale,
+        scaleY: scale,
         originX: "left",
         originY: "top",
+        selectable: true,
+        evented: true,
+        lockMovementX: false,
+        lockMovementY: false,
+        lockScalingX: false,
+        lockScalingY: false,
+        lockRotation: true,
       });
       image.set(
         "name",
         file.name.replace(/\.[^.]+$/, "").slice(0, 24) || "Image",
       );
       canvas.add(image);
-      canvas.sendObjectToBack(image);
-      canvas.discardActiveObject();
+      if (hasLayout) canvas.setActiveObject(image);
+      else canvas.discardActiveObject();
       canvas.requestRenderAll();
       selectedFilterRef.current = "original";
       filterIntensityRef.current = 100;
       setSelectedFilter("original");
       setFilterIntensity(100);
-      setDimensions({ width, height });
+      if (!hasLayout) setDimensions({ width, height });
       setHasDocument(true);
       setImageThumbnail(thumbnail);
       setBrightness(0);
