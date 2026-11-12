@@ -11,7 +11,7 @@ function formatDuration(seconds: number) {
 
 export function VideoUploadPanel() {
   const inputRef = useRef<HTMLInputElement>(null)
-  const { videoClip } = useEditor()
+  const { videoClip, tools } = useEditor()
 
   const chooseFile = () => inputRef.current?.click()
 
@@ -24,7 +24,14 @@ export function VideoUploadPanel() {
         hidden
         onChange={(event) => {
           const file = event.currentTarget.files?.[0]
-          if (file) videoClip.setFile(file)
+          if (file && !file.type.startsWith('video/')) {
+            tools.setNotice('Choose a video file to continue.')
+          } else if (file && file.size > 500 * 1024 * 1024) {
+            tools.setNotice('Videos must be smaller than 500 MB.')
+          } else if (file) {
+            tools.setNotice('')
+            videoClip.setFile(file)
+          }
           event.currentTarget.value = ''
         }}
       />

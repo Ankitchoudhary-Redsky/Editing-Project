@@ -13,11 +13,12 @@ import {
   Type,
 } from 'lucide-react'
 import { Canvas } from 'fabric'
-import type { EditorTool, ShapeKind } from './types'
+import type { DrawingMode, EditorTool, ShapeKind } from './types'
 
 export const BACKGROUND_IMAGE_NAME = '__pixel_studio_background_image__'
 export const DEFAULT_PAGE_WIDTH = 1200
 export const DEFAULT_PAGE_HEIGHT = 800
+export const DRAWING_LAYER_NAME = '__pixel_studio_drawing_layer__'
 
 export const editorToolCategories: {
   id: string
@@ -54,15 +55,53 @@ export const cropRatios: Record<string, number | null> = {
 export const shapeNames: Record<ShapeKind, string> = {
   rect: 'Rectangle',
   roundRect: 'Rounded rectangle',
+  square: 'Square',
   circle: 'Circle',
   ellipse: 'Ellipse',
   line: 'Line',
+  dashedLine: 'Dashed line',
+  dottedLine: 'Dotted line',
   arrow: 'Arrow',
+  doubleArrow: 'Double arrow',
+  curvedArrow: 'Curved arrow',
   triangle: 'Triangle',
+  rightTriangle: 'Right triangle',
+  diamond: 'Diamond',
   star: 'Star',
   pentagon: 'Pentagon',
+  hexagon: 'Hexagon',
+  octagon: 'Octagon',
+  heart: 'Heart',
+  cross: 'Cross',
+  plus: 'Plus',
+  minus: 'Minus',
+  chevron: 'Chevron',
+  parallelogram: 'Parallelogram',
+  speechBubble: 'Speech bubble',
+  cloud: 'Cloud',
+  ring: 'Ring',
+  donut: 'Donut',
+  arc: 'Arc',
 }
 
+export const resizePresets = [
+  { label: 'Square', width: 1080, height: 1080 },
+  { label: 'Portrait', width: 1080, height: 1350 },
+  { label: 'Landscape', width: 1600, height: 900 },
+  { label: 'Story', width: 1080, height: 1920 },
+]
+
+export const textFontFamilies = ['Georgia', 'Arial', 'Verdana', 'Trebuchet MS', 'Courier New', 'Times New Roman']
+
+export const drawingModeDescriptions: Record<DrawingMode, string> = {
+  pencil: 'Draw freehand strokes on your image.',
+  sketch: 'Create light, fine sketch strokes.',
+  marker: 'Draw bold, opaque marker strokes.',
+  highlighter: 'Add broad, translucent highlight strokes.',
+  eraser: 'Erase pencil strokes from your design.',
+  'magic-remover': 'Brush over image areas to make them transparent.',
+  lasso: 'Draw around an image area to select it.',
+}
 
 export const IMAGE_SOURCE_TOKEN = '__pixel_studio_image_source__'
 let nextSourceId = 1
@@ -100,22 +139,43 @@ export function restoreImageSourceTokens(sources: Record<string, string>) {
 }
 
 export function serializeCanvas(canvas: Canvas) {
-  return JSON.stringify(
-    {
-      width: canvas.getWidth(),
-      height: canvas.getHeight(),
-      scene: canvas.toObject(['name', 'textAnimation', 'shapeId', 'textParentId', 'textParentWidth', 'textParentHeight', 'textParentFontSize', 'shadowSize', 'shadowArtworkSize', 'shadowArtworkBaseScaleX', 'shadowArtworkBaseScaleY', 'threeDType', 'threeDShapeKind', 'threeDCharacter', 'threeDEmoji', 'threeDColor', 'threeDRotationX', 'threeDRotationY', 'threeDRotationZ']),
-    },
-    (key, value: unknown) => {
-      if (
-        key === 'src' &&
-        typeof value === 'string' &&
-        value.startsWith('data:image/')
-      ) {
-        return getImageSourceToken(value)
+  const scene = canvas.toObject([
+    'name',
+    'textAnimation',
+    'shapeId',
+    'textParentId',
+    'textParentWidth',
+    'textParentHeight',
+    'textParentFontSize',
+    'imageParentId',
+    'threeDType',
+    'threeDShapeKind',
+    'threeDCharacter',
+    'threeDEmoji',
+    'threeDColor',
+    'threeDRotationX',
+    'threeDRotationY',
+    'threeDRotationZ',
+    'shadowSize',
+    'shadowArtworkSize',
+    'shadowArtworkBaseScaleX',
+    'shadowArtworkBaseScaleY',
+  ]) as Record<string, unknown>
+  const replaceImageSources = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(replaceImageSources)
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    for (const [key, child] of Object.entries(value)) {
+      if (key === 'src' && typeof child === 'string' && child.startsWith('data:image/')) {
+        ;(value as Record<string, unknown>)[key] = getImageSourceToken(child)
+      } else {
+        replaceImageSources(child)
       }
+    }
+  }
+  replaceImageSources(scene)
 
-      return value
-    },
-  )
+  return JSON.stringify({ width: canvas.getWidth(), height: canvas.getHeight(), scene })
 }

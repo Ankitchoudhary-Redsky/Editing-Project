@@ -1,18 +1,5 @@
 import { Canvas, IText, Shadow, type FabricObject } from 'fabric'
-import type { TextDesignOptions } from '../model/types'
-
-export type NewTextOptions = TextDesignOptions & {
-  value: string
-  fontFamily: string
-  fontSize: number
-  color: string
-  opacity: number
-  outline: string
-  outlineWidth: number
-  shadow: string
-  position?: { left: number; top: number }
-  startEditing?: boolean
-}
+import type { NewTextOptions } from '../model/types'
 
 export function createTextObject(canvas: Canvas, options: NewTextOptions) {
   const isPositioned = options.position !== undefined

@@ -19,6 +19,24 @@ export const filterPresets: { id: FilterId; name: string; description: string }[
   { id: 'dreamy', name: 'Dreamy', description: 'Soft, airy colors' },
 ]
 
+export const filterThumbnailStyles: Record<FilterId, string> = {
+  original: 'none',
+  grayscale: 'grayscale(1)',
+  blackWhite: 'grayscale(1) contrast(1.8)',
+  sepia: 'sepia(1)',
+  vintage: 'sepia(.55) saturate(.8) contrast(.9)',
+  retro: 'saturate(1.35) hue-rotate(-10deg)',
+  warm: 'sepia(.25) saturate(1.2)',
+  cool: 'hue-rotate(15deg) saturate(.9)',
+  vivid: 'saturate(1.7) contrast(1.1)',
+  cinematic: 'contrast(1.15) saturate(.85) hue-rotate(8deg)',
+  dramatic: 'contrast(1.5) saturate(1.1)',
+  fade: 'contrast(.85) brightness(1.08) saturate(.8)',
+  pastel: 'saturate(.75) brightness(1.12)',
+  noir: 'grayscale(1) contrast(1.5) brightness(.9)',
+  dreamy: 'brightness(1.12) saturate(.8) contrast(.9)',
+}
+
 const identity = [
   1, 0, 0, 0, 0,
   0, 1, 0, 0, 0,

@@ -12,7 +12,6 @@ import {
   type FabricObject,
   type TPointerEvent,
 } from 'fabric'
-
 import { EditorContext } from './features/editor/EditorContext'
 import {
   EditorNotice,
@@ -34,13 +33,13 @@ import type { DrawingMode,
   AddedEditorPage,
   AddedPageActions,
   EditorContextValue,
-  EditorMode, EditorTool, ShapeKind, LineStyle, TextProperty, FilterId,
+  EditorMode, EditorTool, ShapeKind, ShapeToolMode, ThreeDShapeKind, LineStyle, TextProperty, FilterId, EditPoint,
   VideoAudioDraft, VideoClipDraft, VideoPreviewData,
   ExportFormat, TextAnimation, TextDesignOptions,
 } from './features/editor/model/types'
 import { hasTransparentPixels, removeImageBackground } from './features/editor/operations/removeImageBackground'
-import { editImagePixels, type EditPoint } from './features/editor/operations/editImagePixels'
-import { restartAnimatedStickers } from './features/editor/operations/animatedSticker'
+import { editImagePixels } from './features/editor/operations/editImagePixels'
+import { restartAnimatedStickers } from './features/editor/operations/animatedStickerPlayback'
 
 import './App.css'
 import { addImageInsideShape, buildShapeObject, createShapeObject, syncImageWithShape } from './features/editor/operations/shapeObjects'
@@ -50,7 +49,7 @@ import { deleteProjectDraft, loadProjectDraft, saveProjectDraft } from './featur
 import { drawProjectWatermark } from './features/editor/operations/projectWatermark'
 import { exportAnimatedCanvas } from './features/editor/operations/animatedExport'
 import { attachDeleteControl } from './features/editor/operations/objectDeleteControl'
-import { disposeThreeDRotationRuntime } from './features/editor/operations/threeDShapes'
+import { addEditableThreeDShape, disposeThreeDRotationRuntime, threeDShapeChoices } from './features/editor/operations/threeDShapes'
 
 type EditorSnapshot = {
   pageId?: number | null
@@ -488,11 +487,7 @@ function App() {
   const [pageOneSnapshot, setPageOneSnapshot] = useState<string | undefined>()
   const pageOneSnapshotRef = useRef<string | undefined>(undefined)
   const [pageOnePreview, setPageOnePreview] = useState('')
-  useEffect(() => {
-    if (!hasImage && addedPages.length === 0 && hasDeletedPageOneImage) {
-      setHasDeletedPageOneImage(false)
-    }
-  }, [addedPages.length, hasDeletedPageOneImage, hasImage])
+  const showDeletedPageOneImage = hasDeletedPageOneImage && (hasImage || addedPages.length > 0)
   const [zoom, setZoom] = useState(1)
   const [fitScale, setFitScale] = useState(1)
   const [draggingFile, setDraggingFile] = useState(false)
@@ -514,6 +509,8 @@ function App() {
   const [textOutlineWidth, setTextOutlineWidth] = useState(0)
   const [textShadow, setTextShadow] = useState('none')
   const [shapeKind, setShapeKind] = useState<ShapeKind>('rect')
+  const [shapeToolMode, setShapeToolMode] = useState<ShapeToolMode>('2d')
+  const [threeDShapeKind, setThreeDShapeKind] = useState<ThreeDShapeKind>('sphere')
   const [lineStyle, setLineStyle] = useState<LineStyle>('straight')
   const [fillColor, setFillColor] = useState('#b9e4d1')
   const [transparentFill, setTransparentFill] = useState(false)
@@ -1515,9 +1512,17 @@ function App() {
       }
       shapeDrawingRef.current = { start, preview: null }
       suppressHistoryRef.current = true
-      const preview = buildShapeObject({ kind: shapeKind, lineStyle, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, { left: start.x, top: start.y, width: 1, height: 1 })
+      const preview = shapeToolMode === '3d'
+        ? addEditableThreeDShape(
+            canvas,
+            threeDShapeKind,
+            strokeColor,
+            threeDShapeChoices.find((choice) => choice.kind === threeDShapeKind)?.label ?? threeDShapeKind,
+            { left: start.x, top: start.y, width: 1, height: 1 },
+          )
+        : buildShapeObject({ kind: shapeKind, lineStyle, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, { left: start.x, top: start.y, width: 1, height: 1 })
       shapeDrawingRef.current.preview = preview
-      canvas.add(preview)
+      if (shapeToolMode !== '3d') canvas.add(preview)
       canvas.requestRenderAll()
     }
     const handlePointerMove = (event: { e: TPointerEvent }) => {
@@ -1533,6 +1538,13 @@ function App() {
       const top = Math.min(drawingState.start.y, point.y)
       const width = Math.max(1, Math.abs(point.x - drawingState.start.x))
       const height = Math.max(1, Math.abs(point.y - drawingState.start.y))
+      if (shapeToolMode === '3d' && drawingState.preview) {
+        drawingState.preview.set({ left, top, width, height })
+        drawingState.preview.setCoords()
+        constrainShapeToImage(canvas, imageObjectRef.current, drawingState.preview)
+        canvas.requestRenderAll()
+        return
+      }
       if (drawingState.preview) canvas.remove(drawingState.preview)
       const preview = buildShapeObject({ kind: shapeKind, lineStyle, fill: fillColor, transparentFill, stroke: strokeColor, strokeWidth, opacity: shapeOpacity, name: shapeNames[shapeKind] }, {
         left,
@@ -1553,7 +1565,10 @@ function App() {
       shapeDrawingRef.current = null
       const preview = drawingState.preview
       if (!preview || (preview.getScaledWidth() < 4 && preview.getScaledHeight() < 4)) {
-        if (preview) canvas.remove(preview)
+        if (preview) {
+          canvas.remove(preview)
+          preview.dispose()
+        }
         suppressHistoryRef.current = false
         canvas.requestRenderAll()
         return
@@ -1579,7 +1594,7 @@ function App() {
       canvas.skipTargetFind = false
       canvas.selection = true
     }
-  }, [activeTool, fabricCanvas, fillColor, hasDocument, lineStyle, recordHistory, shapeKind, shapeOpacity, strokeColor, strokeWidth, syncObjects, transparentFill])
+  }, [activeTool, fabricCanvas, fillColor, hasDocument, lineStyle, recordHistory, shapeKind, shapeOpacity, shapeToolMode, strokeColor, strokeWidth, syncObjects, threeDShapeKind, transparentFill])
 
   useEffect(() => {
     const timer = setTimeout(() => setNotice(''), 3200)
@@ -2664,6 +2679,32 @@ const resetBackground = async () => {
     if (direction === 'forward') canvas.bringObjectForward(object)
     else if (object !== imageObjectRef.current) canvas.sendObjectBackwards(object)
     canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const moveTableLayer = (tableId: number, direction: 'forward' | 'backward') => {
+    const canvas = activeCanvasRef.current
+    const cell = canvas?.getObjects().find((object) =>
+      object.get('name') === tableCellName(tableId, 0, 0),
+    )
+    if (cell) moveLayer(cell, direction)
+  }
+
+  const setLayerVisibility = (object: FabricObject, visible: boolean) => {
+    object.set('visible', visible)
+    activeCanvasRef.current?.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const setLayerLocked = (object: FabricObject, locked: boolean) => {
+    object.set({ layerLocked: locked, selectable: !locked, evented: !locked })
+    activeCanvasRef.current?.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const renameLayer = (object: FabricObject, name: string) => {
+    object.set('name', name)
+    activeCanvasRef.current?.requestRenderAll()
     recordHistory(true)
   }
 
@@ -4231,7 +4272,7 @@ const deleteSelection = async () => {
       dimensions,
       hasDocument,
       hasImage,
-      hasDeletedPageOneImage,
+      hasDeletedPageOneImage: showDeletedPageOneImage,
       imageThumbnail,
       selected: selectedObject,
       objects,
@@ -4301,7 +4342,39 @@ const deleteSelection = async () => {
     resize: { width: resizeWidth, height: resizeHeight, setWidth: updateResizeWidth, setHeight: updateResizeHeight, keepRatio, setKeepRatio, scaleArtwork, setScaleArtwork, apply: applyResize },
     text: { selected: selectedText, value: textValue, fontFamily, setFontFamily, fontSize, setFontSize, color: textColor, setColor: setTextColor, background: textBackground, setBackground: setTextBackground, opacity: textOpacity, setOpacity: setTextOpacity, outline: textOutline, setOutline: setTextOutline, outlineWidth: textOutlineWidth, setOutlineWidth: setTextOutlineWidth, shadow: textShadow, setShadow: setTextShadow, add: createText, update: updateText },
     animation: { selected: String(selectedObject?.get('textAnimation') ?? 'none') as TextAnimation, hasAnimations: objects.some((object) => String(object.get('textAnimation') ?? 'none') !== 'none'), apply: applyObjectAnimation, remove: removeSelectedAnimation, clear: clearAnimations },
-      shapes: { selected: selectedObject, isSelectedShape: selectedIsShape, kind: shapeKind, setKind: setShapeKind, lineStyle, setLineStyle, fill: fillColor, setFill: setFillColor, transparentFill, setTransparentFill, stroke: strokeColor, setStroke: setStrokeColor, strokeWidth, setStrokeWidth, opacity: shapeOpacity, setOpacity: setShapeOpacity, add: addShape, addText: addTextInsideSelectedShape, addImage: addImageInsideSelectedShape, duplicate: duplicateSelected, delete: deleteSelected, updateAppearance: updateShapeAppearance, moveLayer, selectLayer },
+      shapes: {
+        selected: selectedObject,
+        isSelectedShape: selectedIsShape,
+        mode: shapeToolMode,
+        setMode: setShapeToolMode,
+        kind: shapeKind,
+        setKind: setShapeKind,
+        threeDKind: threeDShapeKind,
+        setThreeDKind: setThreeDShapeKind,
+        lineStyle,
+        setLineStyle,
+        fill: fillColor,
+        setFill: setFillColor,
+        transparentFill,
+        setTransparentFill,
+        stroke: strokeColor,
+        setStroke: setStrokeColor,
+        strokeWidth,
+        setStrokeWidth,
+        opacity: shapeOpacity,
+        setOpacity: setShapeOpacity,
+        add: addShape,
+        addText: addTextInsideSelectedShape,
+        addImage: addImageInsideSelectedShape,
+        duplicate: duplicateSelected,
+        delete: deleteSelected,
+        updateAppearance: updateShapeAppearance,
+        moveLayer,
+        selectLayer,
+        setLayerVisibility,
+        setLayerLocked,
+        renameLayer,
+      },
     shadows: { update: updateSelectedShadow },
     adjustments: {
       brightness,
@@ -4378,6 +4451,7 @@ const deleteSelection = async () => {
       selectRow: selectTableRow,
       selectColumn: selectTableColumn,
       setBorderColor: updateTableBorderColor,
+      moveLayer: moveTableLayer,
     },
     export: { open: exportOpen, setOpen: setExportOpen, format: exportFormat, setFormat: setExportFormat, scale: exportScale, setScale: setExportScale, watermark: exportWatermark, setWatermark: setExportWatermark, busy: exportBusy, download: downloadDesign, shareBusy, share: shareDesign },
 
@@ -4415,6 +4489,7 @@ const deleteSelection = async () => {
           <ToolRail />
           <ToolPanel />
           <EditorWorkspace
+            historyVersion={historyVersion}
             setCanvasElement={setCanvasElement}
             setPageCanvasElement={setPageCanvasElement}
             setStageElement={setStageElement}

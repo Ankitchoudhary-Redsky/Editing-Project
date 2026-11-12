@@ -1,5 +1,6 @@
 import { useEditor } from '../EditorContext'
 import { editorToolCategories } from '../model/constants'
+import { editorHeadings } from '../model/editorCopy'
 import { AdjustmentsPanel } from './panels/AdjustmentsPanel'
 import { UploadPanel } from './panels/UploadPanel'
 import { CropPanel } from './panels/CropPanel'
@@ -21,10 +22,17 @@ export function ToolPanel() {
   const { canvas, pages, tools } = useEditor()
   if (tools.active === 'music') return null
   const activeCategory = editorToolCategories.find((category) => category.tools.some(({ id }) => id === tools.active)) ?? editorToolCategories[0]
+  const panelHeading = editorHeadings.toolPanels[tools.active as keyof typeof editorHeadings.toolPanels] ?? activeCategory.label
 
   return (
-    <aside className="tool-panel" inert={pages.switching && tools.active !== 'upload'} aria-busy={pages.switching}>
-      <div className={`panel-heading ${activeCategory.tools.length > 1 ? 'has-subtools' : ''}`}><div><h3 className="panel-kicker">{activeCategory.label}</h3></div></div>
+    <aside
+      className={`tool-panel${activeCategory.tools.length > 1 ? ' has-subtools' : ''}`}
+      inert={pages.switching && tools.active !== 'upload'}
+      aria-busy={pages.switching}
+    >
+      <div className={`panel-heading ${activeCategory.tools.length > 1 ? 'has-subtools' : ''}`}>
+        <div><h3 className="panel-kicker">{panelHeading}</h3></div>
+      </div>
       {activeCategory.tools.length > 1 && (
         <nav className="panel-subtools" aria-label={`${activeCategory.label} tools`}>
           {activeCategory.tools.map(({ id, label }) => (
@@ -32,7 +40,7 @@ export function ToolPanel() {
               key={id}
               type="button"
               className={`panel-subtool ${tools.active === id ? 'active' : ''}`}
-              disabled={(id === 'crop' || id === 'resize') && !canvas.hasImage}
+              disabled={(id === 'crop' || id === 'resize') && !canvas.hasDocument}
               aria-pressed={tools.active === id}
               onClick={() => {
                 tools.setActive(id)

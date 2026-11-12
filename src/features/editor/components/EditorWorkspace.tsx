@@ -1,13 +1,11 @@
-
-import type { DragEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { DragEvent, PointerEvent as ReactPointerEvent, ReactNode, Ref } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FabricImage } from 'fabric'
-import { Copy, Eraser, Highlighter, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Plus, RotateCcw, Trash2, Upload } from 'lucide-react'
-import { Rotate3D } from 'lucide-react'
+import { Copy, Eraser, Highlighter, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Plus, Rotate3D, RotateCcw, Trash2, Upload } from 'lucide-react'
 
 import { useEditor } from '../EditorContext'
 import { objectName } from '../model/objectName'
-import type { AddedEditorPage, DrawingMode } from '../model/types'
+import type { AddedEditorPage, CanvasSurfaceProps, DrawingMode } from '../model/types'
 import { getThreeDRotation, isThreeDRotatable, updateThreeDRotation } from '../operations/threeDShapes'
 import type { ThreeDRotation } from '../operations/threeDShapes'
 import ImageMusicVideoExport from './ImageMusicVideoExport'
@@ -16,8 +14,93 @@ const PAGE_ALREADY_HAS_IMAGE_NOTICE = 'This page already has an image. Remove it
 
 type EditorWorkspaceProps = {
   setCanvasElement: (element: HTMLCanvasElement | null) => void
-  setPageCanvasElement: (pageId: number, element: HTMLCanvasElement | null) => void
+  setPageCanvasElement?: (pageId: number, element: HTMLCanvasElement | null) => void
   setStageElement: (element: HTMLDivElement | null) => void
+}
+
+type WorkspaceCanvasSurfaceProps = CanvasSurfaceProps & {
+  surfaceRef?: Ref<HTMLDivElement>
+  onDragOver?: (event: DragEvent<HTMLDivElement>) => void
+  onDrop?: (event: DragEvent<HTMLDivElement>) => void
+  children?: ReactNode
+}
+
+function CanvasSurface({
+  scale,
+  setCanvasElement,
+  showDrawingCursor,
+  brushSize,
+  cursorIcon: CursorIcon,
+  isResizeCursor,
+  surfaceRef,
+  onDragOver,
+  onDrop,
+  children,
+}: WorkspaceCanvasSurfaceProps) {
+  const cursorElementRef = useRef<HTMLDivElement | null>(null)
+  const cursorPositionRef = useRef<{ x: number; y: number } | null>(null)
+
+  useEffect(() => {
+    const cursor = cursorElementRef.current
+    const position = cursorPositionRef.current
+    if (!cursor || !showDrawingCursor || !position) return
+
+    cursor.style.left = `${position.x}px`
+    cursor.style.top = `${position.y}px`
+    cursor.style.visibility = 'visible'
+  }, [showDrawingCursor, CursorIcon])
+
+  return (
+    <div
+      className="canvas-surface"
+      ref={surfaceRef}
+      data-drawing-cursor={showDrawingCursor}
+      style={{ transform: `translate(-50%, -50%) scale(${scale})` }}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onPointerMoveCapture={(event) => {
+        if (!showDrawingCursor) return
+        const bounds = event.currentTarget.getBoundingClientRect()
+        const pointerScale = bounds.width / event.currentTarget.offsetWidth || 1
+        const position = {
+          x: (event.clientX - bounds.left) / pointerScale,
+          y: (event.clientY - bounds.top) / pointerScale,
+        }
+        cursorPositionRef.current = position
+        const cursor = cursorElementRef.current
+        if (cursor) {
+          cursor.style.left = `${position.x}px`
+          cursor.style.top = `${position.y}px`
+          cursor.style.visibility = 'visible'
+        }
+      }}
+      onPointerLeave={() => {
+        cursorPositionRef.current = null
+        if (cursorElementRef.current) cursorElementRef.current.style.visibility = 'hidden'
+      }}
+    >
+      <canvas ref={setCanvasElement} />
+      {children}
+      {showDrawingCursor && CursorIcon && (
+        <div
+          ref={cursorElementRef}
+          className="drawing-cursor"
+          style={{ visibility: 'hidden' }}
+          aria-hidden="true"
+        >
+          {!isResizeCursor && (
+            <span
+              className="drawing-cursor-brush"
+              style={{ width: brushSize, height: brushSize }}
+            />
+          )}
+          <span className={isResizeCursor ? 'drawing-cursor-icon table-resize-cursor' : 'drawing-cursor-icon'}>
+            <CursorIcon size={17} strokeWidth={2.2} />
+          </span>
+        </div>
+      )}
+    </div>
+  )
 }
 
 type DraggedPageImage = {
@@ -28,10 +111,11 @@ type DraggedPageImage = {
 }
 
 export function EditorWorkspace({
+  historyVersion,
   setCanvasElement,
   setPageCanvasElement,
   setStageElement,
-}: EditorWorkspaceProps) {
+}: EditorWorkspaceProps & { historyVersion: number }) {
   const {
     canvas,
     fabricCanvas,
@@ -53,10 +137,6 @@ export function EditorWorkspace({
   } = useEditor()
   const setNotice = tools.setNotice
 
-  const [cursorPosition, setCursorPosition] = useState<{
-    x: number
-    y: number
-  } | null>(null)
   const [dropTargetPageId, setDropTargetPageId] = useState<number | null>(null)
   const [canvasSurfaceSize, setCanvasSurfaceSize] = useState({ width: 0, height: 0 })
   const nextPageIdRef = useRef(2)
@@ -165,6 +245,16 @@ export function EditorWorkspace({
     observer.observe(surface)
     return () => observer.disconnect()
   }, [canvas.dimensions.height, canvas.dimensions.width, canvas.fitScale, canvas.zoom])
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('')
+  useEffect(() => {
+    if (!canvas.hasImage || !fabricCanvas || tools.active !== 'music') return
+
+    const frame = window.requestAnimationFrame(() => {
+      setImagePreviewUrl(fabricCanvas.toDataURL({ format: 'png', multiplier: 1 }))
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [canvas.hasImage, fabricCanvas, historyVersion, tools.active])
+
   const selectedThreeDObject = canvas.hasImage && canvas.selected instanceof FabricImage && isThreeDRotatable(canvas.selected)
     ? canvas.selected
     : null
@@ -255,7 +345,6 @@ export function EditorWorkspace({
     const maxScrollTop = stage.scrollHeight - stage.clientHeight
     stage.scrollTop = Math.max(0, Math.min(maxScrollTop, stage.scrollTop + scrollDelta))
   }
-
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     if (event.dataTransfer.types.includes('application/x-estudio-page-image')) {
@@ -427,6 +516,7 @@ export function EditorWorkspace({
   const handleFirstPageDrop = async (event: DragEvent<HTMLDivElement>) => {
     if (!event.dataTransfer.types.includes('application/x-estudio-page-image')) return
     event.preventDefault()
+    console.log('handleFirstPageDrop')
     event.stopPropagation()
     if (canvas.hasImage) {
       tools.setNotice(PAGE_ALREADY_HAS_IMAGE_NOTICE)
@@ -468,7 +558,7 @@ export function EditorWorkspace({
     event.preventDefault()
     event.stopPropagation()
     setDropTargetPageId(null)
-
+console.log('handlePageDrop', pageId)
     const targetPage = addedPages.find((page) => page.id === pageId)
     if (targetPage?.imageUrl) {
       tools.setNotice(PAGE_ALREADY_HAS_IMAGE_NOTICE)
@@ -515,6 +605,7 @@ export function EditorWorkspace({
 
   const handleWorkspaceDrop = (event: DragEvent<HTMLDivElement>) => {
     const target = event.target
+    console.log('handleWorkspaceDrop', target, event.dataTransfer.types)
     if (
       editorMode.active === 'image' &&
       canvas.hasImage &&
@@ -593,28 +684,18 @@ export function EditorWorkspace({
           }}
         >
           <div className="canvas-holder">
-          <div
-            className="canvas-surface"
-            ref={canvasSurfaceRef}
-            onDragOver={handleFirstPageDragOver}
-            onDrop={(event) => void handleFirstPageDrop(event)}
-            data-drawing-cursor={showDrawingCursor}
-            style={{
-              transform: `translate(-50%, -50%) scale(${canvas.fitScale * canvas.zoom})`,
-            }}
-            onPointerMoveCapture={(event) => {
-              if (!showDrawingCursor) return
-              const bounds = event.currentTarget.getBoundingClientRect()
-              const scale = bounds.width / event.currentTarget.offsetWidth || 1
-              setCursorPosition({
-                x: (event.clientX - bounds.left) / scale,
-                y: (event.clientY - bounds.top) / scale,
-              })
-            }}
-            onPointerLeave={() => setCursorPosition(null)}
-          >
-            <canvas ref={setCanvasElement} />
-            {fabricCanvas && selectedThreeDObject && selectedThreeDBounds && (
+            <CanvasSurface
+              scale={canvas.fitScale * canvas.zoom}
+              setCanvasElement={setCanvasElement}
+              showDrawingCursor={showDrawingCursor}
+              brushSize={drawing.brushSize * (drawing.activeMode === 'highlighter' ? 3 : 1)}
+              cursorIcon={CursorIcon}
+              isResizeCursor={Boolean(resizeCursor)}
+              surfaceRef={canvasSurfaceRef}
+              onDragOver={handleFirstPageDragOver}
+              onDrop={(event) => void handleFirstPageDrop(event)}
+            >
+              {fabricCanvas && selectedThreeDObject && selectedThreeDBounds && (
               <button
                 type="button"
                 className="three-d-rotate-handle"
@@ -629,29 +710,9 @@ export function EditorWorkspace({
                 onPointerUp={endThreeDRotation}
                 onPointerCancel={endThreeDRotation}
               ><Rotate3D size={18} strokeWidth={1.8} /></button>
-            )}
-            {showDrawingCursor && cursorPosition && CursorIcon && (
-              <div
-                className="drawing-cursor"
-                style={{ left: cursorPosition.x, top: cursorPosition.y }}
-                aria-hidden="true"
-              >
-                {!resizeCursor && (
-                  <span
-                    className="drawing-cursor-brush"
-                      style={{
-                        width: drawing.brushSize * (drawing.activeMode === 'highlighter' ? 3 : 1),
-                        height: drawing.brushSize * (drawing.activeMode === 'highlighter' ? 3 : 1),
-                      }}
-                  />
-                )}
-                <span className={resizeCursor ? 'drawing-cursor-icon table-resize-cursor' : 'drawing-cursor-icon'}>
-                  <CursorIcon size={17} strokeWidth={2.2} />
-                </span>
-              </div>
-            )}
-          </div>
-          {canvas.hasImage && editorMode.active === 'image' && (
+              )}
+            </CanvasSurface>
+            {canvas.hasImage && editorMode.active === 'image' && (
             <div
               className="page-image-tools first-page-image-tools"
               aria-label="Page 1 image actions"
@@ -670,8 +731,8 @@ export function EditorWorkspace({
                 <Trash2 size={15} aria-hidden="true" />
               </button>
             </div>
-          )}
-          {!canvas.hasImage && (
+            )}
+            {!canvas.hasImage && (
             <div className="empty-prompt">
               <div className="empty-art">
                 <div className="empty-sun" />
@@ -686,7 +747,7 @@ export function EditorWorkspace({
               </button>
               <span className="empty-format">PNG · JPG · WEBP</span>
             </div>
-          )}
+            )}
           </div>
 
           {editorMode.active === 'video' && tools.active !== 'music' && (
@@ -769,7 +830,7 @@ export function EditorWorkspace({
             >
               <canvas
                 className="added-page-fabric-canvas"
-                ref={(element) => setPageCanvasElement(page.id, element)}
+                ref={(element) => setPageCanvasElement?.(page.id, element)}
                 aria-label={`Editable Page ${index + addedPageNumberOffset}`}
               />
               {!page.imageUrl && (
@@ -856,10 +917,7 @@ export function EditorWorkspace({
         <ImageMusicVideoExport
           fabricCanvas={fabricCanvas}
           hasImage={canvas.hasImage}
-          imagePreviewUrl={fabricCanvas.toDataURL({
-            format: 'png',
-            multiplier: 1,
-          })}
+          imagePreviewUrl={imagePreviewUrl}
           imageDimensions={canvas.dimensions}
           isActive={tools.active === 'music'}
           onBack={() => tools.setActive('adjust')}

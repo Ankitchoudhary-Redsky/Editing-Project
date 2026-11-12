@@ -9,6 +9,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useEditor } from '../../EditorContext'
+import { BACKGROUND_IMAGE_NAME } from '../../model/constants'
 
 export function BackgroundPanel() {
   const { canvas, background } = useEditor()
@@ -18,6 +19,8 @@ export function BackgroundPanel() {
     canvas.hasImage &&
     !background.removed &&
     !background.isRemoving
+  const canEditCanvasBackground = canvas.hasDocument && (background.removed || !canvas.hasImage)
+  const hasBackgroundLayer = canvas.objects.some((object) => object.get('name') === BACKGROUND_IMAGE_NAME)
 
   return (
     <div className="panel-content background-content">
@@ -62,13 +65,13 @@ export function BackgroundPanel() {
         </div>
       )}
 
-      {!canvas.hasImage && (
+      {!canvas.hasImage && canvas.hasDocument && (
         <p className="panel-note">
-          Upload an image first to enable background removal.
+          Add an image layer to use AI background removal. You can still add a background layer behind this artwork.
         </p>
       )}
 
-      {background.removed && (
+      {canEditCanvasBackground && (
         <>
           <div className="panel-separator" />
 
@@ -121,20 +124,22 @@ export function BackgroundPanel() {
             </p>
           </div>
 
-          <button
-            type="button"
-            className="secondary-button full-button"
-            onClick={background.clearBackground}
-          >
-            <RotateCcw size={15} />
-            Make background transparent
-          </button>
+          {hasBackgroundLayer && (
+            <button
+              type="button"
+              className="secondary-button full-button"
+              onClick={background.clearBackground}
+            >
+              <RotateCcw size={15} />
+              Make background transparent
+            </button>
+          )}
         </>
       )}
 
-      {background.removed && (
+      {canEditCanvasBackground && hasBackgroundLayer && (
         <p className="panel-note">
-          Reset restores your original image.
+          {background.removed ? 'Reset restores your original image.' : 'Background layers stay independent from your artwork layers.'}
         </p>
       )}
 
@@ -149,7 +154,7 @@ export function BackgroundPanel() {
         </button>
       )}
 
-      {background.removed && (
+      {canEditCanvasBackground && (
         <button
           type="button"
           className="secondary-button full-button"

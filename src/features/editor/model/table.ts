@@ -1,0 +1,1 @@
+export type { CanvasTable, TableGesture } from './types'

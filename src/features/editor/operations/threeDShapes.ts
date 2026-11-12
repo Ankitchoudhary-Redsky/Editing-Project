@@ -1,16 +1,30 @@
 import { FabricImage, FabricObject, type Canvas } from 'fabric'
+import { EditableThreeDShape } from './EditableThreeDShape'
+import type { ThreeDShapeKind } from '../model/types'
 
 export const threeDShapeChoices = [
-  { kind: 'sphere', label: 'Sphere', color: '#18a78b', group: 'Basic Objects' },
   { kind: 'cube', label: 'Cube', color: '#5588ee', group: 'Basic Objects' },
+  { kind: 'box', label: 'Box', color: '#5e9c88', group: 'Basic Objects' },
+  { kind: 'sphere', label: 'Sphere', color: '#18a78b', group: 'Basic Objects' },
+  { kind: 'cylinder', label: 'Cylinder', color: '#e5ad36', group: 'Basic Objects' },
   { kind: 'cone', label: 'Cone', color: '#f18442', group: 'Basic Objects' },
   { kind: 'torus', label: 'Torus', color: '#eb6687', group: 'Basic Objects' },
-  { kind: 'ring', label: 'Ring', color: '#d15d9b', group: 'Basic Objects' },
-  { kind: 'cylinder', label: 'Cylinder', color: '#e5ad36', group: 'Basic Objects' },
-  { kind: 'diamond', label: 'Diamond', color: '#8968dc', group: 'Basic Objects' },
-  { kind: 'pyramid', label: 'Pyramid', color: '#d77645', group: 'Basic Objects' },
-  { kind: 'hexagon', label: 'Hexagon', color: '#32a6b0', group: 'Basic Objects' },
+  { kind: 'torusKnot', label: 'Torus knot', color: '#b064ca', group: 'Basic Objects' },
   { kind: 'capsule', label: 'Capsule', color: '#6185d8', group: 'Basic Objects' },
+  { kind: 'plane', label: 'Plane', color: '#4ca8b0', group: 'Basic Objects' },
+  { kind: 'circle', label: 'Circle', color: '#4e9e9a', group: 'Basic Objects' },
+  { kind: 'ring', label: 'Ring', color: '#d15d9b', group: 'Basic Objects' },
+  { kind: 'tetrahedron', label: 'Tetrahedron', color: '#ce8050', group: 'Basic Objects' },
+  { kind: 'octahedron', label: 'Octahedron', color: '#8968dc', group: 'Basic Objects' },
+  { kind: 'dodecahedron', label: 'Dodecahedron', color: '#3e95b7', group: 'Basic Objects' },
+  { kind: 'icosahedron', label: 'Icosahedron', color: '#c95f6e', group: 'Basic Objects' },
+  { kind: 'roundedBox', label: 'Rounded box', color: '#6c9a61', group: 'Basic Objects' },
+  { kind: 'pyramid', label: 'Pyramid', color: '#d77645', group: 'Advanced Shapes' },
+  { kind: 'triangularPrism', label: 'Triangular prism', color: '#4787c5', group: 'Advanced Shapes' },
+  { kind: 'pentagonalPrism', label: 'Pentagonal prism', color: '#ab6dce', group: 'Advanced Shapes' },
+  { kind: 'hexagonalPrism', label: 'Hexagonal prism', color: '#32a6b0', group: 'Advanced Shapes' },
+  { kind: 'starExtrusion', label: 'Star extrusion', color: '#e5a92e', group: 'Advanced Shapes' },
+  { kind: 'heartExtrusion', label: 'Heart extrusion', color: '#ec5276', group: 'Advanced Shapes' },
   { kind: 'arrow', label: 'Arrow', color: '#ef5b42', group: 'Symbols & Icons' },
   { kind: 'heart', label: 'Heart', color: '#ec5276', group: 'Symbols & Icons' },
   { kind: 'star', label: 'Star', color: '#e5a92e', group: 'Symbols & Icons' },
@@ -24,10 +38,12 @@ export const threeDShapeChoices = [
   { kind: 'play', label: 'Play', color: '#5984e6', group: 'Symbols & Icons' },
   { kind: 'flower', label: 'Flower', color: '#df679b', group: 'Symbols & Icons' },
   { kind: 'crown', label: 'Crown', color: '#dda633', group: 'Symbols & Icons' },
+  { kind: 'diamond', label: 'Diamond', color: '#8968dc', group: 'Basic Objects' },
+  { kind: 'hexagon', label: 'Hexagon', color: '#32a6b0', group: 'Basic Objects' },
 ] as const
 
-export type ThreeDShapeKind = (typeof threeDShapeChoices)[number]['kind']
-export const threeDShapeGroups = ['Basic Objects', 'Symbols & Icons', 'Letters & Numbers', 'Emojis'] as const
+export type { ThreeDShapeKind }
+export const threeDShapeGroups = ['Basic Objects', 'Advanced Shapes', 'Symbols & Icons', 'Letters & Numbers', 'Emojis'] as const
 export const threeDCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('')
 export const threeDEmojiChoices = [
   { emoji: '😃', label: 'Smiling Face', color: '#ffc928', mood: 'smile', category: 'Faces' },
@@ -363,11 +379,15 @@ function createGeometry(THREE: ThreeModule, kind: ThreeDShapeKind): import('thre
     case 'sphere':
       return new THREE.SphereGeometry(1, 48, 48)
     case 'cube':
+    case 'box':
+    case 'roundedBox':
       return new THREE.BoxGeometry(1.65, 1.65, 1.65)
     case 'cone':
       return new THREE.ConeGeometry(0.95, 1.8, 5)
     case 'torus':
       return new THREE.TorusGeometry(0.76, 0.3, 24, 64)
+    case 'torusKnot':
+      return new THREE.TorusKnotGeometry(0.62, 0.2, 96, 16)
     case 'ring':
       return new THREE.TorusGeometry(0.82, 0.16, 24, 64)
     case 'cylinder':
@@ -381,6 +401,39 @@ function createGeometry(THREE: ThreeModule, kind: ThreeDShapeKind): import('thre
         const angle = -Math.PI / 2 + index * Math.PI / 3
         return [Math.cos(angle), Math.sin(angle)]
       }))
+    case 'plane':
+      return new THREE.PlaneGeometry(1.6, 1.6)
+    case 'circle':
+      return new THREE.CylinderGeometry(0.8, 0.8, 0.16, 48)
+    case 'tetrahedron':
+      return new THREE.TetrahedronGeometry(1.05)
+    case 'octahedron':
+      return new THREE.OctahedronGeometry(1.05)
+    case 'dodecahedron':
+      return new THREE.DodecahedronGeometry(1.05)
+    case 'icosahedron':
+      return new THREE.IcosahedronGeometry(1.05)
+    case 'triangularPrism':
+      return new THREE.CylinderGeometry(0.85, 0.85, 1.4, 3)
+    case 'pentagonalPrism':
+      return new THREE.CylinderGeometry(0.85, 0.85, 1.4, 5)
+    case 'hexagonalPrism':
+      return new THREE.CylinderGeometry(0.85, 0.85, 1.4, 6)
+    case 'starExtrusion':
+      return extrudeShape(THREE, Array.from({ length: 10 }, (_, index) => {
+        const angle = -Math.PI / 2 + index * Math.PI / 5
+        const radius = index % 2 === 0 ? 1 : 0.45
+        return [Math.cos(angle) * radius, Math.sin(angle) * radius]
+      }))
+    case 'heartExtrusion': {
+      const shape = new THREE.Shape()
+      shape.moveTo(0, -0.82)
+      shape.bezierCurveTo(-0.3, -0.48, -1, 0.02, -1, 0.52)
+      shape.bezierCurveTo(-1, 1.15, -0.2, 1.2, 0, 0.58)
+      shape.bezierCurveTo(0.2, 1.2, 1, 1.15, 1, 0.52)
+      shape.bezierCurveTo(1, 0.02, 0.3, -0.48, 0, -0.82)
+      return new THREE.ExtrudeGeometry(shape, { depth: 0.38, bevelEnabled: true, bevelSegments: 4, steps: 1, bevelSize: 0.07, bevelThickness: 0.07 })
+    }
     case 'capsule':
       return new THREE.CapsuleGeometry(0.5, 0.7, 8, 24)
     case 'arrow':
@@ -565,6 +618,32 @@ export async function addThreeDShape(canvas: Canvas, kind: ThreeDShapeKind, colo
     threeDRotationY: initialShapeRotation.y,
     threeDRotationZ: initialShapeRotation.z,
   })
+}
+
+export function addEditableThreeDShape(
+  canvas: Canvas,
+  kind: ThreeDShapeKind,
+  color: string,
+  label: string,
+  bounds = {
+    left: canvas.getWidth() / 2 - 110,
+    top: canvas.getHeight() / 2 - 95,
+    width: 220,
+    height: 190,
+  },
+) {
+  const object = new EditableThreeDShape({
+    ...bounds,
+    originX: 'left',
+    originY: 'top',
+    threeDKind: kind,
+    threeDColor: color,
+    name: `3D ${label}`,
+  })
+  canvas.add(object)
+  canvas.setActiveObject(object)
+  canvas.requestRenderAll()
+  return object
 }
 
 type GlyphPoint = [number, number]
