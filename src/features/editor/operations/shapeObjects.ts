@@ -37,6 +37,51 @@ export function constrainShapeToCanvas(canvas: Canvas, object: FabricObject) {
   object.setCoords()
 }
 
+export function constrainShapeToImage(
+  canvas: Canvas,
+  imageObject: FabricObject | null,
+  object: FabricObject,
+) {
+  if (!imageObject) {
+    constrainShapeToCanvas(canvas, object)
+    return
+  }
+
+  object.setCoords()
+  const objectBounds = object.getBoundingRect()
+  const imageBounds = imageObject.getBoundingRect()
+
+  const minLeft = imageBounds.left
+  const maxRight = imageBounds.left + imageBounds.width
+  const minTop = imageBounds.top
+  const maxBottom = imageBounds.top + imageBounds.height
+
+  const currentLeft = object.left ?? 0
+  const currentTop = object.top ?? 0
+
+  let nextLeft = currentLeft
+  let nextTop = currentTop
+
+  if (objectBounds.left < minLeft) {
+    nextLeft += minLeft - objectBounds.left
+  }
+  if (objectBounds.left + objectBounds.width > maxRight) {
+    nextLeft -= objectBounds.left + objectBounds.width - maxRight
+  }
+  if (objectBounds.top < minTop) {
+    nextTop += minTop - objectBounds.top
+  }
+  if (objectBounds.top + objectBounds.height > maxBottom) {
+    nextTop -= objectBounds.top + objectBounds.height - maxBottom
+  }
+
+  object.set({
+    left: nextLeft,
+    top: nextTop,
+  })
+  object.setCoords()
+}
+
 export function isShapeObject(object: FabricObject) {
   const name = String(object.get('name') ?? '')
   return Object.values(shapeNames).some(

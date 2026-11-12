@@ -1,12 +1,11 @@
-import type { DragEvent } from 'react'
-import { useEditor } from '../EditorContext'
-import { EditorNotice, ExportDialog, PreviewDialog } from './EditorDialogs'
-import { EditorHeader } from './EditorHeader'
-import { EditorWorkspace } from './EditorWorkspace'
-import { ToolPanel } from './ToolPanel'
-import { ToolRail } from './ToolRail'
-import type { EditorShellProps } from '../model/types'
-
+import type { DragEvent } from "react";
+import { useEditor } from "../EditorContext";
+import { EditorNotice, ExportDialog, PreviewDialog } from "./EditorDialogs";
+import { EditorHeader } from "./EditorHeader";
+import { EditorWorkspace } from "./EditorWorkspace";
+import { ToolPanel } from "./ToolPanel";
+import { ToolRail } from "./ToolRail";
+import type { EditorShellProps } from "../model/types";
 
 export function EditorShell({
   historyVersion,
@@ -14,16 +13,16 @@ export function EditorShell({
   setCanvasElement,
   setStageElement,
 }: EditorShellProps) {
-  const { tools, handleDrop } = useEditor()
+  const { tools, canvas, handleDrop } = useEditor();
 
   const handleDragOver = (event: DragEvent<HTMLElement>) => {
-    event.preventDefault()
-    tools.setDraggingFile(true)
-  }
+    event.preventDefault();
+    tools.setDraggingFile(true);
+  };
 
   const handleDragLeave = (event: DragEvent<HTMLElement>) => {
-    if (event.currentTarget === event.target) tools.setDraggingFile(false)
-  }
+    if (event.currentTarget === event.target) tools.setDraggingFile(false);
+  };
 
   return (
     <main
@@ -39,13 +38,13 @@ export function EditorShell({
         accept="image/png,image/jpeg,image/webp"
         hidden
         onChange={(event) => {
-          void tools.uploadFile(event.target.files?.[0])
-          event.currentTarget.value = ''
+          void tools.uploadFile(event.target.files?.[0]);
+          event.currentTarget.value = "";
         }}
       />
       <section className="editor-body">
-        <ToolRail />
-        <ToolPanel />
+        {canvas.hasDocument && <ToolRail />}
+        {canvas.hasDocument && <ToolPanel />}
         <EditorWorkspace
           historyVersion={historyVersion}
           setCanvasElement={setCanvasElement}
@@ -56,8 +55,8 @@ export function EditorShell({
       <ExportDialog />
       <PreviewDialog />
       <span className="visually-hidden" aria-live="polite">
-        {historyVersion > 0 ? 'Document updated' : ''}
+        {historyVersion > 0 ? "Document updated" : ""}
       </span>
     </main>
-  )
+  );
 }

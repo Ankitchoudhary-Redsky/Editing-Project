@@ -4,6 +4,9 @@ import type { UseEditorKeyboardShortcutsOptions } from '../model/types'
 export function useEditorKeyboardShortcuts({
   undo,
   redo,
+  copySelection,
+  pasteSelection,
+  duplicateSelection,
   deleteSelected,
   handleTableKeyboardInput,
 }: UseEditorKeyboardShortcutsOptions) {
@@ -33,6 +36,15 @@ export function useEditorKeyboardShortcuts({
       } else if (command && event.key.toLowerCase() === 'y') {
         event.preventDefault()
         void redo()
+      } else if (command && event.key.toLowerCase() === 'c') {
+        event.preventDefault()
+        void copySelection()
+      } else if (command && event.key.toLowerCase() === 'v') {
+        event.preventDefault()
+        void pasteSelection()
+      } else if (command && event.key.toLowerCase() === 'd') {
+        event.preventDefault()
+        void duplicateSelection()
       } else if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault()
         deleteSelected()
@@ -41,5 +53,5 @@ export function useEditorKeyboardShortcuts({
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undo, redo, deleteSelected, handleTableKeyboardInput])
+  }, [undo, redo, copySelection, pasteSelection, duplicateSelection, deleteSelected, handleTableKeyboardInput])
 }

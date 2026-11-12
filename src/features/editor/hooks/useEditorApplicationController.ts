@@ -156,6 +156,9 @@ export function useEditorApplicationController({
   useEditorKeyboardShortcuts({
     undo,
     redo,
+    copySelection: objectEditing.copySelection,
+    pasteSelection: objectEditing.pasteSelection,
+    duplicateSelection: objectEditing.duplicateSelected,
     deleteSelected: objectEditing.deleteSelected,
     handleTableKeyboardInput: table.handleKeyboardInput,
   })

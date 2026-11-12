@@ -20,11 +20,11 @@
 }
 
 .topbar {
+  z-index: 4;
   display: flex;
   flex: 0 0 64px;
   align-items: center;
-  justify-content: flex-start;
-  gap: 24px;
+  justify-content: space-between;
   padding: 0 22px;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
@@ -66,7 +66,7 @@
 }
 
 .brand-lockup,
-.project-title,
+/* .project-title, */
 .top-actions,
 .project-name,
 .save-status,
@@ -81,7 +81,7 @@
 .export-info {
   display: flex;
   align-items: center;
-  gap:10px;
+  gap: 10px;
 }
 
 .brand-lockup {
@@ -107,19 +107,18 @@
   color: var(--accent);
   font-weight: 400;
 }
+
 .project-title {
   display: flex;
-  align-items: center;
+  flex: 1;
+  flex-direction: row;
+  align-items: flex-start;
   gap: 12px;
-  margin-left: 10px;
+  justify-content: space-around;
+  padding-left: 18px;
 }
-
 .project-name {
-  display: flex;
-  align-items: center;
   gap: 7px;
-  max-width: 130px;
-  min-width: 0;
   padding: 0;
   border: 0;
   color: #2e3934;
@@ -127,6 +126,15 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+.project-title input {
+  width: min(260px, 44vw);
+  padding: 3px 6px;
+  border: 1px solid #a8cabb;
+  border-radius: 4px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
 }
 
 .project-name-text {
@@ -246,4 +254,8 @@
   display: flex;
   flex: 1;
   min-height: 0;
+}
+
+.editor-app:has(.workspace.focus-mode) > .topbar {
+  display: none;
 }

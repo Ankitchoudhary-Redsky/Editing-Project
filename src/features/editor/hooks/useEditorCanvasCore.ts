@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useRef } from 'react'
-import { Canvas, FabricImage, Rect, type FabricObject } from 'fabric'
-import type { FilterId, EditorTool, UseEditorCanvasCoreOptions } from '../model/types'
-import { BACKGROUND_IMAGE_NAME, serializeCanvas } from '../model/constants'
-import { useFabricCanvas } from './useFabricCanvas'
-import { useHistoryRecorder } from './useHistoryRecorder'
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Canvas, FabricImage, Rect, type FabricObject } from "fabric";
+import type {
+  FilterId,
+  EditorTool,
+  UseEditorCanvasCoreOptions,
+} from "../model/types";
+import { BACKGROUND_IMAGE_NAME, serializeCanvas } from "../model/constants";
+import { useFabricCanvas } from "./useFabricCanvas";
+import { useHistoryRecorder } from "./useHistoryRecorder";
 
 export function useEditorCanvasCore({
   activeTool,
@@ -16,33 +20,38 @@ export function useEditorCanvasCore({
   setImageThumbnail,
   setCropRotation,
 }: UseEditorCanvasCoreOptions) {
-  const canvasRef = useRef<Canvas | null>(null)
-  const suppressHistoryRef = useRef(false)
-  const cropObjectRef = useRef<Rect | null>(null)
-  const cropOriginalSnapshotRef = useRef<string | null>(null)
-  const imageObjectRef = useRef<FabricImage | null>(null)
-  const imageSourceRef = useRef('')
-  const selectedFilterRef = useRef<FilterId>('original')
-  const filterIntensityRef = useRef(100)
-  const backgroundRemovedRef = useRef(false)
-  const backgroundColorRef = useRef('#ffffff')
-  const activeToolRef = useRef<EditorTool>('upload')
-  const userEditedBeforeDraftLoadRef = useRef(false)
-  const syncedObjectsRef = useRef<FabricObject[]>([])
+  const canvasRef = useRef<Canvas | null>(null);
+  const suppressHistoryRef = useRef(false);
+  const cropObjectRef = useRef<Rect | null>(null);
+  const cropOriginalSnapshotRef = useRef<string | null>(null);
+  const imageObjectRef = useRef<FabricImage | null>(null);
+  const imageSourceRef = useRef("");
+  const selectedFilterRef = useRef<FilterId>("original");
+  const filterIntensityRef = useRef(100);
+  const backgroundRemovedRef = useRef(false);
+  const backgroundColorRef = useRef("#ffffff");
+  const activeToolRef = useRef<EditorTool>("upload");
+  const userEditedBeforeDraftLoadRef = useRef(false);
+  const syncedObjectsRef = useRef<FabricObject[]>([]);
+  const [imageResizeLocked, setImageResizeLocked] = useState(false);
 
   const markUserEditedBeforeDraftLoad = useCallback(() => {
-    if (!suppressHistoryRef.current) userEditedBeforeDraftLoadRef.current = true
-  }, [])
+    if (!suppressHistoryRef.current)
+      userEditedBeforeDraftLoadRef.current = true;
+  }, []);
   const markUserInteractionBeforeDraftLoad = useCallback(() => {
-    userEditedBeforeDraftLoadRef.current = true
-  }, [])
-  const shouldSyncCanvasObjects = useCallback(() => !suppressHistoryRef.current, [])
+    userEditedBeforeDraftLoadRef.current = true;
+  }, []);
+  const shouldSyncCanvasObjects = useCallback(
+    () => !suppressHistoryRef.current,
+    [],
+  );
 
   const syncSelection = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    const active = canvas.getActiveObject() ?? null
+    const active = canvas.getActiveObject() ?? null;
     active?.set({
       borderColor: '#2c7660',
       borderScaleFactor: 1.35,
@@ -52,56 +61,98 @@ export function useEditorCanvasCore({
       cornerStyle: 'circle',
       transparentCorners: false,
     })
-    setSelectedObject(active)
-    setSelectedIsImage(active === imageObjectRef.current)
-  }, [setSelectedIsImage, setSelectedObject])
+    setSelectedObject(active);
+    setSelectedIsImage(active === imageObjectRef.current);
+  }, [setSelectedIsImage, setSelectedObject]);
 
   const syncObjects = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    const currentObjects = canvas.getObjects()
+    const currentObjects = canvas.getObjects();
     const image = currentObjects.find(
-      (item) => item instanceof FabricImage && item.get('name') !== BACKGROUND_IMAGE_NAME && !item.get('isLibraryImage'),
-    )
-    const imageInteractive = activeToolRef.current === 'upload' || activeToolRef.current === 'library'
-    if (image && (
-      image.selectable !== imageInteractive || image.evented !== imageInteractive ||
-      image.lockMovementX === imageInteractive || image.lockMovementY === imageInteractive ||
-      image.lockScalingX === imageInteractive || image.lockScalingY === imageInteractive || image.lockRotation !== true
-    )) {
+      (item) =>
+        item instanceof FabricImage &&
+        item.get("name") !== BACKGROUND_IMAGE_NAME &&
+        !String(item.get("name") ?? "").startsWith("layout-image-"),
+    );
+    if (image) {
+      const objectLocked = image.get("objectLocked") === true;
       image.set({
-        selectable: imageInteractive,
-        evented: imageInteractive,
-        lockMovementX: !imageInteractive,
-        lockMovementY: !imageInteractive,
-        lockScalingX: !imageInteractive,
-        lockScalingY: !imageInteractive,
-        lockRotation: true,
-      })
+        selectable: !imageResizeLocked,
+        evented: !imageResizeLocked,
+        lockMovementX: imageResizeLocked || objectLocked,
+        lockMovementY: imageResizeLocked || objectLocked,
+        lockScalingX: imageResizeLocked || objectLocked,
+        lockScalingY: imageResizeLocked || objectLocked,
+        lockRotation: imageResizeLocked || objectLocked,
+      });
+      image.setCoords();
     }
-    if (!imageInteractive && canvas.getActiveObject() === image) canvas.discardActiveObject()
-    const imageObject = image instanceof FabricImage ? image : null
-    if (imageObjectRef.current !== imageObject) imageObjectRef.current = imageObject
-    setCropRotation(image instanceof FabricImage ? Math.round(image.angle || 0) : 0)
-    setHasImage(Boolean(image))
-    setHasDocument(Boolean(image))
-    if (!(image instanceof FabricImage)) setImageThumbnail('')
-    const visibleObjects = currentObjects.filter((item) => item !== cropObjectRef.current)
-    const previousObjects = syncedObjectsRef.current
+    if (imageResizeLocked && canvas.getActiveObject() === image) canvas.discardActiveObject()
+    const imageObject = image instanceof FabricImage ? image : null;
+    if (imageObjectRef.current !== imageObject)
+      imageObjectRef.current = imageObject;
+    setCropRotation(
+      image instanceof FabricImage ? Math.round(image.angle || 0) : 0,
+    );
+    const hasCanvasImage = currentObjects.some(
+      (item) =>
+        item instanceof FabricImage &&
+        item.get("name") !== BACKGROUND_IMAGE_NAME,
+    );
+    setHasImage(hasCanvasImage);
+    setHasDocument(
+      currentObjects.some((item) => item !== cropObjectRef.current),
+    );
+    if (!(image instanceof FabricImage)) setImageThumbnail("");
+    const visibleObjects = currentObjects.filter(
+      (item) => item !== cropObjectRef.current,
+    );
+    const previousObjects = syncedObjectsRef.current;
     if (
       visibleObjects.length !== previousObjects.length ||
       visibleObjects.some((item, index) => item !== previousObjects[index])
     ) {
-      syncedObjectsRef.current = visibleObjects
-      setObjects(visibleObjects)
+      syncedObjectsRef.current = visibleObjects;
+      setObjects(visibleObjects);
     }
 
-    syncSelection()
-  }, [setCropRotation, setHasDocument, setHasImage, setImageThumbnail, setObjects, syncSelection])
+    syncSelection();
+  }, [
+    imageResizeLocked,
+    setCropRotation,
+    setHasDocument,
+    setHasImage,
+    setImageThumbnail,
+    setObjects,
+    syncSelection,
+  ]);
+
+  const toggleImageResizeLock = useCallback(() => {
+    const nextLocked = !imageResizeLocked;
+    setImageResizeLocked(nextLocked);
+    const image = imageObjectRef.current;
+    const canvas = canvasRef.current;
+    const objectLocked = image?.get("objectLocked") === true;
+    image?.set({
+      selectable: !nextLocked,
+      evented: !nextLocked,
+      lockMovementX: nextLocked || objectLocked,
+      lockMovementY: nextLocked || objectLocked,
+      lockScalingX: nextLocked || objectLocked,
+      lockScalingY: nextLocked || objectLocked,
+      lockRotation: nextLocked || objectLocked,
+    });
+    if (nextLocked && canvas?.getActiveObject() === image)
+      canvas.discardActiveObject();
+    image?.setCoords();
+    canvas?.requestRenderAll();
+    syncSelection();
+  }, [imageResizeLocked, syncSelection]);
 
   const serializeEditorSnapshot = useCallback((canvas: Canvas) => {
-    const base = serializeCanvas(canvas)
+    const base = serializeCanvas(canvas);
     return JSON.stringify({
       ...base,
       editor: {
@@ -110,15 +161,15 @@ export function useEditorCanvasCore({
         backgroundRemoved: backgroundRemovedRef.current,
         backgroundColor: backgroundColorRef.current,
       },
-    })
-  }, [])
+    });
+  }, []);
 
   const history = useHistoryRecorder({
     canvasRef,
     suppressHistoryRef,
     serializeSnapshot: serializeEditorSnapshot,
     syncObjects,
-  })
+  });
   const fabric = useFabricCanvas({
     canvasRef,
     recordHistory: history.recordHistory,
@@ -129,12 +180,12 @@ export function useEditorCanvasCore({
     onUserEdit: markUserEditedBeforeDraftLoad,
     onUserInteraction: markUserInteractionBeforeDraftLoad,
     shouldSyncObjects: shouldSyncCanvasObjects,
-  })
+  });
 
   useEffect(() => {
-    activeToolRef.current = activeTool
+    activeToolRef.current = activeTool;
     syncObjects()
-  }, [activeTool, syncObjects])
+  }, [activeTool, syncObjects]);
 
   return {
     canvasRef,
@@ -148,12 +199,14 @@ export function useEditorCanvasCore({
     backgroundRemovedRef,
     backgroundColorRef,
     activeToolRef,
+    imageResizeLocked,
+    toggleImageResizeLock,
     userEditedBeforeDraftLoadRef,
-      markUserInteractionBeforeDraftLoad,
+    markUserInteractionBeforeDraftLoad,
     serializeEditorSnapshot,
     syncObjects,
     syncSelection,
     history,
     fabric,
-  }
+  };
 }

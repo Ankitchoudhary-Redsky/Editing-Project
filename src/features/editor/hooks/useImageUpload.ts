@@ -1,7 +1,7 @@
-import { useRef } from 'react'
-import type { UseImageUploadOptions } from '../model/types'
-import { hasTransparentPixels } from '../operations/removeImageBackground'
-import { loadLocalImage } from '../operations/loadLocalImage'
+import { useRef } from "react";
+import type { UseImageUploadOptions } from "../model/types";
+import { hasTransparentPixels } from "../operations/removeImageBackground";
+import { loadLocalImage } from "../operations/loadLocalImage";
 
 export function useImageUpload({
   canvasRef,
@@ -34,44 +34,52 @@ export function useImageUpload({
   setDraggingFile,
   markUserInteractionBeforeDraftLoad,
 }: UseImageUploadOptions) {
-  const uploadRequestRef = useRef(0)
+  const uploadRequestRef = useRef(0);
 
-  return async function uploadFile(file?: File) {
-    if (!file) return
-    const requestId = ++uploadRequestRef.current
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-      setNotice('Choose a PNG, JPG, or WebP image.')
-      return
+  return async function uploadFile(
+    file?: File,
+    onProgress?: (progress: number) => void,
+  ): Promise<string | null> {
+    if (!file) return null;
+    const requestId = ++uploadRequestRef.current;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      const message = "Choose a PNG, JPG, or WebP image.";
+      setNotice(message);
+      return message;
     }
     if (file.size > 30 * 1024 * 1024) {
-      setNotice('Images must be smaller than 30 MB.')
-      return
+      const message = "Images must be smaller than 30 MB.";
+      setNotice(message);
+      return message;
     }
-    markUserInteractionBeforeDraftLoad()
+    markUserInteractionBeforeDraftLoad();
 
     try {
-      const { image, source, dimensions, thumbnail } = await loadLocalImage(file)
-      if (requestId !== uploadRequestRef.current) return
-      const alreadyTransparent = await hasTransparentPixels(source)
-      if (requestId !== uploadRequestRef.current) return
-      backgroundRemovedRef.current = alreadyTransparent
-      backgroundColorRef.current = '#ffffff'
-      setBackgroundRemoved(alreadyTransparent)
-      setBackgroundColor('#ffffff')
-      setIsRemovingBackground(false)
-      setBackgroundProgress('')
-      const { width, height } = dimensions
-      const canvas = canvasRef.current
-      if (!canvas) return
+      const { image, source, dimensions, thumbnail } = await loadLocalImage(
+        file,
+        (progress) => onProgress?.(Math.min(95, Math.round(progress * 0.95))),
+      );
+      if (requestId !== uploadRequestRef.current) return null;
+      const alreadyTransparent = await hasTransparentPixels(source);
+      if (requestId !== uploadRequestRef.current) return null;
+      backgroundRemovedRef.current = alreadyTransparent;
+      backgroundColorRef.current = "#ffffff";
+      setBackgroundRemoved(alreadyTransparent);
+      setBackgroundColor("#ffffff");
+      setIsRemovingBackground(false);
+      setBackgroundProgress("");
+      const { width, height } = dimensions;
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
 
-      imageSourceRef.current = source
-      suppressHistoryRef.current = true
-      canvas.clear()
-      imageObjectRef.current = image
-      resetTables()
-      resetDrawing()
-      canvas.setDimensions({ width, height })
-      canvas.backgroundColor = 'rgba(0,0,0,0)'
+      imageSourceRef.current = source;
+      suppressHistoryRef.current = true;
+      canvas.clear();
+      imageObjectRef.current = image;
+      resetTables();
+      resetDrawing();
+      canvas.setDimensions({ width, height });
+      canvas.backgroundColor = "rgba(0,0,0,0)";
       image.set({
         left: 0,
         top: 0,
@@ -107,13 +115,19 @@ export function useImageUpload({
       syncObjects()
     } catch (error) {
       if (requestId === uploadRequestRef.current) {
-        setNotice(error instanceof Error ? error.message : 'The image could not be opened. Try another file.')
+        const message =
+          error instanceof Error
+            ? error.message
+            : "The image could not be opened. Try another file.";
+        setNotice(message);
+        return message;
       }
     } finally {
       if (requestId === uploadRequestRef.current) {
-        suppressHistoryRef.current = false
-        setDraggingFile(false)
+        suppressHistoryRef.current = false;
+        setDraggingFile(false);
       }
     }
-  }
+    return null;
+  };
 }
