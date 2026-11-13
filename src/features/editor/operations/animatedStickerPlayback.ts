@@ -25,7 +25,6 @@ export async function addAnimatedStickerFrames(
   asset: StickerAnimationAsset,
 ): Promise<void> {
   const animationId = `sticker-animation-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${nextStickerAnimationId++}`}`
-  await saveStickerAnimation(animationId, asset)
   stickerAnimations.set(animationId, { frames: frameCanvases, delays })
 
   const sticker = new FabricImage(frameCanvases[0], {
@@ -42,6 +41,10 @@ export async function addAnimatedStickerFrames(
   fabricCanvas.setActiveObject(sticker)
   fabricCanvas.requestRenderAll()
   startStickerAnimation(fabricCanvas, sticker, frameCanvases, delays)
+
+  void saveStickerAnimation(animationId, asset).catch((error) => {
+    console.warn('Could not persist sticker animation:', error)
+  })
 }
 
 export async function restartAnimatedStickers(canvas: Canvas): Promise<void> {
