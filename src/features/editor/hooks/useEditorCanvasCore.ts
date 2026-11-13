@@ -5,7 +5,7 @@ import type {
   EditorTool,
   UseEditorCanvasCoreOptions,
 } from "../model/types";
-import { BACKGROUND_IMAGE_NAME, serializeCanvas } from "../model/constants";
+import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, DRAWING_LAYER_NAME, serializeCanvas } from "../model/constants";
 import { useFabricCanvas } from "./useFabricCanvas";
 import { useHistoryRecorder } from "./useHistoryRecorder";
 
@@ -71,13 +71,20 @@ export function useEditorCanvasCore({
 
     const currentObjects = canvas.getObjects();
     const image = currentObjects.find(
-      (item) =>
-        item instanceof FabricImage &&
-        item.get("name") !== BACKGROUND_IMAGE_NAME &&
-        !String(item.get("name") ?? "").startsWith("layout-image-"),
-    );
-    if (image) {
-      const objectLocked = image.get("objectLocked") === true;
+      (item) => item instanceof FabricImage &&
+        item.get(BASE_IMAGE_PROPERTY) === true,
+    ) ?? currentObjects.find(
+      (item) => item instanceof FabricImage &&
+        item.get('name') !== BACKGROUND_IMAGE_NAME &&
+        item.get('name') !== DRAWING_LAYER_NAME &&
+        !item.get('stickerAnimationId') &&
+        !item.get('threeDType') &&
+        !item.get('emojiId'),
+    )
+    if (image && (
+      image.selectable || image.evented || !image.lockMovementX || !image.lockMovementY ||
+      !image.lockScalingX || !image.lockScalingY || !image.lockRotation
+    )) {
       image.set({
         selectable: !imageResizeLocked,
         evented: !imageResizeLocked,
@@ -152,7 +159,11 @@ export function useEditorCanvasCore({
   }, [imageResizeLocked, syncSelection]);
 
   const serializeEditorSnapshot = useCallback((canvas: Canvas) => {
-    const base = serializeCanvas(canvas);
+    const base = JSON.parse(serializeCanvas(canvas);) as {
+      width: number
+      height: number
+      scene: Parameters<Canvas['loadFromJSON']>[0]
+    }
     return JSON.stringify({
       ...base,
       editor: {

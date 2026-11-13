@@ -3,7 +3,7 @@ import { FabricImage, filters } from 'fabric'
 import type { FilterId } from '../model/types'
 import { createPresetMatrix } from '../model/filters'
 
-export function applyImageAdjustments( image: FabricImage, brightness: number, contrast: number, saturation: number, filterId: FilterId = 'original', intensity = 100 ) {
+export function applyImageAdjustments(image: FabricImage, brightness: number, contrast: number, saturation: number, filterId: FilterId = 'original', intensity = 100) {
   image.filters = []
   const matrix = createPresetMatrix(filterId, intensity)
   if (matrix) {

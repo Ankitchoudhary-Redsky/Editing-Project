@@ -155,6 +155,7 @@ export function useMagicImageRemoval({
         return
       }
       image.filters = originalState.filters
+      image.applyFilters()
       image.setCoords()
       targetCanvas.requestRenderAll()
       recordHistory(true)

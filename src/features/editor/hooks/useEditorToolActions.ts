@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { EditorTool, FilterId, UseEditorToolActionsOptions } from '../model/types'
 import { applyImageAdjustments } from '../operations/imageAdjustments'
 import { createEditorPreview, downloadEditorImage } from '../operations/editorExport'
@@ -36,6 +36,14 @@ export function useEditorToolActions({
   restartAnimations,
   setNotice,
 }: UseEditorToolActionsOptions) {
+  const adjustmentPreviewRef = useRef(false)
+  const adjustmentFrameRef = useRef<number | null>(null)
+  const pendingAdjustmentsRef = useRef<[number, number, number] | null>(null)
+
+  useEffect(() => () => {
+    if (adjustmentFrameRef.current !== null) cancelAnimationFrame(adjustmentFrameRef.current)
+  }, [])
+
   const setActiveEditorTool = useCallback((tool: EditorTool) => {
     if (activeTool === 'crop' && tool !== 'crop') {
       cancelCrop(tool)
@@ -60,7 +68,43 @@ export function useEditorToolActions({
       filterIntensityRef.current,
     )
     canvasRef.current?.requestRenderAll()
-    recordHistory()
+    if (!adjustmentPreviewRef.current) recordHistory()
+  }
+
+  const beginAdjustmentPreview = () => {
+    adjustmentPreviewRef.current = true
+  }
+
+  const scheduleAdjustmentPreview = (
+    nextBrightness = brightness,
+    nextContrast = contrast,
+    nextSaturation = saturation,
+  ) => {
+    pendingAdjustmentsRef.current = [nextBrightness, nextContrast, nextSaturation]
+    if (adjustmentFrameRef.current !== null) return
+    adjustmentFrameRef.current = requestAnimationFrame(() => {
+      adjustmentFrameRef.current = null
+      const pending = pendingAdjustmentsRef.current
+      pendingAdjustmentsRef.current = null
+      if (pending) applyAdjustments(...pending)
+    })
+  }
+
+  const finishAdjustmentPreview = (
+    nextBrightness: number,
+    nextContrast: number,
+    nextSaturation: number,
+  ) => {
+    if (!adjustmentPreviewRef.current) return
+    adjustmentPreviewRef.current = false
+    if (adjustmentFrameRef.current !== null) cancelAnimationFrame(adjustmentFrameRef.current)
+    adjustmentFrameRef.current = null
+    const pending = pendingAdjustmentsRef.current ?? [nextBrightness, nextContrast, nextSaturation]
+    pendingAdjustmentsRef.current = null
+    setBrightness(pending[0])
+    setContrast(pending[1])
+    setSaturation(pending[2])
+    applyAdjustments(...pending)
   }
 
   const changeFilter = (id: FilterId) => {
@@ -88,6 +132,10 @@ export function useEditorToolActions({
   }
 
   const resetAdjustments = () => {
+    if (adjustmentFrameRef.current !== null) cancelAnimationFrame(adjustmentFrameRef.current)
+    adjustmentFrameRef.current = null
+    adjustmentPreviewRef.current = false
+    pendingAdjustmentsRef.current = null
     setBrightness(0)
     setContrast(0)
     setSaturation(0)
@@ -167,6 +215,9 @@ export function useEditorToolActions({
   return {
     setActiveEditorTool,
     applyAdjustments,
+    scheduleAdjustmentPreview,
+    beginAdjustmentPreview,
+    finishAdjustmentPreview,
     changeFilter,
     changeFilterIntensity,
     resetFilter,

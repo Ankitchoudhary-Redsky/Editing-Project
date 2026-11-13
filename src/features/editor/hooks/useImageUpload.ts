@@ -85,6 +85,7 @@ export function useImageUpload({
         top: 0,
         originX: 'left',
         originY: 'top',
+        isBaseImage: true,
         selectable: true,
         evented: true,
         lockMovementX: false,

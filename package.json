@@ -7,6 +7,7 @@
     "dev": "vite --host",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "generate:3d-emojis": "node scripts/generate-3d-emoji-models.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

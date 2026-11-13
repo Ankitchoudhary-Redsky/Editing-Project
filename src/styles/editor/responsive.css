@@ -12,7 +12,6 @@
     display: none;
   }
 }
-
 @media (max-width: 700px) {
   .topbar { flex-basis: 58px; padding: 0 12px; }
   .brand-lockup { min-width: auto; gap: 7px; }

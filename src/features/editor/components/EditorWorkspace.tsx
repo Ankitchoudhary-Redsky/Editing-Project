@@ -1,30 +1,14 @@
-import type { DragEvent } from "react";
-import { useEffect, useRef, useState } from "react";
-import {
-  CopyPlus,
-  Eraser,
-  Fullscreen,
-  LockKeyhole,
-  Minimize2,
-  Highlighter,
-  Link2,
-  MessageSquarePlus,
-  MoreHorizontal,
-  MoveHorizontal,
-  MoveVertical,
-  Paintbrush,
-  Pencil,
-  UnlockKeyhole,
-  Trash2, Upload,
-} from "lucide-react";
 
-import { useEditor } from "../EditorContext";
-import { UploadLanding } from "./UploadLanding";
-import { objectName } from "../model/objectName";
-import type { DrawingMode, CanvasSurfaceProps } from "../model/types";
-import type { EditorWorkspaceProps } from "../model/types";
-import ImageMusicVideoExport from "./ImageMusicVideoExport";
-import { CanvasContextMenu } from "./CanvasContextMenu";
+import type { DragEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Eraser, Highlighter, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Upload } from 'lucide-react'
+
+import { useEditor } from '../EditorContext'
+import { EditorEmptyState } from './EditorEmptyState'
+import { objectName } from '../model/objectName'
+import type { DrawingMode, CanvasSurfaceProps } from '../model/types'
+import type { EditorWorkspaceProps } from '../model/types'
+import ImageMusicVideoExport from './ImageMusicVideoExport'
 
 function CanvasSurface({
   scale,
@@ -34,8 +18,8 @@ function CanvasSurface({
   cursorIcon: CursorIcon,
   isResizeCursor,
 }: CanvasSurfaceProps) {
-  const cursorElementRef = useRef<HTMLDivElement | null>(null);
-  const cursorPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const cursorElementRef = useRef<HTMLDivElement | null>(null)
+  const cursorPositionRef = useRef<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     const cursor = cursorElementRef.current;
@@ -50,8 +34,11 @@ function CanvasSurface({
   return (
     <div
       className="canvas-surface"
+      ref={surfaceRef}
       data-drawing-cursor={showDrawingCursor}
       style={{ transform: `translate(-50%, -50%) scale(${scale})` }}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       onPointerMoveCapture={(event) => {
         if (!showDrawingCursor) return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -76,6 +63,7 @@ function CanvasSurface({
       }}
     >
       <canvas ref={setCanvasElement} />
+      {children}
       {showDrawingCursor && CursorIcon && (
         <div
           ref={cursorElementRef}
@@ -283,6 +271,13 @@ function FloatingObjectToolbar({
   )
 }
 
+type DraggedPageImage = {
+  imageUrl: string
+  fileName?: string
+  width: number
+  height: number
+}
+
 export function EditorWorkspace({
   historyVersion,
   setCanvasElement,
@@ -299,12 +294,7 @@ export function EditorWorkspace({
     draggingFile,
     table,
     handleDrop,
-  } = useEditor();
-
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const canvasHolderRef = useRef<HTMLDivElement | null>(null);
-  const [showFullScreen, setShowFullScreen] = useState(false);
-  const [uploadingInitialImage, setUploadingInitialImage] = useState(false);
+  } = useEditor()
 
   const drawingCursorIcons: Partial<Record<DrawingMode, typeof Pencil>> = {
     pencil: Pencil,
@@ -327,7 +317,7 @@ export function EditorWorkspace({
   const currentZoom = canvas.zoom;
   const setZoom = canvas.setZoom;
 
-  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('')
 
   useEffect(() => {
     if (!canvas.hasImage || !fabricCanvas || tools.active !== "music") return;
@@ -340,51 +330,100 @@ export function EditorWorkspace({
     return () => window.cancelAnimationFrame(frame);
   }, [canvas.hasImage, fabricCanvas, historyVersion, tools.active]);
 
-  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    tools.setDraggingFile(true);
-  };
+  const selectedThreeDObject = canvas.hasImage && canvas.selected instanceof FabricImage && isThreeDRotatable(canvas.selected)
+    ? canvas.selected
+    : null
+  const selectedThreeDBounds = selectedThreeDObject?.getBoundingRect()
 
-  useEffect(() => {
-    if (!showFullScreen) return;
+  const beginThreeDRotation = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!selectedThreeDObject) return
+    const rotation = getThreeDRotation(selectedThreeDObject)
+    if (!rotation) return
+    const surface = event.currentTarget.closest('.canvas-surface')
+    if (!surface) return
+    const surfaceBounds = surface.getBoundingClientRect()
+    const surfaceScale = surfaceBounds.width / canvas.dimensions.width
+    const objectBounds = selectedThreeDObject.getBoundingRect()
+    const centerX = surfaceBounds.left + (objectBounds.left + objectBounds.width / 2) * surfaceScale
+    const centerY = surfaceBounds.top + (objectBounds.top + objectBounds.height / 2) * surfaceScale
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    rotationDragRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      centerX,
+      centerY,
+      lastZAngle: Math.atan2(event.clientY - centerY, event.clientX - centerX),
+      accumulatedZDelta: 0,
+      rotation,
+      pendingRotation: rotation,
+      frameId: null,
+      object: selectedThreeDObject,
+    }
+  }
 
-    fabricCanvas?.discardActiveObject();
-    fabricCanvas?.requestRenderAll();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setShowFullScreen(false);
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [fabricCanvas, showFullScreen]);
-
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-
-    const handleWheel = (event: globalThis.WheelEvent) => {
-      // Only intercept pinch-to-zoom / modified wheel gestures.
-      if (!event.ctrlKey && !event.metaKey) return;
-
-      if (event.cancelable) {
-        event.preventDefault();
+  const moveThreeDRotation = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = rotationDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId || !fabricCanvas) return
+    event.preventDefault()
+    event.stopPropagation()
+    const normalize = (value: number) => (value % 360 + 360) % 360
+    const pointerAngle = Math.atan2(event.clientY - drag.centerY, event.clientX - drag.centerX)
+    const rollStep = Math.atan2(
+      Math.sin(pointerAngle - drag.lastZAngle),
+      Math.cos(pointerAngle - drag.lastZAngle),
+    )
+    drag.lastZAngle = pointerAngle
+    drag.accumulatedZDelta += rollStep * 180 / Math.PI
+    drag.pendingRotation = {
+      x: normalize(drag.rotation.x + (event.clientY - drag.y) * 0.7),
+      y: normalize(drag.rotation.y + (event.clientX - drag.x) * 0.7),
+      z: normalize(drag.rotation.z + drag.accumulatedZDelta),
+    }
+    if (drag.frameId !== null) return
+    drag.frameId = requestAnimationFrame(() => {
+      drag.frameId = null
+      if (rotationDragRef.current === drag) {
+        void updateThreeDRotation(fabricCanvas, drag.object, drag.pendingRotation, false)
       }
+    })
+  }
 
-      const zoomFactor = Math.exp(-event.deltaY * 0.01);
-      const nextZoom = Math.min(3, Math.max(0.1, currentZoom * zoomFactor));
+  const endThreeDRotation = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (rotationDragRef.current?.pointerId !== event.pointerId) return
+    event.preventDefault()
+    event.stopPropagation()
+    const drag = rotationDragRef.current
+    if (drag.frameId !== null) {
+      cancelAnimationFrame(drag.frameId)
+    }
+    if (fabricCanvas) void updateThreeDRotation(fabricCanvas, drag.object, drag.pendingRotation)
+    rotationDragRef.current = null
+  }
 
-      setZoom(nextZoom);
-    };
+  const autoScrollStage = (event: DragEvent<HTMLElement>) => {
+    if (!event.dataTransfer.types.includes('application/x-estudio-page-image')) return
+    const stage = stageScrollRef.current
+    if (!stage) return
 
-    viewport.addEventListener("wheel", handleWheel, {
-      passive: false,
-    });
-
-    return () => {
-      viewport.removeEventListener("wheel", handleWheel);
-    };
-  }, [currentZoom, setZoom]);
+    const bounds = stage.getBoundingClientRect()
+    const edgeSize = Math.min(96, bounds.height * 0.18)
+    const distanceFromTop = event.clientY - bounds.top
+    const distanceFromBottom = bounds.bottom - event.clientY
+    const scrollDelta = distanceFromTop < edgeSize
+      ? -Math.ceil((edgeSize - distanceFromTop) / edgeSize * 24)
+      : distanceFromBottom < edgeSize
+        ? Math.ceil((edgeSize - distanceFromBottom) / edgeSize * 24)
+        : 0
+    const maxScrollTop = stage.scrollHeight - stage.clientHeight
+    stage.scrollTop = Math.max(0, Math.min(maxScrollTop, stage.scrollTop + scrollDelta))
+  }
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    tools.setDraggingFile(true)
+  }
 
   return (
     <section
@@ -392,44 +431,24 @@ export function EditorWorkspace({
     >
       <div
         className="stage"
-        ref={(element) => {
-          stageRef.current = element
-          setStageElement(element)
-        }}
+        ref={setStageElement}
         onDragOver={handleDragOver}
         onDragLeave={() => tools.setDraggingFile(false)}
         onDrop={handleDrop}
       >
-        <div
-          ref={canvasHolderRef}
-          className="canvas-holder"
-        >
-          <CanvasContextMenu holderRef={canvasHolderRef} />
+        <div className="canvas-holder">
           <CanvasSurface
             scale={canvas.fitScale * canvas.zoom}
             setCanvasElement={setCanvasElement}
             showDrawingCursor={showDrawingCursor}
-            brushSize={
-              drawing.brushSize * (drawing.activeMode === "highlighter" ? 3 : 1)
-            }
+            brushSize={drawing.brushSize * (drawing.activeMode === 'highlighter' ? 3 : 1)}
             cursorIcon={CursorIcon}
             isResizeCursor={Boolean(resizeCursor)}
           />
-          {(!canvas.hasDocument || uploadingInitialImage) &&
-            editorMode.active === "image" && (
-              <UploadLanding
-                restoring={false}
-                onUploadStart={() => setUploadingInitialImage(true)}
-                onUploadFinish={() => setUploadingInitialImage(false)}
-                onUpload={(file, onProgress) =>
-                  tools.uploadFile(file, onProgress)
-                }
-              />
-            )}
+          {!canvas.hasDocument && <EditorEmptyState onUpload={tools.openFilePicker} />}
         </div>
-        <FloatingObjectToolbar stageRef={stageRef} />
 
-        {editorMode.active === "video" && tools.active !== "music" && (
+        {editorMode.active === 'video' && tools.active !== 'music' && (
           <div className="video-workspace-preview">
             {videoClip.url ? (
               <video
@@ -452,17 +471,14 @@ export function EditorWorkspace({
                 </button>
               </div>
             )}
-          </div>
-        )}
+            </div>
+          )}
 
-        {editorMode.active === "video" && videoClip.isTrimming && (
+        {editorMode.active === 'video' && videoClip.isTrimming && (
           <div className="video-trim-loading" role="status" aria-live="polite">
             <span className="video-trim-spinner" aria-hidden="true" />
             <strong>Preparing your trimmed video</strong>
-            <span>
-              Playing audio while the clip is processed. Your download will
-              start when it finishes.
-            </span>
+            <span>Playing audio while the clip is processed. Your download will start when it finishes.</span>
           </div>
         )}
 
@@ -470,13 +486,146 @@ export function EditorWorkspace({
           <div className="drop-cover">
             <div>
               <Upload size={24} />
-              <strong>
-                Drop {editorMode.active === "video" ? "video" : "image"} to open
-              </strong>
+              <strong>Drop {editorMode.active === 'video' ? 'video' : 'image'} to open</strong>
             </div>
           </div>
         )}
       </div>
+
+      {editorMode.active === 'image' && (
+        <div className="workspace-pages">
+          <div className="page-thumbnails" ref={thumbnailStripRef} aria-label="Pages">
+            <div
+              className={`page-thumbnail${activePageId === null ? ' selected' : ''}`}
+              draggable={activePageId === null && canvas.hasImage}
+              ref={(element) => {
+                if (element) thumbnailElementsRef.current.set(null, element)
+                else thumbnailElementsRef.current.delete(null)
+              }}
+              onDragStart={(event) => handlePageImageDragStart(event, null)}
+              onDragOver={handleFirstPageDragOver}
+              onDrop={(event) => void handleFirstPageDrop(event)}
+            >
+              <button
+                type="button"
+                className="page-thumbnail-select"
+                aria-label="Select Page 1"
+                aria-current={activePageId === null ? 'page' : undefined}
+                onClick={() => void activatePage(null)}
+              >
+                <span className="page-thumbnail-preview">
+                  {(pageOnePreview || (activePageId === null ? canvas.imageThumbnail : ''))
+                    ? <img src={pageOnePreview || canvas.imageThumbnail} alt="Page 1 preview" draggable={false} />
+                    : <span className="page-thumbnail-empty">Empty page</span>}
+                </span>
+                <span className="page-thumbnail-label">1</span>
+              </button>
+              <div className="page-thumbnail-actions">
+                <button
+                  type="button"
+                  className="page-thumbnail-action"
+                  aria-label="Upload or replace image on Page 1"
+                  title="Upload or replace image"
+                  onClick={() => void activatePage(null).then(() => tools.openFilePicker())}
+                >
+                  {pageOnePreview ? <RotateCcw size={14} /> : <Upload size={14} />}
+                </button>
+                <button
+                  type="button"
+                  className="page-thumbnail-action"
+                  aria-label="Duplicate Page 1"
+                  title="Duplicate page"
+                  onClick={() => duplicatePage()}
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
+            </div>
+
+            {addedPages.map((page, index) => (
+              <div
+                key={page.id}
+                className={`page-thumbnail${activePageId === page.id ? ' selected' : ''}${dropTargetPageId === page.id ? ' drop-target' : ''}`}
+                draggable={activePageId === page.id ? canvas.hasImage : Boolean(page.imageUrl)}
+                ref={(element) => {
+                  if (element) thumbnailElementsRef.current.set(page.id, element)
+                  else thumbnailElementsRef.current.delete(page.id)
+                }}
+                onDragStart={(event) => handlePageImageDragStart(event, page.id)}
+                onDragOver={(event) => handlePageDragOver(event, page.id)}
+                onDragLeave={(event) => {
+                  event.stopPropagation()
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setDropTargetPageId(null)
+                  }
+                }}
+                onDrop={(event) => void handlePageDrop(event, page.id)}
+              >
+                <button
+                  type="button"
+                  className="page-thumbnail-select"
+                  aria-label={`Select Page ${index + 2}`}
+                  aria-current={activePageId === page.id ? 'page' : undefined}
+                  onClick={() => void activatePage(page.id)}
+                >
+                  <span className="page-thumbnail-preview">
+                    {page.preview || page.imageUrl
+                      ? <img src={page.preview || page.imageUrl} alt={`Page ${index + 2} preview`} draggable={false} />
+                      : <span className="page-thumbnail-empty">Empty page</span>}
+                  </span>
+                  <span className="page-thumbnail-label">{index + 2}</span>
+                </button>
+                <div className="page-thumbnail-actions">
+                  <button
+                    type="button"
+                    className="page-thumbnail-action"
+                    aria-label={`${page.imageUrl ? 'Replace' : 'Upload'} image on Page ${index + 2}`}
+                    title={page.imageUrl ? 'Replace image' : 'Upload image'}
+                    onClick={() => pageUploadInputsRef.current.get(page.id)?.click()}
+                  >
+                    {page.imageUrl ? <RotateCcw size={14} /> : <Upload size={14} />}
+                  </button>
+                  <button
+                    type="button"
+                    className="page-thumbnail-action"
+                    aria-label={`Duplicate Page ${index + 2}`}
+                    title="Duplicate page"
+                    onClick={() => duplicatePage(page.id)}
+                  >
+                    <Copy size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="page-thumbnail-action delete-thumbnail-action"
+                    aria-label={`Delete Page ${index + 2}`}
+                    title="Delete page"
+                    onClick={() => deletePage(page.id)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <input
+                  ref={(element) => {
+                    if (element) pageUploadInputsRef.current.set(page.id, element)
+                    else pageUploadInputsRef.current.delete(page.id)
+                  }}
+                  className="page-upload-input"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) => {
+                    uploadPageImage(page.id, event.currentTarget.files?.[0])
+                    event.currentTarget.value = ''
+                  }}
+                />
+              </div>
+            ))}
+
+            <button type="button" className="page-thumbnail-add" onClick={addPage} aria-label="Add page" title="Add page">
+              <Plus size={20} aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="workspace-footer">
         <span>

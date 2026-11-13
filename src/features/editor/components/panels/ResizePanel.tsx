@@ -5,7 +5,7 @@ export function ResizePanel() {
   const { canvas, resize } = useEditor();
   return (
     <div className="panel-content">
-      <fieldset className="panel-control-group" disabled={!canvas.hasImage}>
+      <fieldset className="panel-control-group" disabled={!canvas.hasDocument}>
         <div className="dimensions-fields">
           <label className="field-label">
             Width
@@ -69,9 +69,9 @@ export function ResizePanel() {
         </button>
       </fieldset>
       <p className="panel-note">
-        {canvas.hasImage
+        {canvas.hasDocument
           ? "Canvas size is separate from artwork scaling. Artwork is cropped by the document edges."
-          : "Upload an image to resize it."}
+          : "Add a layer to resize the canvas."}
       </p>
     </div>
   );

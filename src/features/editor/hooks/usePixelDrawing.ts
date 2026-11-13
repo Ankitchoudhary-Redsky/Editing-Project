@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { FabricImage, type FabricObject } from 'fabric'
-import type { EditPoint, UsePixelDrawingOptions } from '../model/types'
+import { DRAWING_LAYER_NAME } from '../model/constants'
+import type { DrawingMode, EditPoint, UsePixelDrawingOptions } from '../model/types'
 import { editImagePixelsInCanvas } from '../operations/editImagePixels'
 import { createImageEditingTransform, createVisibleImageCanvas, getImageBrushScale, toImagePoint } from '../operations/pixelCanvas'
 import { useMagicImageRemoval } from './useMagicImageRemoval'
 
 const LASSO_PREVIEW_NAME = '__pixel_studio_lasso_preview__'
+type PaintMode = Extract<DrawingMode, 'pencil' | 'sketch' | 'marker' | 'highlighter' | 'eraser'>
+
+function isPaintMode(mode: DrawingMode): mode is PaintMode {
+  return mode === 'pencil' || mode === 'sketch' || mode === 'marker' || mode === 'highlighter' || mode === 'eraser'
+}
 
 export function usePixelDrawing({
   canvas,
@@ -23,9 +29,8 @@ export function usePixelDrawing({
 }: UsePixelDrawingOptions) {
   const drawingLayerCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const drawingLayerImageRef = useRef<FabricImage | null>(null)
-  const pendingDrawingPointsRef = useRef<EditPoint[]>([])
-  const pendingDrawingModeRef = useRef<'pencil' | 'eraser' | null>(null)
-  const lastDrawnPointRef = useRef<EditPoint | null>(null)
+  const gestureBaseCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const pendingDrawingModeRef = useRef<PaintMode | null>(null)
   const drawingFrameRef = useRef<number | null>(null)
   const activeDrawingModeRef = useRef(activeDrawingMode)
   const drawingColorRef = useRef(drawingColor)
@@ -68,9 +73,7 @@ export function usePixelDrawing({
       return { canvas: cachedCanvas, image: cachedImage }
     }
 
-    const layer = targetCanvas.getObjects().find(
-      (object) => object.get('name') === '__pixel_studio_drawing_layer__',
-    )
+    const layer = targetCanvas.getObjects().find((object) => object.get('name') === DRAWING_LAYER_NAME)
     let layerImage = layer instanceof FabricImage ? layer : null
     let layerCanvas = drawingLayerCanvasRef.current
 
@@ -86,7 +89,7 @@ export function usePixelDrawing({
         selectable: false,
         evented: false,
       })
-      layerImage.set('name', '__pixel_studio_drawing_layer__')
+      layerImage.set('name', DRAWING_LAYER_NAME)
       targetCanvas.add(layerImage)
       targetCanvas.bringObjectToFront(layerImage)
     } else {
@@ -108,28 +111,32 @@ export function usePixelDrawing({
     return { canvas: layerCanvas, image: layerImage }
   }, [canvasRef])
 
-  const drawOnDrawingLayer = useCallback((points: EditPoint[], mode: 'pencil' | 'eraser') => {
+  const drawOnDrawingLayer = useCallback((points: EditPoint[], mode: PaintMode) => {
     const layer = getDrawingLayer()
     const targetCanvas = canvasRef.current
     const context = layer?.canvas.getContext('2d')
     if (!layer || !targetCanvas || !context || points.length === 0) return
+    const transform = createImageEditingTransform(layer.image)
+    const localPoints = points.map((point) => toImagePoint(layer.image, point, transform))
+    const brushSize = brushSizeRef.current * transform.brushScale
 
     context.save()
     context.globalCompositeOperation = mode === 'eraser' ? 'destination-out' : 'source-over'
+    context.globalAlpha = mode === 'sketch' ? 0.55 : mode === 'highlighter' ? 0.32 : mode === 'marker' ? 0.9 : 1
     context.strokeStyle = drawingColorRef.current
     context.fillStyle = drawingColorRef.current
-    context.lineWidth = brushSizeRef.current
+    context.lineWidth = brushSize * (mode === 'sketch' ? 0.55 : mode === 'marker' ? 1.35 : mode === 'highlighter' ? 3 : 1)
     context.lineCap = 'round'
     context.lineJoin = 'round'
     context.beginPath()
-    context.moveTo(points[0].x, points[0].y)
+    context.moveTo(localPoints[0].x, localPoints[0].y)
 
-    if (points.length === 1) {
-      context.arc(points[0].x, points[0].y, brushSizeRef.current / 2, 0, Math.PI * 2)
+    if (localPoints.length === 1) {
+      context.arc(localPoints[0].x, localPoints[0].y, brushSize / 2, 0, Math.PI * 2)
       context.fill()
     } else {
-      for (let index = 1; index < points.length; index += 1) {
-        const point = points[index]
+      for (let index = 1; index < localPoints.length; index += 1) {
+        const point = localPoints[index]
         context.lineTo(point.x, point.y)
       }
       context.stroke()
@@ -138,7 +145,7 @@ export function usePixelDrawing({
     context.restore()
     layer.image.dirty = true
     targetCanvas.requestRenderAll()
-  }, [canvasRef, getDrawingLayer])
+  }, [brushSizeRef, canvasRef, drawingColorRef, getDrawingLayer])
 
   const flushPendingDrawing = useCallback(() => {
     if (drawingFrameRef.current !== null) {
@@ -146,36 +153,44 @@ export function usePixelDrawing({
       drawingFrameRef.current = null
     }
 
-    const points = pendingDrawingPointsRef.current
     const mode = pendingDrawingModeRef.current
-    pendingDrawingPointsRef.current = []
     pendingDrawingModeRef.current = null
-    if (!mode || points.length === 0) return
+    const points = gesturePointsRef.current
+    const layer = getDrawingLayer()
+    const context = layer?.canvas.getContext('2d')
+    if (!mode || points.length === 0 || !layer || !context) return
 
+    context.clearRect(0, 0, layer.canvas.width, layer.canvas.height)
+    if (gestureBaseCanvasRef.current) {
+      context.drawImage(gestureBaseCanvasRef.current, 0, 0)
+    }
     drawOnDrawingLayer(points, mode)
-    lastDrawnPointRef.current = points[points.length - 1]
-  }, [drawOnDrawingLayer])
+  }, [drawOnDrawingLayer, getDrawingLayer])
 
-  const queueDrawingPoint = useCallback((point: EditPoint, mode: 'pencil' | 'eraser', startsGesture = false) => {
+  const queueDrawingPoint = useCallback((point: EditPoint, mode: PaintMode, startsGesture = false) => {
     if (startsGesture) {
-      pendingDrawingPointsRef.current = [point]
       pendingDrawingModeRef.current = mode
-      lastDrawnPointRef.current = null
+      gesturePointsRef.current = [point]
+      const layer = getDrawingLayer()
+      if (layer) {
+        const baseCanvas = document.createElement('canvas')
+        baseCanvas.width = layer.canvas.width
+        baseCanvas.height = layer.canvas.height
+        baseCanvas.getContext('2d')?.drawImage(layer.canvas, 0, 0)
+        gestureBaseCanvasRef.current = baseCanvas
+      }
     } else {
       if (pendingDrawingModeRef.current && pendingDrawingModeRef.current !== mode) {
         flushPendingDrawing()
       }
-      if (pendingDrawingPointsRef.current.length === 0) {
-        if (lastDrawnPointRef.current) pendingDrawingPointsRef.current.push(lastDrawnPointRef.current)
-        pendingDrawingModeRef.current = mode
-      }
-      pendingDrawingPointsRef.current.push(point)
+      pendingDrawingModeRef.current = mode
+      gesturePointsRef.current.push(point)
     }
 
     if (drawingFrameRef.current === null) {
       drawingFrameRef.current = requestAnimationFrame(flushPendingDrawing)
     }
-  }, [flushPendingDrawing])
+  }, [flushPendingDrawing, getDrawingLayer])
 
   const applyPixelEdit = async (points: EditPoint[], mode: 'brush' | 'lasso') => {
     const targetCanvas = canvasRef.current
@@ -200,6 +215,7 @@ export function usePixelDrawing({
       if (canvasRef.current !== targetCanvas || imageObjectRef.current !== image) return
       image.setElement(editedCanvas)
       image.set({ cropX: 0, cropY: 0, width: editedCanvas.width, height: editedCanvas.height })
+      image.applyFilters()
       image.setCoords()
       targetCanvas.requestRenderAll()
 
@@ -250,15 +266,13 @@ export function usePixelDrawing({
       const point = event.scenePoint
       if (!point || activeToolRef.current !== 'draw-remove') return
       if (tableEditing) return
-      if (!imageObjectRef.current) {
-        setNotice('Upload an image before using drawing tools.')
+      const mode = activeDrawingModeRef.current
+      if ((mode === 'magic-remover' || mode === 'lasso') && !imageObjectRef.current) {
+        setNotice('Add an image layer before using pixel removal or freehand selection.')
         return
       }
-
-      const mode = activeDrawingModeRef.current
-      if (mode === 'pencil' || mode === 'eraser') {
+      if (isPaintMode(mode)) {
         isGestureDrawingRef.current = true
-        gesturePointsRef.current = [{ x: point.x, y: point.y }]
         queueDrawingPoint(point, mode, true)
       } else if (mode === 'magic-remover') {
         if (!startMagicRemoval(point)) return
@@ -275,8 +289,7 @@ export function usePixelDrawing({
       if (!point || !isGestureDrawingRef.current) return
 
       const mode = activeDrawingModeRef.current
-      if (mode === 'pencil' || mode === 'eraser') {
-        gesturePointsRef.current.push({ x: point.x, y: point.y })
+      if (isPaintMode(mode)) {
         queueDrawingPoint(point, mode)
       } else if (mode === 'magic-remover') {
         const previousPoint = gesturePointsRef.current.at(-1)
@@ -293,6 +306,7 @@ export function usePixelDrawing({
       if (activeToolRef.current !== 'draw-remove') {
         flushPendingDrawing()
         gesturePointsRef.current = []
+        gestureBaseCanvasRef.current = null
         return
       }
 
@@ -300,17 +314,19 @@ export function usePixelDrawing({
       const releasePoint = event.scenePoint
       const lastGesturePoint = gesturePointsRef.current.at(-1)
       if (
-        (mode === 'pencil' || mode === 'eraser') &&
+        isPaintMode(mode) &&
         releasePoint &&
         (!lastGesturePoint || releasePoint.x !== lastGesturePoint.x || releasePoint.y !== lastGesturePoint.y)
       ) {
-        gesturePointsRef.current.push({ x: releasePoint.x, y: releasePoint.y })
         queueDrawingPoint(releasePoint, mode)
       }
-      if (mode === 'pencil' || mode === 'eraser') flushPendingDrawing()
+      if (isPaintMode(mode)) {
+        flushPendingDrawing()
+        gestureBaseCanvasRef.current = null
+      }
       const points = [...gesturePointsRef.current]
       gesturePointsRef.current = []
-      if (mode === 'pencil' || mode === 'eraser') {
+      if (isPaintMode(mode)) {
         recordHistory(true)
       } else if (mode === 'magic-remover') {
         void finishMagicRemoval()
@@ -356,11 +372,10 @@ export function usePixelDrawing({
   const reset = () => {
     drawingLayerCanvasRef.current = null
     drawingLayerImageRef.current = null
+    gestureBaseCanvasRef.current = null
     if (drawingFrameRef.current !== null) cancelAnimationFrame(drawingFrameRef.current)
     drawingFrameRef.current = null
-    pendingDrawingPointsRef.current = []
     pendingDrawingModeRef.current = null
-    lastDrawnPointRef.current = null
     gesturePointsRef.current = []
     lassoPointsRef.current = []
     lassoPreviewObjectsRef.current = []

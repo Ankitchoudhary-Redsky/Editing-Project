@@ -24,7 +24,8 @@ import { ShadowPanel } from "./panels/ShadowPanel";
 import { AnimatePanel } from "./panels/AnimatePanel";
 
 export function ToolPanel() {
-  const { canvas, tools } = useEditor();
+  const { canvas, pages, tools } = useEditor();
+  const isPageSwitching = pages?.switching ?? false
   if (tools.active === "music") return null;
   const activeCategory =
     editorToolCategories.find((category) =>
@@ -36,11 +37,17 @@ export function ToolPanel() {
     ] ?? activeCategory.label;
 
   return (
-    <aside className="tool-panel">
-      <div className="panel-heading">
+    <aside
+      className={`tool-panel${activeCategory.tools.length > 1 ? ' has-subtools' : ''}`}
+      inert={isPageSwitching && tools.active !== 'upload'}
+      aria-busy={isPageSwitching}
+    >
+      <div className={`panel-heading ${activeCategory.tools.length > 1 ? 'has-subtools' : ''}`}>
+        
         <div>
           <h3 className="panel-kicker">{panelHeading}</h3>
         </div>
+      
       </div>
       {activeCategory.tools.length > 1 && (
         <nav
@@ -52,7 +59,7 @@ export function ToolPanel() {
               key={id}
               type="button"
               className={`panel-subtool ${tools.active === id ? "active" : ""}`}
-              disabled={(id === "crop" || id === "resize") && !canvas.hasImage}
+              disabled={(id === "crop" || id === "resize") && !canvas.hasDocument}
               aria-pressed={tools.active === id}
               onClick={() => {
                 tools.setActive(id);

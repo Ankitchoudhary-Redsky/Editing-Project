@@ -395,15 +395,24 @@
 .line-style-option:hover, .line-style-option.selected { border-color: #94b7a0; color: var(--accent); background: #f4f9f5; }
 .line-style-option.curve-down svg { transform: rotateX(180deg); }
 .three-d-shapes-section, .three-d-shape-group { display: flex; flex-direction: column; gap: 9px; }
-.three-d-category-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.three-d-category-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
 .three-d-category-tabs button { min-width: 0; min-height: 29px; padding: 0 2px; border: 1px solid var(--line); border-radius: 4px; color: #78827b; background: #fff; font: inherit; font-size: 9px; cursor: pointer; }
 .three-d-category-tabs button.selected { border-color: #94b7a0; color: var(--accent); background: #f4f9f5; }
 .three-d-shape-search { width: 100%; min-height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 5px; color: #34433b; background: #fff; font: inherit; font-size: 11px; }
 .three-d-shape-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
 .three-d-character-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
 .three-d-emoji-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.three-d-emoji-category-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.three-d-emoji-category-tabs button { min-width: 0; min-height: 28px; padding: 0 3px; border: 1px solid var(--line); border-radius: 4px; color: #78827b; background: #fff; font: inherit; font-size: 9px; cursor: pointer; }
+.three-d-emoji-category-tabs button.selected { border-color: #94b7a0; color: var(--accent); background: #f4f9f5; }
+.three-d-loading { margin: 0; color: #607167; font-size: 10px; }
+.three-d-emoji-category-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.three-d-emoji-category-tabs button { min-width: 0; min-height: 28px; padding: 0 3px; border: 1px solid var(--line); border-radius: 4px; color: #78827b; background: #fff; font: inherit; font-size: 9px; cursor: pointer; }
+.three-d-emoji-category-tabs button.selected { border-color: #94b7a0; color: var(--accent); background: #f4f9f5; }
+.three-d-loading { margin: 0; color: #607167; font-size: 10px; }
 .three-d-shape-choice, .three-d-emoji-choice { display: flex; min-width: 0; min-height: 70px; flex-direction: column; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--line); border-radius: 5px; color: #64736a; background: #fff; font: inherit; font-size: 9px; cursor: pointer; }
 .three-d-shape-choice:hover, .three-d-emoji-choice:hover { border-color: #94b7a0; background: #f7faf7; }
+.three-d-shape-choice.selected { border-color: #32745d; color: var(--accent); background: #eef7f0; box-shadow: inset 0 0 0 1px #32745d; }
 .three-d-shape-choice:disabled, .three-d-emoji-choice:disabled, .three-d-character-choice:disabled { opacity: .55; cursor: wait; }
 .three-d-shape-preview { position: relative; display: block; width: 30px; height: 30px; filter: drop-shadow(2px 3px 2px #1d312533); }
 .three-d-shape-preview.model-sphere { border-radius: 50%; background: radial-gradient(circle at 30% 25%, #fff9 0, var(--shape-color) 38%, #172b4655 100%); }
@@ -429,6 +438,8 @@
 .three-d-shape-preview.model-crown { clip-path: polygon(3% 30%, 27% 48%, 40% 14%, 53% 48%, 79% 13%, 96% 30%, 86% 89%, 13% 89%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
 .three-d-character-choice { aspect-ratio: 1; border: 1px solid var(--line); border-radius: 4px; color: #426dbf; background: linear-gradient(145deg, #fff, #edf2ff); box-shadow: 1px 2px 0 #9bb1dc; font: 700 15px 'Avenir Next', 'Segoe UI', sans-serif; text-shadow: 1px 1px #fff, 2px 2px #9bb1dc; cursor: pointer; }
 .three-d-emoji-choice > span { font-size: 28px; line-height: 1; filter: drop-shadow(2px 3px 2px #1d312533); }
+.three-d-emoji-choice > img { display: block; width: 38px; height: 38px; object-fit: contain; filter: drop-shadow(2px 3px 2px #1d312533); }
+.three-d-emoji-choice > img { display: block; width: 38px; height: 38px; object-fit: contain; filter: drop-shadow(2px 3px 2px #1d312533); }
 .three-d-emoji-choice small { font: inherit; font-size: 9px; }
 .three-d-object-controls { display: flex; flex-direction: column; gap: 9px; padding: 10px; border: 1px solid var(--line); border-radius: 5px; background: #f9fbf9; }
 .three-d-character-color { display: flex; align-items: end; gap: 8px; }

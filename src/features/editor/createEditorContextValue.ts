@@ -13,6 +13,7 @@ export function createEditorContextValue({
   toolActions,
   animation,
   ui,
+  pages,
 }: CreateEditorContextValueOptions): EditorContextValue {
   const { fabricCanvas, fitScale, fitToScreen } = canvasCore.fabric;
   const selectedText =
@@ -34,6 +35,7 @@ export function createEditorContextValue({
       dimensions: ui.dimensions,
       hasDocument: ui.hasDocument,
       hasImage: ui.hasImage,
+      hasDeletedPageOneImage: false,
       imageThumbnail: ui.imageThumbnail,
       selected: ui.selectedObject,
       objects: ui.objects,
@@ -45,6 +47,7 @@ export function createEditorContextValue({
       fitScale,
       fitToScreen,
     },
+    pages,
     history: {
       canUndo: canvasCore.history.canUndo,
       canRedo: canvasCore.history.canRedo,
@@ -97,8 +100,12 @@ export function createEditorContextValue({
     shapes: {
       selected: ui.selectedObject,
       isSelectedShape: features.objectEditing.selectedIsShape,
+      mode: settings.shapeToolMode,
+      setMode: settings.setShapeToolMode,
       kind: settings.shapeKind,
       setKind: settings.setShapeKind,
+      threeDKind: settings.threeDShapeKind,
+      setThreeDKind: settings.setThreeDShapeKind,
       lineStyle: settings.lineStyle,
       setLineStyle: settings.setLineStyle,
       fill: settings.fillColor,
@@ -122,6 +129,9 @@ export function createEditorContextValue({
       updateAppearance: features.objectEditing.updateShapeAppearance,
       moveLayer: features.objectEditing.moveLayer,
       selectLayer: features.objectEditing.selectLayer,
+      setLayerVisibility: features.objectEditing.setLayerVisibility,
+      setLayerLocked: features.objectEditing.setLayerLocked,
+      renameLayer: features.objectEditing.renameLayer,
       selectLayers: features.objectEditing.selectLayers,
     },
     shadows: {
@@ -135,6 +145,8 @@ export function createEditorContextValue({
       saturation: settings.saturation,
       setSaturation: settings.setSaturation,
       apply: toolActions.applyAdjustments,
+      beginPreview: toolActions.beginAdjustmentPreview,
+      finishPreview: toolActions.finishAdjustmentPreview,
       reset: toolActions.resetAdjustments,
     },
     preview: {
@@ -204,6 +216,7 @@ export function createEditorContextValue({
       share: toolActions.shareDesign,
     },
     table: features.table,
+
     framesLayout: features.framesLayout,
   };
 }

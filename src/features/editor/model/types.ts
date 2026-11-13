@@ -56,13 +56,15 @@ export type DrawingMode =
 export type ShapeKind =
   | "rect"
   | "roundRect"
-  | "circle"
+  | 'square' | "circle"
   | "ellipse"
   | "line"
-  | "arrow"
-  | "triangle"
-  | "star"
-  | "pentagon";
+  | 'dashedLine' | 'dottedLine' | "arrow"
+  | 'doubleArrow' | 'curvedArrow' | "triangle"
+  | 'rightTriangle' | 'diamond' | "star"
+  | "pentagon"; | 'hexagon' | 'octagon' | 'heart' | 'cross' | 'plus' | 'minus' | 'chevron' | 'parallelogram' | 'speechBubble' | 'cloud' | 'ring' | 'donut' | 'arc'
+export type ThreeDShapeKind = 'sphere' | 'cube' | 'box' | 'roundedBox' | 'cylinder' | 'cone' | 'torus' | 'torusKnot' | 'capsule' | 'plane' | 'circle' | 'ring' | 'tetrahedron' | 'octahedron' | 'dodecahedron' | 'icosahedron' | 'diamond' | 'pyramid' | 'triangularPrism' | 'pentagonalPrism' | 'hexagonalPrism' | 'starExtrusion' | 'heartExtrusion' | 'arrow' | 'heart' | 'star' | 'sparkle' | 'check' | 'lightning' | 'cloud' | 'speech' | 'plus' | 'cross' | 'play' | 'flower' | 'crown' | 'hexagon'
+export type ShapeToolMode = '2d' | '3d'
 export type LineStyle = "straight" | "curve-up" | "curve-down";
 
 export type ExportFormat = "png" | "jpeg" | "gif" | "mp4";
@@ -106,15 +108,16 @@ export type EditorContextUiState = {
 };
 
 export type CreateEditorContextValueOptions = {
-  settings: ReturnType<typeof useEditorSettingsState>;
-  canvasCore: ReturnType<typeof useEditorCanvasCore>;
-  documentActions: ReturnType<typeof useEditorDocumentActions>;
-  features: ReturnType<typeof useEditorFeatureControllers>;
-  snapshot: ReturnType<typeof useEditorSnapshotController>;
-  toolActions: ReturnType<typeof useEditorToolActions>;
-  animation: ReturnType<typeof useTextAnimation>;
-  ui: EditorContextUiState;
-};
+  settings: ReturnType<typeof useEditorSettingsState>
+  canvasCore: ReturnType<typeof useEditorCanvasCore>
+  documentActions: ReturnType<typeof useEditorDocumentActions>
+  features: ReturnType<typeof useEditorFeatureControllers>
+  snapshot: ReturnType<typeof useEditorSnapshotController>
+  toolActions: ReturnType<typeof useEditorToolActions>
+  animation: ReturnType<typeof useTextAnimation>
+  ui: EditorContextUiState
+  pages: EditorPagesController
+}
 
 export type EditorEmptyStateProps = {
   onUpload: () => void;
@@ -191,6 +194,27 @@ export type FilterId =
   | "dreamy";
 export type FilterSettings = { id: FilterId; intensity: number };
 export type Dimensions = { width: number; height: number };
+export type AddedEditorPage = {
+  id: number
+  imageUrl?: string
+  fileName?: string
+  width?: number
+  height?: number
+  snapshot?: string
+  imageSource?: string
+  preview?: string
+}
+export type PersistedEditorPages = {
+  items: AddedEditorPage[]
+  activeId: number | null
+  pageOneSnapshot?: string
+  pageOneImageSource?: string
+  pageOnePreview?: string
+}
+export type AddedPageActions = {
+  replace: (pageId: number) => void
+  delete: (pageId: number) => void
+}
 export type TextProperty =
   | "text"
   | "fontFamily"
@@ -253,8 +277,11 @@ export type UseShapeDrawingOptions = {
   canvasRef: MutableRefObject<Canvas | null>;
   imageObjectRef: MutableRefObject<FabricImage | null>;
   activeTool: EditorTool;
+  shapeToolMode: ShapeToolMode
+  setActiveTool: (tool: EditorTool) => void
   hasDocument: boolean;
   shapeKind: ShapeKind;
+  threeDShapeKind: ThreeDShapeKind
   lineStyle: LineStyle;
   fillColor: string;
   transparentFill: boolean;
@@ -328,6 +355,7 @@ export interface EditorContextValue {
     dimensions: Dimensions;
     hasDocument: boolean;
     hasImage: boolean;
+    hasDeletedPageOneImage: boolean
     imageThumbnail: string;
     selected: FabricObject | null;
     objects: FabricObject[];
@@ -339,6 +367,24 @@ export interface EditorContextValue {
     fitScale: number;
     fitToScreen: () => void;
   };
+
+  pages: {
+    items: AddedEditorPage[]
+    setItems: Dispatch<SetStateAction<AddedEditorPage[]>>
+    activeId: number | null
+    setActiveId: Dispatch<SetStateAction<number | null>>
+    switching: boolean
+    pageOnePreview: string
+    version: number
+    saveActivePage: () => void
+    getPersistedState: () => PersistedEditorPages
+    restorePersistedState: (pages?: PersistedEditorPages) => void
+    replace: (pageId: number) => void
+    delete: (pageId: number) => void
+    select: (pageId: number | null) => Promise<void>
+    getSnapshot: (pageId: number | null) => string | undefined
+    registerActions: (actions: AddedPageActions | null) => void
+  }
 
   history: {
     canUndo: boolean;
@@ -452,8 +498,12 @@ export interface EditorContextValue {
   shapes: {
     selected: FabricObject | null;
     isSelectedShape: boolean;
+    mode: ShapeToolMode
+    setMode: Dispatch<SetStateAction<ShapeToolMode>>
     kind: ShapeKind;
     setKind: Dispatch<SetStateAction<ShapeKind>>;
+    threeDKind: ThreeDShapeKind
+    setThreeDKind: Dispatch<SetStateAction<ThreeDShapeKind>>
     lineStyle: LineStyle;
     setLineStyle: Dispatch<SetStateAction<LineStyle>>;
     fill: string;
@@ -487,6 +537,9 @@ export interface EditorContextValue {
     ) => void;
     selectLayer: (object: FabricObject) => void;
     selectLayers: (objects: FabricObject[]) => void;
+    setLayerVisibility: (object: FabricObject, visible: boolean) => void
+    setLayerLocked: (object: FabricObject, locked: boolean) => void
+    renameLayer: (object: FabricObject, name: string) => void
   };
   shadows: {
     update: (
@@ -508,6 +561,8 @@ export interface EditorContextValue {
       contrast?: number,
       saturation?: number,
     ) => void;
+    beginPreview: () => void
+    finishPreview: (brightness: number, contrast: number, saturation: number) => void
     reset: () => void;
   };
 
@@ -614,6 +669,8 @@ export type EditorSnapshot = {
 };
 
 export type PersistedEditorDraft = EditorSnapshot & {
+  pages?: PersistedEditorPages
+  imageSources?: Record<string, string>
   projectName: string;
   activeTool: EditorTool;
   zoom: number;
@@ -642,6 +699,7 @@ export type PersistedEditorDraft = EditorSnapshot & {
   textOutlineWidth: number;
   textShadow: string;
   shapeKind: ShapeKind;
+  threeDShapeKind: ThreeDShapeKind
   lineStyle: LineStyle;
   fillColor: string;
   transparentFill: boolean;
@@ -655,7 +713,7 @@ export type PersistedEditorDraft = EditorSnapshot & {
 
 export type EditorSettings = ReturnType<typeof useEditorSettingsState>;
 export type EditorRuntime = ReturnType<typeof useEditorCanvasRuntime>;
-
+export type EditorPagesController = EditorContextValue['pages']
 export type ProjectSettings = ReturnType<typeof useEditorProjectSettingsState>;
 export type DesignSettings = ReturnType<typeof useEditorDesignSettingsState>;
 export type EditorDraftSettings = Omit<
@@ -878,6 +936,7 @@ export type EditorFeatureState = {
   isRemovingBackground: boolean;
   backgroundProgress: string;
   backgroundColor: string;
+  shapeToolMode: ShapeToolMode
   textValue: string;
   fontFamily: string;
   fontSize: number;
@@ -888,6 +947,7 @@ export type EditorFeatureState = {
   textOutlineWidth: number;
   textShadow: string;
   shapeKind: ShapeKind;
+  threeDShapeKind: ThreeDShapeKind
   lineStyle: LineStyle;
   fillColor: string;
   transparentFill: boolean;
@@ -967,17 +1027,19 @@ export type UseEditorDraftRestorationOptions = {
 };
 
 export type UseEditorProjectPersistenceOptions = {
-  canvasRef: MutableRefObject<Canvas | null>;
-  fabricCanvas: Canvas | null;
-  suppressHistoryRef: MutableRefObject<boolean>;
-  userEditedBeforeDraftLoadRef: MutableRefObject<boolean>;
-  draftReady: boolean;
-  setDraftReady: (ready: boolean) => void;
-  hasDocument: boolean;
-  historyVersion: number;
-  draftSettings: DraftSettings;
-  resizeSettings: ResizeSettings;
-  restoreCanvasSnapshot: (snapshot: EditorSnapshot) => Promise<void>;
+  canvasRef: MutableRefObject<Canvas | null>
+  fabricCanvas: Canvas | null
+  suppressHistoryRef: MutableRefObject<boolean>
+  userEditedBeforeDraftLoadRef: MutableRefObject<boolean>
+  draftReady: boolean
+  setDraftReady: (ready: boolean) => void
+  historyVersion: number
+  pagesVersion: number
+  draftSettings: DraftSettings
+  resizeSettings: ResizeSettings
+  restoreCanvasSnapshot: (snapshot: EditorSnapshot) => Promise<void>
+  getPagesSnapshot: () => PersistedEditorPages
+  restorePages: (pages?: PersistedEditorPages) => void
   restoreDraftSettings: (
     draft: PersistedEditorDraft,
     restoreResize: (settings: ResizeSettings) => void,

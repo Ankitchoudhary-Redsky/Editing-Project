@@ -4,6 +4,7 @@ import { EditorShell } from "./features/editor/components/EditorShell";
 import { useEditorApplicationController } from "./features/editor/hooks/useEditorApplicationController";
 import { useEditorSettingsState } from "./features/editor/hooks/useEditorSettingsState";
 import { useEditorUiState } from "./features/editor/hooks/useEditorUiState";
+import { TemplateFeatureRoot } from './features/templates/components/TemplateFeatureRoot'
 
 import "./App.css";
 
@@ -21,12 +22,14 @@ function App() {
 
   return (
     <EditorContext.Provider value={contextValue}>
-      <EditorShell
-        historyVersion={historyVersion}
-        setUploadInputElement={setUploadInputElement}
-        setCanvasElement={setCanvasElement}
-        setStageElement={setStageElement}
-      />
+      <TemplateFeatureRoot loadTemplate={loadTemplateIntoEditor}>
+        <EditorShell
+          historyVersion={historyVersion}
+          setUploadInputElement={setUploadInputElement}
+          setCanvasElement={setCanvasElement}
+          setStageElement={setStageElement}
+        />
+      </TemplateFeatureRoot>
     </EditorContext.Provider>
   );
 }

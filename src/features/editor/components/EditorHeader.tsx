@@ -1,13 +1,14 @@
 import {
-  ArrowRight,
+  ArrowRight, BookmarkPlus,
   ChevronDown,
   Download,
-  Eye,
+  Eye, LayoutTemplate,
   Redo2,
   Share2,
   Undo2,
 } from "lucide-react";
 import { useEditor } from "../EditorContext";
+import { useTemplateFeature } from '../../templates/components/TemplateFeatureContext'
 import img1 from "../../../assets/logo.png";
 import { Image as ImageIcon, Video } from "lucide-react";
 
@@ -20,6 +21,7 @@ export function EditorHeader() {
     editorMode,
     export: exportState,
   } = useEditor();
+  const { openGallery, setSaveDialogOpen } = useTemplateFeature()
   const finishRenaming = () => {
     if (!project.name.trim()) project.setName("Untitled");
     project.setIsRenaming(false);
@@ -84,6 +86,8 @@ export function EditorHeader() {
         </div>
       </div>
       <div className="top-actions">
+        <button className="preview-button" onClick={openGallery}><LayoutTemplate size={16} /> Templates</button>
+        <button className="preview-button" onClick={() => setSaveDialogOpen(true)} disabled={!canvas.hasDocument}><BookmarkPlus size={16} /> Save template</button>
         <button
           className="icon-button"
           title="Undo"

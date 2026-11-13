@@ -13,11 +13,16 @@ import {
   Library,
   Moon,
   Sparkles,
+  Type,
 } from "lucide-react";
 import { Canvas } from "fabric";
 import type { DrawingMode, EditorTool, ShapeKind } from "./types";
 
 export const BACKGROUND_IMAGE_NAME = "__pixel_studio_background_image__";
+export const BASE_IMAGE_PROPERTY = 'isBaseImage'
+export const DEFAULT_PAGE_WIDTH = 1200
+export const DEFAULT_PAGE_HEIGHT = 800
+export const DRAWING_LAYER_NAME = '__pixel_studio_drawing_layer__'
 
 export const editorToolCategories: {
   id: string;
@@ -138,13 +143,33 @@ export const cropRatios: Record<string, number | null> = {
 export const shapeNames: Record<ShapeKind, string> = {
   rect: "Rectangle",
   roundRect: "Rounded rectangle",
+  square: 'Square',
   circle: "Circle",
   ellipse: "Ellipse",
   line: "Line",
+  dashedLine: 'Dashed line',
+  dottedLine: 'Dotted line',
   arrow: "Arrow",
+  doubleArrow: 'Double arrow',
+  curvedArrow: 'Curved arrow',
   triangle: "Triangle",
+  rightTriangle: 'Right triangle',
+  diamond: 'Diamond',
   star: "Star",
   pentagon: "Pentagon",
+  hexagon: 'Hexagon',
+  octagon: 'Octagon',
+  heart: 'Heart',
+  cross: 'Cross',
+  plus: 'Plus',
+  minus: 'Minus',
+  chevron: 'Chevron',
+  parallelogram: 'Parallelogram',
+  speechBubble: 'Speech bubble',
+  cloud: 'Cloud',
+  ring: 'Ring',
+  donut: 'Donut',
+  arc: 'Arc',
 };
 
 export const resizePresets = [
@@ -195,9 +220,36 @@ export function resolveImageSourceToken(token: string) {
   return tokenToSource.get(token);
 }
 
+export function getImageSourceTokens() {
+  return Object.fromEntries(tokenToSource)
+}
+
+export function restoreImageSourceTokens(sources: Record<string, string>) {
+  for (const [token, source] of Object.entries(sources)) {
+    tokenToSource.set(token, source)
+    sourceToToken.set(source, token)
+    const tokenId = Number(token.match(/_(\d+)__$/)?.[1])
+    if (Number.isFinite(tokenId)) nextSourceId = Math.max(nextSourceId, tokenId + 1)
+  }
+}
+
+export function getImageSourceTokens() {
+  return Object.fromEntries(tokenToSource)
+}
+
+export function restoreImageSourceTokens(sources: Record<string, string>) {
+  for (const [token, source] of Object.entries(sources)) {
+    tokenToSource.set(token, source)
+    sourceToToken.set(source, token)
+    const tokenId = Number(token.match(/_(\d+)__$/)?.[1])
+    if (Number.isFinite(tokenId)) nextSourceId = Math.max(nextSourceId, tokenId + 1)
+  }
+}
+
 export function serializeCanvas(canvas: Canvas) {
   const scene = canvas.toObject([
     "name",
+    BASE_IMAGE_PROPERTY,
     "textAnimation",
     "shapeId",
     "textParentId",
@@ -205,6 +257,14 @@ export function serializeCanvas(canvas: Canvas) {
     "textParentHeight",
     "textParentFontSize",
     "imageParentId",
+    'threeDType',
+    'threeDShapeKind',
+    'threeDCharacter',
+    'threeDEmoji',
+    'threeDColor',
+    'threeDRotationX',
+    'threeDRotationY',
+    'threeDRotationZ',
     "shadowSize",
     "shadowArtworkSize",
     "shadowArtworkBaseScaleX",
@@ -230,9 +290,5 @@ export function serializeCanvas(canvas: Canvas) {
   };
   replaceImageSources(scene);
 
-  return {
-    width: canvas.getWidth(),
-    height: canvas.getHeight(),
-    scene,
-  };
+  return JSON.stringify({ width: canvas.getWidth(), height: canvas.getHeight(), scene });
 }

@@ -3,6 +3,7 @@ import type {
   PersistedEditorDraft,
   UseEditorProjectPersistenceOptions,
 } from '../model/types'
+import { getImageSourceTokens, restoreImageSourceTokens } from '../model/constants'
 import { loadProjectDraft, saveProjectDraft } from '../operations/projectStorage'
 
 export function useEditorProjectPersistence({
@@ -12,11 +13,13 @@ export function useEditorProjectPersistence({
   userEditedBeforeDraftLoadRef,
   draftReady,
   setDraftReady,
-  hasDocument,
   historyVersion,
+  pagesVersion,
   draftSettings,
   resizeSettings,
   restoreCanvasSnapshot,
+  getPagesSnapshot,
+  restorePages,
   restoreDraftSettings,
   restoreResize,
   initializeHistory,
@@ -40,10 +43,12 @@ export function useEditorProjectPersistence({
         ) return
 
         suppressHistoryRef.current = true
+        if (draft.imageSources) restoreImageSourceTokens(draft.imageSources)
         await restoreCanvasSnapshot(draft)
         if (disposed || generation !== restorationGenerationRef.current) return
 
         restoreDraftSettings(draft, restoreResize)
+        restorePages(draft.pages)
         initializeHistory(fabricCanvas)
       })
       .catch(() => {
@@ -70,6 +75,7 @@ export function useEditorProjectPersistence({
     fabricCanvas,
     initializeHistory,
     restoreCanvasSnapshot,
+    restorePages,
     restoreDraftSettings,
     restoreResize,
     setDraftReady,
@@ -81,13 +87,15 @@ export function useEditorProjectPersistence({
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!draftReady || !canvas || !hasDocument) return
+    if (!draftReady || !canvas) return
 
     const timer = window.setTimeout(() => {
       const draft: PersistedEditorDraft = {
         width: canvas.getWidth(),
         height: canvas.getHeight(),
         scene: canvas.toJSON(),
+        pages: getPagesSnapshot(),
+        imageSources: getImageSourceTokens(),
         ...draftSettings,
         resizeWidth: resizeSettings.width,
         resizeHeight: resizeSettings.height,
@@ -104,7 +112,8 @@ export function useEditorProjectPersistence({
     canvasRef,
     draftReady,
     draftSettings,
-    hasDocument,
+    getPagesSnapshot,
+    pagesVersion,
     historyVersion,
     resizeSettings.height,
     resizeSettings.keepRatio,

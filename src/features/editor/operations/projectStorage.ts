@@ -83,6 +83,59 @@ export function deleteProjectDraft(): Promise<void> {
   })
 }
 
+export async function loadProjectStorageValue<T>(key: string): Promise<T | undefined> {
+  const database = await openDatabase()
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readonly')
+    const request = transaction.objectStore(STORE_NAME).get(key)
+    let value: T | undefined
+
+    request.onsuccess = () => {
+      value = request.result as T | undefined
+    }
+    request.onerror = () => reject(request.error)
+    transaction.oncomplete = () => resolve(value)
+    transaction.onerror = () => reject(transaction.error)
+    transaction.onabort = () => reject(transaction.error)
+  })
+}
+
+export async function loadProjectStorageEntries<T>(prefix: string): Promise<Array<[string, T]>> {
+  const database = await openDatabase()
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readonly')
+    const store = transaction.objectStore(STORE_NAME)
+    const keysRequest = store.getAllKeys()
+    const valuesRequest = store.getAll()
+
+    transaction.onerror = () => reject(transaction.error)
+    transaction.onabort = () => reject(transaction.error)
+    keysRequest.onerror = () => reject(keysRequest.error)
+    valuesRequest.onerror = () => reject(valuesRequest.error)
+    transaction.oncomplete = () => {
+      const entries = keysRequest.result.flatMap((key, index) => {
+        if (typeof key !== 'string' || !key.startsWith(prefix)) return []
+        return [[key, valuesRequest.result[index] as T] as [string, T]]
+      })
+      resolve(entries)
+    }
+  })
+}
+
+export function saveProjectStorageValues(entries: Array<[string, unknown]>): Promise<void> {
+  return enqueueWrite((store) => {
+    entries.forEach(([key, value]) => store.put(value, key))
+  })
+}
+
+export function deleteProjectStorageValues(keys: string[]): Promise<void> {
+  return enqueueWrite((store) => {
+    keys.forEach((key) => store.delete(key))
+  })
+}
+
 export function saveStickerAnimation(id: string, asset: StickerAnimationAsset): Promise<void> {
   return enqueueWrite((store) => {
     store.put(asset, `${STICKER_ANIMATION_KEY_PREFIX}${id}`)

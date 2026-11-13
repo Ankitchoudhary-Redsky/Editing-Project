@@ -1,33 +1,10 @@
-import { useCallback, useEffect, useRef } from "react";
-import {
-  ActiveSelection,
-  FabricImage,
-  IText,
-  Shadow,
-  type FabricObject,
-} from "fabric";
-import type {
-  TextDesignOptions,
-  TextProperty,
-  UseObjectEditingOptions,
-} from "../model/types";
-import { shapeNames } from "../model/constants";
-import { objectName } from "../model/objectName";
-import {
-  addImageInsideShape,
-  constrainShapeToCanvas,
-  constrainShapeToImage,
-  createShapeObject,
-  isShapeObject,
-  syncImageWithShape,
-} from "../operations/shapeObjects";
-import {
-  createTextInsideShape,
-  createTextObject,
-  syncParentShapeForText,
-  syncTextWithShape,
-  updateLinkedTextFontSize,
-} from "../operations/textObjects";
+import { useCallback, useEffect } from 'react'
+import { FabricImage, IText, Shadow, type FabricObject } from 'fabric'
+import type { TextDesignOptions, TextProperty, UseObjectEditingOptions } from '../model/types'
+import { shapeNames } from '../model/constants'
+import { objectName } from '../model/objectName'
+import { addImageInsideShape, constrainShapeToImage, createShapeObject, isShapeObject, syncImageWithShape } from '../operations/shapeObjects'
+import { createTextInsideShape, createTextObject, syncParentShapeForText, syncTextWithShape, updateLinkedTextFontSize } from '../operations/textObjects'
 
 export function useObjectEditing({
   canvas,
@@ -53,12 +30,14 @@ export function useObjectEditing({
   strokeColor,
   strokeWidth,
   shapeOpacity,
+  manageCanvasEvents = true,
   setActiveTool,
   setTextValue,
   recordHistory,
+  syncObjects,
 }: UseObjectEditingOptions) {
   useEffect(() => {
-    if (!canvas) return;
+    if (!canvas) return
     const constrainAndSync = (event: { target?: FabricObject }) => {
       const target = event.target;
       if (target && isShapeObject(target)) {
@@ -73,11 +52,11 @@ export function useObjectEditing({
     canvas.on("object:scaling", constrainAndSync);
     canvas.on("object:rotating", constrainAndSync);
     return () => {
-      canvas.off("object:moving", constrainAndSync);
-      canvas.off("object:scaling", constrainAndSync);
-      canvas.off("object:rotating", constrainAndSync);
-    };
-  }, [canvas, imageObjectRef]);
+      canvas.off('object:moving', constrainAndSync)
+      canvas.off('object:scaling', constrainAndSync)
+      canvas.off('object:rotating', constrainAndSync)
+    }
+  }, [canvas, imageObjectRef])
 
   const selectedIsShape = Boolean(
     selectedObject &&
@@ -142,11 +121,11 @@ export function useObjectEditing({
   };
 
   const addImageToShape = async (file: File) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !selectedObject || !isShapeObject(selectedObject)) return;
-    await addImageInsideShape(canvas, selectedObject, file);
-    recordHistory(true);
-  };
+    const canvas = canvasRef.current
+    if (!canvas || !selectedObject || !isShapeObject(selectedObject)) return
+    await addImageInsideShape(canvas, selectedObject, file)
+    recordHistory(true)
+  }
 
   const updateText = (property: TextProperty, value: string | number) => {
     const active = canvasRef.current?.getActiveObject();
@@ -196,103 +175,15 @@ export function useObjectEditing({
   };
 
   const deleteSelected = useCallback(() => {
-    const canvas = canvasRef.current;
-    const active = canvas?.getActiveObject();
-    if (!canvas || !active) return;
-    if (active === imageObjectRef.current) imageObjectRef.current = null;
-    canvas.remove(active);
-    canvas.discardActiveObject();
-    canvas.requestRenderAll();
-    recordHistory(true);
-  }, [canvasRef, imageObjectRef, recordHistory]);
-
-  const clipboardRef = useRef<{ element: FabricObject | null; style: Record<string, unknown> | null }>({
-    element: null,
-    style: null,
-  });
-
-  const copySelection = useCallback(async () => {
-    const canvas = canvasRef.current;
-    const active = canvas?.getActiveObject();
-    if (!canvas || !active) return;
-
-    const clone = await active.clone();
-    clipboardRef.current = { element: clone, style: null };
-  }, [canvasRef]);
-
-  const pasteSelection = useCallback(async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    if (clipboardRef.current.element) {
-      const active = canvas.getActiveObject();
-      const clone = await clipboardRef.current.element.clone();
-      clone.set({
-        left: (active?.left ?? 0) + 24,
-        top: (active?.top ?? 0) + 24,
-      });
-      canvas.add(clone);
-      canvas.setActiveObject(clone);
-      canvas.requestRenderAll();
-      recordHistory(true);
-      return;
-    }
-
-    if (clipboardRef.current.style) {
-      const active = canvas.getActiveObject();
-      if (!active) return;
-
-      for (const key of [
-        "fill",
-        "stroke",
-        "strokeWidth",
-        "opacity",
-        "fontFamily",
-        "fontSize",
-        "fontWeight",
-        "fontStyle",
-        "backgroundColor",
-        "textBackgroundColor",
-      ] as const) {
-        const value = clipboardRef.current.style[key];
-        if (value !== undefined) active.set(key, value as never);
-      }
-
-      if (clipboardRef.current.style.shadow && typeof clipboardRef.current.style.shadow === "object") {
-        active.set("shadow", new Shadow(clipboardRef.current.style.shadow as never));
-      }
-
-      active.setCoords();
-      canvas.requestRenderAll();
-      recordHistory();
-    }
-  }, [canvasRef, recordHistory]);
-
-  const copyStyleSelection = useCallback(() => {
-    const canvas = canvasRef.current;
-    const active = canvas?.getActiveObject();
-    if (!active) return;
-
-    const style: Record<string, unknown> = {};
-    for (const key of [
-      "fill",
-      "stroke",
-      "strokeWidth",
-      "opacity",
-      "fontFamily",
-      "fontSize",
-      "fontWeight",
-      "fontStyle",
-      "backgroundColor",
-      "textBackgroundColor",
-    ] as const) {
-      const value = active.get(key);
-      if (value !== undefined && value !== null) style[key] = value;
-    }
-
-    if (active.shadow) style.shadow = active.shadow.toObject();
-    clipboardRef.current = { element: null, style };
-  }, [canvasRef]);
+    const canvas = canvasRef.current
+    const active = canvas?.getActiveObject()
+    if (!canvas || !active) return
+    if (active === imageObjectRef.current) imageObjectRef.current = null
+    canvas.remove(active)
+    canvas.discardActiveObject()
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }, [canvasRef, imageObjectRef, recordHistory])
 
   const duplicateSelected = async () => {
     const canvas = canvasRef.current;
@@ -309,11 +200,11 @@ export function useObjectEditing({
   };
 
   const selectLayer = (object: FabricObject) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.setActiveObject(object);
-    canvas.requestRenderAll();
-  };
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.setActiveObject(object)
+    canvas.requestRenderAll()
+  }
 
   const moveLayer = (
     object: FabricObject,
@@ -406,16 +297,12 @@ export function useObjectEditing({
     size?: number,
     imageSize?: number,
   ) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !target || target === cropObjectRef.current) return;
-    const name = target.get("name");
-    if (
-      name === "__pixel_studio_drawing_layer__" ||
-      name === "__pixel_studio_background_image__"
-    )
-      return;
-    target.set("shadow", shadow);
-    if (size !== undefined) target.set("shadowSize", size);
+    const canvas = canvasRef.current
+    if (!canvas || !target || target === cropObjectRef.current) return
+    const name = target.get('name')
+    if (name === '__pixel_studio_drawing_layer__' || name === '__pixel_studio_background_image__') return
+    target.set('shadow', shadow)
+    if (size !== undefined) target.set('shadowSize', size)
     if (imageSize !== undefined && target instanceof FabricImage) {
       const currentScaleX = target.scaleX ?? 1;
       const currentScaleY = target.scaleY ?? 1;
@@ -455,10 +342,6 @@ export function useObjectEditing({
     copyStyleSelection,
     duplicateSelected,
     selectLayer,
-    selectLayers,
-    deleteLayers,
-    moveLayers,
-    duplicateLayers,
     moveLayer,
     updateShapeAppearance,
     updateShadow,

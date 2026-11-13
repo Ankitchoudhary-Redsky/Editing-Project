@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { FabricImage, Shadow, type FabricObject } from 'fabric'
 import { useEditor } from '../../EditorContext'
+import { BACKGROUND_IMAGE_NAME, DRAWING_LAYER_NAME } from '../../model/constants'
 import { objectName } from '../../model/objectName'
 
 const presets = [
@@ -77,15 +79,16 @@ function getShadowSettings(shadow: Shadow | null | undefined, shadowSize = 50) {
 
 function isEditableObject(object: FabricObject | null) {
   const name = object?.get('name')
-  return Boolean(object && name !== '__pixel_studio_drawing_layer__' && name !== '__pixel_studio_background_image__')
+  return Boolean(object && name !== DRAWING_LAYER_NAME && name !== BACKGROUND_IMAGE_NAME)
 }
 
 export function ShadowPanel() {
   const { canvas, shadows } = useEditor()
+  const [, setRangeVersion] = useState(0)
   const selected = isEditableObject(canvas.selected)
     ? canvas.selected
     : canvas.objects.find((object) => isEditableObject(object)) ?? null
-  const enabled = canvas.hasImage && Boolean(selected)
+  const enabled = canvas.hasDocument && Boolean(selected)
   const shadowSize = selected ? Number(selected.get('shadowSize') ?? 50) : 50
   const imageSize = selected ? Number(selected.get('shadowArtworkSize') ?? 100) : 100
   const settings = { ...getShadowSettings(selected?.shadow, shadowSize), imageSize }
@@ -109,6 +112,11 @@ export function ShadowPanel() {
     shadows.update(buildShadow(value.color, value.opacity, value.blur, value.distance, angle, value.size), selected, value.size, value.imageSize)
   }
 
+  const updateRange = (next: Partial<typeof settings>) => {
+    update(next)
+    setRangeVersion((version) => version + 1)
+  }
+
   const applyPreset = (preset: typeof presets[number]) => {
     if (!selected) return
     let imageSize: number | undefined
@@ -125,8 +133,8 @@ export function ShadowPanel() {
   return (
     <div className="panel-content shadow-panel">
       {!canvas.selected && selected && <p className="panel-note shadow-selection-note">Applying to {objectName(selected, canvas.objects.indexOf(selected))}. Select another layer from Layers to change the target.</p>}
-      {!canvas.hasImage && <p className="panel-note shadow-selection-note">Upload an image to enable shadow controls.</p>}
-      {canvas.hasImage && !selected && <p className="panel-note shadow-selection-note">Add or select a layer to apply a shadow.</p>}
+      {!canvas.hasDocument && <p className="panel-note shadow-selection-note">Add a layer to enable shadow controls.</p>}
+      {canvas.hasDocument && !selected && <p className="panel-note shadow-selection-note">Select a text, shape, or image layer to apply a shadow.</p>}
           <section className="shadow-section">
             <div className="shadow-heading-row">
               <div><span className="field-label">Shadow style</span><p>Choose a preset</p></div>
@@ -169,17 +177,17 @@ export function ShadowPanel() {
             <div className="shadow-heading-row"><div><span className="field-label">Adjust shadow</span><p>Fine-tune the selected style</p></div></div>
             <div className="dimensions-fields shadow-color-fields">
               <label className="field-label color-field">Colour<input type="color" value={settings.color} disabled={!enabled} onChange={(event) => update({ color: event.target.value })} /></label>
-              <label className="range-field"><span>Intensity <b>{settings.opacity}%</b></span><input type="range" min="0" max="100" value={settings.opacity} disabled={!enabled} onChange={(event) => update({ opacity: Number(event.target.value) })} /></label>
+              <label className="range-field"><span>Intensity <b>{settings.opacity}%</b></span><input type="range" min="0" max="100" value={settings.opacity} disabled={!enabled} onChange={(event) => updateRange({ opacity: Number(event.target.value) })} /></label>
             </div>
-            {visibleControls.includes('size') && <label className="range-field"><span>Size <b>{settings.size}</b></span><input type="range" min="0" max="100" value={settings.size} disabled={!enabled} onChange={(event) => update({ size: Number(event.target.value) })} /></label>}
+            {visibleControls.includes('size') && <label className="range-field"><span>Size <b>{settings.size}</b></span><input type="range" min="0" max="100" value={settings.size} disabled={!enabled} onChange={(event) => updateRange({ size: Number(event.target.value) })} /></label>}
             {selected instanceof FabricImage && <div className="shadow-image-size">
-              <label className="range-field"><span>Image size <b>{settings.imageSize}%</b></span><input type="range" min="50" max="120" value={settings.imageSize} disabled={!enabled} onChange={(event) => update({ imageSize: Number(event.target.value) })} /></label>
+              <label className="range-field"><span>Image size <b>{settings.imageSize}%</b></span><input type="range" min="50" max="120" value={settings.imageSize} disabled={!enabled} onChange={(event) => updateRange({ imageSize: Number(event.target.value) })} /></label>
               <p>Reduce image size to make room for a clear shadow.</p>
             </div>}
-            {visibleControls.includes('blur') && <label className="range-field"><span>Blur amount <b>{settings.blur}</b></span><input type="range" min="0" max="60" value={settings.blur} disabled={!enabled} onChange={(event) => update({ blur: Number(event.target.value) })} /></label>}
-            {visibleControls.includes('angle') && <label className="range-field"><span>{activePreset === 'angled' ? 'Rotation' : activePreset === 'backdrop' ? 'Direction' : 'Angle'} <b>{settings.angle}°</b></span><input type="range" min="0" max="359" value={settings.angle} disabled={!enabled || settings.distance === 0} onChange={(event) => update({ angle: Number(event.target.value) })} /></label>}
-            {visibleControls.includes('distance') && <label className="range-field"><span>Distance <b>{settings.distance}</b></span><input type="range" min="0" max="100" value={settings.distance} disabled={!enabled} onChange={(event) => update({ distance: Number(event.target.value) })} /></label>}
-            {visibleControls.includes('curve') && <label className="range-field"><span>Curve <b>{settings.curve}</b></span><input type="range" min="0" max="100" value={settings.curve} disabled={!enabled || settings.distance === 0} onChange={(event) => update({ curve: Number(event.target.value) })} /></label>}
+            {visibleControls.includes('blur') && <label className="range-field"><span>Blur amount <b>{settings.blur}</b></span><input type="range" min="0" max="60" value={settings.blur} disabled={!enabled} onChange={(event) => updateRange({ blur: Number(event.target.value) })} /></label>}
+            {visibleControls.includes('angle') && <label className="range-field"><span>{activePreset === 'angled' ? 'Rotation' : activePreset === 'backdrop' ? 'Direction' : 'Angle'} <b>{settings.angle}°</b></span><input type="range" min="0" max="359" value={settings.angle} disabled={!enabled || settings.distance === 0} onChange={(event) => updateRange({ angle: Number(event.target.value) })} /></label>}
+            {visibleControls.includes('distance') && <label className="range-field"><span>Distance <b>{settings.distance}</b></span><input type="range" min="0" max="100" value={settings.distance} disabled={!enabled} onChange={(event) => updateRange({ distance: Number(event.target.value) })} /></label>}
+            {visibleControls.includes('curve') && <label className="range-field"><span>Curve <b>{settings.curve}</b></span><input type="range" min="0" max="100" value={settings.curve} disabled={!enabled || settings.distance === 0} onChange={(event) => updateRange({ curve: Number(event.target.value) })} /></label>}
           </section>
     </div>
   )
