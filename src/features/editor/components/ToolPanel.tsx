@@ -20,6 +20,7 @@ import { AnimatePanel } from './panels/AnimatePanel'
 
 export function ToolPanel() {
   const { canvas, pages, tools } = useEditor()
+  const isPageSwitching = pages?.switching ?? false
   if (tools.active === 'music') return null
   const activeCategory = editorToolCategories.find((category) => category.tools.some(({ id }) => id === tools.active)) ?? editorToolCategories[0]
   const panelHeading = editorHeadings.toolPanels[tools.active as keyof typeof editorHeadings.toolPanels] ?? activeCategory.label
@@ -27,8 +28,8 @@ export function ToolPanel() {
   return (
     <aside
       className={`tool-panel${activeCategory.tools.length > 1 ? ' has-subtools' : ''}`}
-      inert={pages.switching && tools.active !== 'upload'}
-      aria-busy={pages.switching}
+      inert={isPageSwitching && tools.active !== 'upload'}
+      aria-busy={isPageSwitching}
     >
       <div className={`panel-heading ${activeCategory.tools.length > 1 ? 'has-subtools' : ''}`}>
         <div><h3 className="panel-kicker">{panelHeading}</h3></div>

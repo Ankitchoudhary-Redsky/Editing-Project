@@ -4,8 +4,9 @@ import { FabricImage } from 'fabric'
 import { Copy, Eraser, Highlighter, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Plus, Rotate3D, RotateCcw, Trash2, Upload } from 'lucide-react'
 
 import { useEditor } from '../EditorContext'
+import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, DRAWING_LAYER_NAME } from '../model/constants'
 import { objectName } from '../model/objectName'
-import type { AddedEditorPage, CanvasSurfaceProps, DrawingMode } from '../model/types'
+import type { CanvasSurfaceProps, DrawingMode } from '../model/types'
 import { getThreeDRotation, isThreeDRotatable, updateThreeDRotation } from '../operations/threeDShapes'
 import type { ThreeDRotation } from '../operations/threeDShapes'
 import ImageMusicVideoExport from './ImageMusicVideoExport'
@@ -14,7 +15,6 @@ const PAGE_ALREADY_HAS_IMAGE_NOTICE = 'This page already has an image. Remove it
 
 type EditorWorkspaceProps = {
   setCanvasElement: (element: HTMLCanvasElement | null) => void
-  setPageCanvasElement?: (pageId: number, element: HTMLCanvasElement | null) => void
   setStageElement: (element: HTMLDivElement | null) => void
 }
 
@@ -113,7 +113,6 @@ type DraggedPageImage = {
 export function EditorWorkspace({
   historyVersion,
   setCanvasElement,
-  setPageCanvasElement,
   setStageElement,
 }: EditorWorkspaceProps & { historyVersion: number }) {
   const {
@@ -130,25 +129,26 @@ export function EditorWorkspace({
       items: addedPages,
       setItems: setAddedPages,
       activeId: activePageId,
+      switching: pagesSwitching,
+      pageOnePreview,
       select: activatePage,
       getSnapshot: getPageSnapshot,
+      saveActivePage,
       registerActions: registerPageActions,
     },
   } = useEditor()
-  const setNotice = tools.setNotice
-
   const [dropTargetPageId, setDropTargetPageId] = useState<number | null>(null)
   const [canvasSurfaceSize, setCanvasSurfaceSize] = useState({ width: 0, height: 0 })
   const nextPageIdRef = useRef(2)
   const pageUploadInputsRef = useRef(new Map<number, HTMLInputElement>())
-  const pageElementsRef = useRef(new Map<number, HTMLElement>())
+  const thumbnailElementsRef = useRef(new Map<number | null, HTMLElement>())
   const pageUploadVersionsRef = useRef(new Map<number, number>())
   const pageObjectUrlsRef = useRef(new Set<string>())
   const stageScrollRef = useRef<HTMLDivElement | null>(null)
+  const thumbnailStripRef = useRef<HTMLDivElement | null>(null)
   const canvasSurfaceRef = useRef<HTMLDivElement | null>(null)
   const pendingPageScrollRef = useRef<number | null>(null)
   const pendingPageSelectRef = useRef<number | null>(null)
-  const firstPageRef = useRef<HTMLDivElement | null>(null)
   const rotationDragRef = useRef<{
     pointerId: number
     x: number
@@ -179,19 +179,20 @@ export function EditorWorkspace({
   const CursorIcon = resizeCursor ?? DrawingCursorIcon
 
   const scrollToPage = useCallback((pageId: number | null) => {
-    const pageElement = pageId === null ? firstPageRef.current : pageElementsRef.current.get(pageId)
-    const stageElement = stageScrollRef.current
-    if (!pageElement || !stageElement) return
+    const pageElement = thumbnailElementsRef.current.get(pageId)
+    const stripElement = thumbnailStripRef.current
+    if (!pageElement || !stripElement) return
 
-    const stageBounds = stageElement.getBoundingClientRect()
+    const stripBounds = stripElement.getBoundingClientRect()
     const pageBounds = pageElement.getBoundingClientRect()
-    const targetScrollTop = stageElement.scrollTop + pageBounds.top - stageBounds.top - 16
-    const maxScrollTop = stageElement.scrollHeight - stageElement.clientHeight
-    const requiredScrollTail = Math.max(0, targetScrollTop - maxScrollTop)
-    if (requiredScrollTail > 0) {
-      stageElement.style.setProperty('--page-scroll-tail', `${requiredScrollTail + 2}px`)
-    }
-    stageElement.scrollTo({ top: targetScrollTop, behavior: 'smooth' })
+    const pageLeft = stripElement.scrollLeft + pageBounds.left - stripBounds.left
+    const pageRight = pageLeft + pageBounds.width
+    const targetScrollLeft = pageLeft < stripElement.scrollLeft
+      ? pageLeft - 12
+      : pageRight > stripElement.scrollLeft + stripElement.clientWidth
+        ? pageRight - stripElement.clientWidth + 12
+        : stripElement.scrollLeft
+    stripElement.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: 'smooth' })
   }, [])
 
   useEffect(() => () => {
@@ -213,6 +214,12 @@ export function EditorWorkspace({
       void activatePage(selectPageId)
     }
   }, [addedPages, activatePage, scrollToPage])
+  useEffect(() => {
+    if (editorMode.active === 'image' && !pagesSwitching) saveActivePage()
+  }, [editorMode.active, historyVersion, pagesSwitching, saveActivePage])
+  useEffect(() => {
+    scrollToPage(activePageId)
+  }, [activePageId, scrollToPage])
   useEffect(() => {
     if (activePageId === null) return
     const activePage = addedPages.find((page) => page.id === activePageId)
@@ -351,46 +358,57 @@ export function EditorWorkspace({
       autoScrollStage(event)
       return
     }
-    tools.setDraggingFile(true)
+    if (event.dataTransfer.types.includes('Files')) tools.setDraggingFile(true)
   }
 
-  useEffect(() => {
-    const upperCanvas = canvasSurfaceRef.current?.querySelector<HTMLCanvasElement>('.upper-canvas')
-    if (!upperCanvas) return
-
-    const handleFirstPageImageDragStart = (event: globalThis.DragEvent) => {
-      if (!fabricCanvas || !canvas.hasImage || !event.dataTransfer) {
-        event.preventDefault()
-        event.stopImmediatePropagation()
-        return
-      }
-
-      try {
-        event.dataTransfer.effectAllowed = 'copy'
-        event.dataTransfer.setData('application/x-estudio-page-image', JSON.stringify({
-          imageUrl: fabricCanvas.toDataURL({ format: 'png', multiplier: 1 }),
-          fileName: 'Page 1 image',
-          width: canvas.dimensions.width,
-          height: canvas.dimensions.height,
-        }))
-        event.stopImmediatePropagation()
-      } catch {
-        event.preventDefault()
-        event.stopImmediatePropagation()
-        setNotice('Could not drag this page image.')
-      }
+  const handlePageImageDragStart = (event: DragEvent<HTMLDivElement>, pageId: number | null) => {
+    if (!fabricCanvas || !event.dataTransfer) {
+      event.preventDefault()
+      return
     }
 
-    const canDrag = canvas.hasImage && editorMode.active === 'image'
-    upperCanvas.draggable = canDrag
-    if (!canDrag) return
-
-    upperCanvas.addEventListener('dragstart', handleFirstPageImageDragStart, true)
-    return () => {
-      upperCanvas.removeEventListener('dragstart', handleFirstPageImageDragStart, true)
-      upperCanvas.draggable = false
+    const page = pageId === null ? undefined : addedPages.find((item) => item.id === pageId)
+    const isActivePage = activePageId === pageId
+    const imageUrl = isActivePage
+      ? fabricCanvas.toDataURL({ format: 'png', multiplier: 1 })
+      : pageId === null ? pageOnePreview : page?.preview || page?.imageUrl
+    if (!imageUrl) {
+      event.preventDefault()
+      return
     }
-  }, [canvas.hasImage, canvas.dimensions.height, canvas.dimensions.width, editorMode.active, fabricCanvas, setNotice])
+
+    const snapshot = getPageSnapshot(pageId)
+    const snapshotData = snapshot ? JSON.parse(snapshot) as { width?: number; height?: number } : null
+    event.dataTransfer.effectAllowed = 'copy'
+    event.dataTransfer.setData('application/x-estudio-page-image', JSON.stringify({
+      imageUrl,
+      fileName: page?.fileName ?? `Page ${pageId === null ? 1 : addedPages.findIndex((item) => item.id === pageId) + 2}`,
+      width: snapshotData?.width ?? page?.width ?? canvas.dimensions.width,
+      height: snapshotData?.height ?? page?.height ?? canvas.dimensions.height,
+    } satisfies DraggedPageImage))
+  }
+
+  const pageHasImage = (pageId: number | null) => {
+    if (pageId === activePageId) return canvas.hasImage
+    const page = pageId === null ? undefined : addedPages.find((item) => item.id === pageId)
+    if (page?.imageUrl) return true
+    const snapshot = getPageSnapshot(pageId)
+    if (!snapshot) return false
+    try {
+      const parsed = JSON.parse(snapshot) as { scene?: { objects?: Array<Record<string, unknown> & { type?: string; name?: string }> } }
+      return Boolean(parsed.scene?.objects?.some((object) =>
+        object.type?.toLowerCase() === 'image' &&
+        (object[BASE_IMAGE_PROPERTY] === true || (
+          !object.stickerAnimationId && !object.threeDType && !object.emojiId &&
+          typeof object.src === 'string'
+        )) &&
+        object.name !== BACKGROUND_IMAGE_NAME &&
+        object.name !== DRAWING_LAYER_NAME,
+      ))
+    } catch {
+      return false
+    }
+  }
 
   const addPage = () => {
     const pageId = nextPageIdRef.current
@@ -405,6 +423,7 @@ export function EditorWorkspace({
   }
 
   const duplicatePage = (sourcePageId?: number) => {
+    if (activePageId === (sourcePageId ?? null)) saveActivePage()
     const sourcePage = sourcePageId === undefined
       ? undefined
       : addedPages.find((page) => page.id === sourcePageId)
@@ -475,8 +494,33 @@ export function EditorWorkspace({
             }
           : page))
         void (async () => {
-          await activatePage(pageId)
-          await tools.uploadFile(file)
+          try {
+            await activatePage(pageId)
+            await tools.uploadFile(file)
+            await new Promise<void>((resolve) => {
+              requestAnimationFrame(() => resolve())
+            })
+
+            if (fabricCanvas) {
+              fabricCanvas.requestRenderAll()
+
+              const preview = fabricCanvas.toDataURL({
+                format: 'png',
+                multiplier: 0.2,
+              })
+
+              setAddedPages((pages) =>
+                pages.map((page) =>
+                  page.id === pageId
+                    ? { ...page, preview }
+                    : page,
+                ),
+              )
+            }
+          } catch (error) {
+            console.error('Page image upload failed:', error)
+            tools.setNotice('Could not upload the image to this page.')
+          }
         })()
       }
       image.onerror = () => {
@@ -516,9 +560,8 @@ export function EditorWorkspace({
   const handleFirstPageDrop = async (event: DragEvent<HTMLDivElement>) => {
     if (!event.dataTransfer.types.includes('application/x-estudio-page-image')) return
     event.preventDefault()
-    console.log('handleFirstPageDrop')
     event.stopPropagation()
-    if (canvas.hasImage) {
+    if (pageHasImage(null)) {
       tools.setNotice(PAGE_ALREADY_HAS_IMAGE_NOTICE)
       return
     }
@@ -558,9 +601,8 @@ export function EditorWorkspace({
     event.preventDefault()
     event.stopPropagation()
     setDropTargetPageId(null)
-console.log('handlePageDrop', pageId)
     const targetPage = addedPages.find((page) => page.id === pageId)
-    if (targetPage?.imageUrl) {
+    if (targetPage?.imageUrl || pageHasImage(pageId)) {
       tools.setNotice(PAGE_ALREADY_HAS_IMAGE_NOTICE)
       return
     }
@@ -605,10 +647,12 @@ console.log('handlePageDrop', pageId)
 
   const handleWorkspaceDrop = (event: DragEvent<HTMLDivElement>) => {
     const target = event.target
-    console.log('handleWorkspaceDrop', target, event.dataTransfer.types)
+    const isPageImage = event.dataTransfer.types.includes('application/x-estudio-page-image')
+    const isFile = event.dataTransfer.types.includes('Files')
     if (
       editorMode.active === 'image' &&
       canvas.hasImage &&
+      (isPageImage || isFile) &&
       target instanceof Element &&
       target.closest('.stage-page-main')
     ) {
@@ -634,7 +678,7 @@ console.log('handlePageDrop', pageId)
       }
     }
     pageUploadInputsRef.current.delete(pageId)
-    pageElementsRef.current.delete(pageId)
+    thumbnailElementsRef.current.delete(pageId)
     pageUploadVersionsRef.current.delete(pageId)
     if (activePageId === pageId) {
       const nextPageId = addedPages.find((item) => item.id !== pageId)?.id ?? null
@@ -645,14 +689,6 @@ console.log('handlePageDrop', pageId)
     }
     setAddedPages((pages) => pages.filter((item) => item.id !== pageId))
   }, [activePageId, addedPages, activatePage, setAddedPages])
-
-  const getPageCanvasStyle = (page: AddedEditorPage) => ({
-    aspectRatio: `${page.width ?? canvas.dimensions.width} / ${page.height ?? canvas.dimensions.height}`,
-  })
-  const firstPageActionOffset = canvasSurfaceSize.height > 0
-    ? canvasSurfaceSize.height / 2 + 14
-    : canvas.dimensions.height * canvas.fitScale * canvas.zoom / 2 + 14
-  const addedPageNumberOffset = 2
 
   useEffect(() => {
     registerPageActions({
@@ -674,14 +710,9 @@ console.log('handlePageDrop', pageId)
         onDrop={handleWorkspaceDrop}
       >
         <div
-          className={`stage-page-main${canvas.hasDeletedPageOneImage ? ' removed-page' : ''} ${activePageId === null ? 'active-page' : ''}`}
-          aria-label="Page 1"
-          aria-current={activePageId === null ? 'page' : undefined}
-          ref={firstPageRef}
-          onPointerDownCapture={(event) => {
-            if (event.target instanceof Element && event.target.closest('button, input')) return
-            void activatePage(null)
-          }}
+          className="stage-page-main active-page"
+          aria-label={`Page ${activePageId === null ? 1 : addedPages.findIndex((page) => page.id === activePageId) + 2}`}
+          aria-current="page"
         >
           <div className="canvas-holder">
             <CanvasSurface
@@ -693,7 +724,9 @@ console.log('handlePageDrop', pageId)
               isResizeCursor={Boolean(resizeCursor)}
               surfaceRef={canvasSurfaceRef}
               onDragOver={handleFirstPageDragOver}
-              onDrop={(event) => void handleFirstPageDrop(event)}
+              onDrop={(event) => activePageId === null
+                ? void handleFirstPageDrop(event)
+                : void handlePageDrop(event, activePageId)}
             >
               {fabricCanvas && selectedThreeDObject && selectedThreeDBounds && (
               <button
@@ -715,7 +748,7 @@ console.log('handlePageDrop', pageId)
             {canvas.hasImage && editorMode.active === 'image' && (
             <div
               className="page-image-tools first-page-image-tools"
-              aria-label="Page 1 image actions"
+              aria-label="Current page image actions"
               style={{
                 top: `calc(50% - ${canvasSurfaceSize.height / 2}px - 40px)`,
                 left: `calc(50% + ${canvasSurfaceSize.width / 2 - 108}px)`,
@@ -724,7 +757,7 @@ console.log('handlePageDrop', pageId)
               <button type="button" className="page-icon-button" onClick={tools.openFilePicker} aria-label="Replace image" title="Replace image">
                 <RotateCcw size={15} aria-hidden="true" />
               </button>
-              <button type="button" className="page-icon-button" onClick={() => duplicatePage()} aria-label="Duplicate page" title="Duplicate page">
+              <button type="button" className="page-icon-button" onClick={() => duplicatePage(activePageId ?? undefined)} aria-label="Duplicate page" title="Duplicate page">
                 <Copy size={15} aria-hidden="true" />
               </button>
               <button type="button" className="page-icon-button delete-page-icon" onClick={tools.deleteImage} aria-label="Delete image" title="Delete image">
@@ -732,7 +765,7 @@ console.log('handlePageDrop', pageId)
               </button>
             </div>
             )}
-            {!canvas.hasImage && (
+            {!canvas.hasDocument && (
             <div className="empty-prompt">
               <div className="empty-art">
                 <div className="empty-sun" />
@@ -786,115 +819,143 @@ console.log('handlePageDrop', pageId)
             </div>
           )}
 
-          {editorMode.active === 'image' && addedPages.length === 0 && (
-            <button
-              type="button"
-              className="add-page-button first-page-add"
-              style={{
-                top: `calc(50% + ${firstPageActionOffset}px)`,
-              }}
-              onClick={addPage}
-            >
-              <Plus size={16} aria-hidden="true" />
-              Add page
-            </button>
-          )}
         </div>
-
-        {addedPages.map((page, index) => (
-          <div
-            className="added-page-group"
-            key={page.id}
-          >
-            <section
-              className={`added-page-canvas ${activePageId === page.id ? 'active-page' : ''} ${dropTargetPageId === page.id ? 'drop-target' : ''}`}
-              aria-label={`Page ${index + addedPageNumberOffset}`}
-              aria-current={activePageId === page.id ? 'page' : undefined}
-              ref={(element) => {
-                if (element) pageElementsRef.current.set(page.id, element)
-                else pageElementsRef.current.delete(page.id)
-              }}
-              style={getPageCanvasStyle(page)}
-              onPointerDownCapture={(event) => {
-                if (event.target instanceof Element && event.target.closest('button, input')) return
-                void activatePage(page.id)
-              }}
-              onDragOver={(event) => handlePageDragOver(event, page.id)}
-              onDragLeave={(event) => {
-                event.stopPropagation()
-                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                  setDropTargetPageId(null)
-                }
-              }}
-              onDrop={(event) => handlePageDrop(event, page.id)}
-            >
-              <canvas
-                className="added-page-fabric-canvas"
-                ref={(element) => setPageCanvasElement?.(page.id, element)}
-                aria-label={`Editable Page ${index + addedPageNumberOffset}`}
-              />
-              {!page.imageUrl && (
-                <div className="empty-prompt">
-                  <div className="empty-art">
-                    <div className="empty-sun" />
-                    <div className="empty-mountain one" />
-                    <div className="empty-mountain two" />
-                    <span className="empty-sparkle">✳</span>
-                  </div>
-                  <h1>Your next idea starts here</h1>
-                  <p>Drop an image to begin, or choose one from your computer.</p>
-                  <button className="primary-button" onClick={() => pageUploadInputsRef.current.get(page.id)?.click()}>
-                    <Upload size={16} /> Upload an image
-                  </button>
-                  <span className="empty-format">PNG · JPG · WEBP</span>
-                </div>
-              )}
-              {page.imageUrl && (
-                <>
-                  <div className="page-image-tools" aria-label={`Page ${index + addedPageNumberOffset} image actions`}>
-                    <button type="button" className="page-icon-button" onClick={() => pageUploadInputsRef.current.get(page.id)?.click()} aria-label="Replace image" title="Replace image">
-                      <RotateCcw size={15} aria-hidden="true" />
-                    </button>
-                    <button type="button" className="page-icon-button" onClick={() => duplicatePage(page.id)} aria-label="Duplicate page" title="Duplicate page">
-                      <Copy size={15} aria-hidden="true" />
-                    </button>
-                    <button type="button" className="page-icon-button delete-page-icon" onClick={() => deletePage(page.id)} aria-label="Delete page" title="Delete page">
-                      <Trash2 size={15} aria-hidden="true" />
-                    </button>
-                  </div>
-                </>
-              )}
-              <input
-                ref={(element) => {
-                  if (element) pageUploadInputsRef.current.set(page.id, element)
-                  else pageUploadInputsRef.current.delete(page.id)
-                }}
-                className="page-upload-input"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(event) => {
-                  uploadPageImage(page.id, event.currentTarget.files?.[0])
-                  event.currentTarget.value = ''
-                }}
-              />
-            </section>
-            <div className="added-page-actions">
-              {!page.imageUrl && (
-                <button type="button" className="page-action-button delete-page-button" onClick={() => deletePage(page.id)}>
-                  <Trash2 size={14} aria-hidden="true" />
-                  Delete page
-                </button>
-              )}
-              {index === addedPages.length - 1 && (
-                <button type="button" className="add-page-button" onClick={addPage}>
-                  <Plus size={16} aria-hidden="true" />
-                  Add page
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
       </div>
+
+      {editorMode.active === 'image' && (
+        <div className="workspace-pages">
+          <div className="page-thumbnails" ref={thumbnailStripRef} aria-label="Pages">
+            <div
+              className={`page-thumbnail${activePageId === null ? ' selected' : ''}`}
+              draggable={activePageId === null && canvas.hasImage}
+              ref={(element) => {
+                if (element) thumbnailElementsRef.current.set(null, element)
+                else thumbnailElementsRef.current.delete(null)
+              }}
+              onDragStart={(event) => handlePageImageDragStart(event, null)}
+              onDragOver={handleFirstPageDragOver}
+              onDrop={(event) => void handleFirstPageDrop(event)}
+            >
+              <button
+                type="button"
+                className="page-thumbnail-select"
+                aria-label="Select Page 1"
+                aria-current={activePageId === null ? 'page' : undefined}
+                onClick={() => void activatePage(null)}
+              >
+                <span className="page-thumbnail-preview">
+                  {(pageOnePreview || (activePageId === null ? canvas.imageThumbnail : ''))
+                    ? <img src={pageOnePreview || canvas.imageThumbnail} alt="Page 1 preview" draggable={false} />
+                    : <span className="page-thumbnail-empty">Empty page</span>}
+                </span>
+                <span className="page-thumbnail-label">1</span>
+              </button>
+              <div className="page-thumbnail-actions">
+                <button
+                  type="button"
+                  className="page-thumbnail-action"
+                  aria-label="Upload or replace image on Page 1"
+                  title="Upload or replace image"
+                  onClick={() => void activatePage(null).then(() => tools.openFilePicker())}
+                >
+                  {pageOnePreview ? <RotateCcw size={14} /> : <Upload size={14} />}
+                </button>
+                <button
+                  type="button"
+                  className="page-thumbnail-action"
+                  aria-label="Duplicate Page 1"
+                  title="Duplicate page"
+                  onClick={() => duplicatePage()}
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
+            </div>
+
+            {addedPages.map((page, index) => (
+              <div
+                key={page.id}
+                className={`page-thumbnail${activePageId === page.id ? ' selected' : ''}${dropTargetPageId === page.id ? ' drop-target' : ''}`}
+                draggable={activePageId === page.id ? canvas.hasImage : Boolean(page.imageUrl)}
+                ref={(element) => {
+                  if (element) thumbnailElementsRef.current.set(page.id, element)
+                  else thumbnailElementsRef.current.delete(page.id)
+                }}
+                onDragStart={(event) => handlePageImageDragStart(event, page.id)}
+                onDragOver={(event) => handlePageDragOver(event, page.id)}
+                onDragLeave={(event) => {
+                  event.stopPropagation()
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    setDropTargetPageId(null)
+                  }
+                }}
+                onDrop={(event) => void handlePageDrop(event, page.id)}
+              >
+                <button
+                  type="button"
+                  className="page-thumbnail-select"
+                  aria-label={`Select Page ${index + 2}`}
+                  aria-current={activePageId === page.id ? 'page' : undefined}
+                  onClick={() => void activatePage(page.id)}
+                >
+                  <span className="page-thumbnail-preview">
+                    {page.preview || page.imageUrl
+                      ? <img src={page.preview || page.imageUrl} alt={`Page ${index + 2} preview`} draggable={false} />
+                      : <span className="page-thumbnail-empty">Empty page</span>}
+                  </span>
+                  <span className="page-thumbnail-label">{index + 2}</span>
+                </button>
+                <div className="page-thumbnail-actions">
+                  <button
+                    type="button"
+                    className="page-thumbnail-action"
+                    aria-label={`${page.imageUrl ? 'Replace' : 'Upload'} image on Page ${index + 2}`}
+                    title={page.imageUrl ? 'Replace image' : 'Upload image'}
+                    onClick={() => pageUploadInputsRef.current.get(page.id)?.click()}
+                  >
+                    {page.imageUrl ? <RotateCcw size={14} /> : <Upload size={14} />}
+                  </button>
+                  <button
+                    type="button"
+                    className="page-thumbnail-action"
+                    aria-label={`Duplicate Page ${index + 2}`}
+                    title="Duplicate page"
+                    onClick={() => duplicatePage(page.id)}
+                  >
+                    <Copy size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="page-thumbnail-action delete-thumbnail-action"
+                    aria-label={`Delete Page ${index + 2}`}
+                    title="Delete page"
+                    onClick={() => deletePage(page.id)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <input
+                  ref={(element) => {
+                    if (element) pageUploadInputsRef.current.set(page.id, element)
+                    else pageUploadInputsRef.current.delete(page.id)
+                  }}
+                  className="page-upload-input"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) => {
+                    uploadPageImage(page.id, event.currentTarget.files?.[0])
+                    event.currentTarget.value = ''
+                  }}
+                />
+              </div>
+            ))}
+
+            <button type="button" className="page-thumbnail-add" onClick={addPage} aria-label="Add page" title="Add page">
+              <Plus size={20} aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="workspace-footer">
         <span>

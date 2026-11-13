@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { Canvas, FabricImage, Rect, type FabricObject } from 'fabric'
 import type { FilterId, EditorTool, UseEditorCanvasCoreOptions } from '../model/types'
-import { BACKGROUND_IMAGE_NAME, DRAWING_LAYER_NAME, serializeCanvas } from '../model/constants'
+import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, DRAWING_LAYER_NAME, serializeCanvas } from '../model/constants'
 import { useFabricCanvas } from './useFabricCanvas'
 import { useHistoryRecorder } from './useHistoryRecorder'
 
@@ -54,14 +54,36 @@ export function useEditorCanvasCore({
     const currentObjects = canvas.getObjects()
     const image = currentObjects.find(
       (item) => item instanceof FabricImage &&
+        item.get(BASE_IMAGE_PROPERTY) === true,
+    ) ?? currentObjects.find(
+      (item) => item instanceof FabricImage &&
         item.get('name') !== BACKGROUND_IMAGE_NAME &&
-        item.get('name') !== DRAWING_LAYER_NAME,
+        item.get('name') !== DRAWING_LAYER_NAME &&
+        !item.get('stickerAnimationId') &&
+        !item.get('threeDType') &&
+        !item.get('emojiId'),
     )
     if (image && (
       image.selectable || image.evented || !image.lockMovementX || !image.lockMovementY ||
       !image.lockScalingX || !image.lockScalingY || !image.lockRotation
     )) {
       image.set({
+        selectable: false,
+        evented: false,
+        lockMovementX: true,
+        lockMovementY: true,
+        lockScalingX: true,
+        lockScalingY: true,
+        lockRotation: true,
+      })
+    }
+    const drawingLayer = currentObjects.find((item) => item.get('name') === DRAWING_LAYER_NAME)
+    if (drawingLayer && (
+      drawingLayer.selectable || drawingLayer.evented || !drawingLayer.lockMovementX ||
+      !drawingLayer.lockMovementY || !drawingLayer.lockScalingX || !drawingLayer.lockScalingY ||
+      !drawingLayer.lockRotation
+    )) {
+      drawingLayer.set({
         selectable: false,
         evented: false,
         lockMovementX: true,

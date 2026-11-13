@@ -116,24 +116,27 @@ export function usePixelDrawing({
     const targetCanvas = canvasRef.current
     const context = layer?.canvas.getContext('2d')
     if (!layer || !targetCanvas || !context || points.length === 0) return
+    const transform = createImageEditingTransform(layer.image)
+    const localPoints = points.map((point) => toImagePoint(layer.image, point, transform))
+    const brushSize = brushSizeRef.current * transform.brushScale
 
     context.save()
     context.globalCompositeOperation = mode === 'eraser' ? 'destination-out' : 'source-over'
     context.globalAlpha = mode === 'sketch' ? 0.55 : mode === 'highlighter' ? 0.32 : mode === 'marker' ? 0.9 : 1
     context.strokeStyle = drawingColorRef.current
     context.fillStyle = drawingColorRef.current
-    context.lineWidth = brushSizeRef.current * (mode === 'sketch' ? 0.55 : mode === 'marker' ? 1.35 : mode === 'highlighter' ? 3 : 1)
+    context.lineWidth = brushSize * (mode === 'sketch' ? 0.55 : mode === 'marker' ? 1.35 : mode === 'highlighter' ? 3 : 1)
     context.lineCap = 'round'
     context.lineJoin = 'round'
     context.beginPath()
-    context.moveTo(points[0].x, points[0].y)
+    context.moveTo(localPoints[0].x, localPoints[0].y)
 
-    if (points.length === 1) {
-      context.arc(points[0].x, points[0].y, brushSizeRef.current / 2, 0, Math.PI * 2)
+    if (localPoints.length === 1) {
+      context.arc(localPoints[0].x, localPoints[0].y, brushSize / 2, 0, Math.PI * 2)
       context.fill()
     } else {
-      for (let index = 1; index < points.length; index += 1) {
-        const point = points[index]
+      for (let index = 1; index < localPoints.length; index += 1) {
+        const point = localPoints[index]
         context.lineTo(point.x, point.y)
       }
       context.stroke()
@@ -142,7 +145,7 @@ export function usePixelDrawing({
     context.restore()
     layer.image.dirty = true
     targetCanvas.requestRenderAll()
-  }, [canvasRef, getDrawingLayer])
+  }, [brushSizeRef, canvasRef, drawingColorRef, getDrawingLayer])
 
   const flushPendingDrawing = useCallback(() => {
     if (drawingFrameRef.current !== null) {
@@ -212,6 +215,7 @@ export function usePixelDrawing({
       if (canvasRef.current !== targetCanvas || imageObjectRef.current !== image) return
       image.setElement(editedCanvas)
       image.set({ cropX: 0, cropY: 0, width: editedCanvas.width, height: editedCanvas.height })
+      image.applyFilters()
       image.setCoords()
       targetCanvas.requestRenderAll()
 

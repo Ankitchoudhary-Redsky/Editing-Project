@@ -16,6 +16,7 @@ import { Canvas } from 'fabric'
 import type { DrawingMode, EditorTool, ShapeKind } from './types'
 
 export const BACKGROUND_IMAGE_NAME = '__pixel_studio_background_image__'
+export const BASE_IMAGE_PROPERTY = 'isBaseImage'
 export const DEFAULT_PAGE_WIDTH = 1200
 export const DEFAULT_PAGE_HEIGHT = 800
 export const DRAWING_LAYER_NAME = '__pixel_studio_drawing_layer__'
@@ -141,6 +142,7 @@ export function restoreImageSourceTokens(sources: Record<string, string>) {
 export function serializeCanvas(canvas: Canvas) {
   const scene = canvas.toObject([
     'name',
+    BASE_IMAGE_PROPERTY,
     'textAnimation',
     'shapeId',
     'textParentId',

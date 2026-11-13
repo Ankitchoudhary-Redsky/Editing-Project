@@ -10,6 +10,7 @@ export function createEditorContextValue({
   toolActions,
   animation,
   ui,
+  pages,
 }: CreateEditorContextValueOptions): EditorContextValue {
   const { fabricCanvas, fitScale, fitToScreen } = canvasCore.fabric
   const selectedText = ui.selectedObject instanceof IText ? ui.selectedObject : null
@@ -38,19 +39,7 @@ export function createEditorContextValue({
       fitScale,
       fitToScreen,
     },
-    pages: {
-      items: [],
-      setItems: () => {},
-      activeId: null,
-      setActiveId: () => {},
-      switching: false,
-      pageOnePreview: '',
-      replace: (pageId) => { void pageId },
-      delete: (pageId) => { void pageId },
-      select: async (pageId) => { void pageId },
-      getSnapshot: (pageId) => { void pageId; return undefined },
-      registerActions: (actions) => { void actions },
-    },
+    pages,
     history: {
       canUndo: canvasCore.history.canUndo,
       canRedo: canvasCore.history.canRedo,
@@ -213,5 +202,6 @@ export function createEditorContextValue({
       share: toolActions.shareDesign,
     },
     table: features.table,
+
   }
 }

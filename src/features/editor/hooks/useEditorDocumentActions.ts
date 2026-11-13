@@ -1,7 +1,6 @@
 import { useCallback, useRef } from 'react'
 import type { UseEditorDocumentActionsOptions } from '../model/types'
 import { useImageUpload } from './useImageUpload'
-import { deleteProjectDraft } from '../operations/projectStorage'
 
 export function useEditorDocumentActions({
   uploadOptions,
@@ -24,7 +23,6 @@ export function useEditorDocumentActions({
   recordHistory,
   syncObjects,
   resizeDisplay,
-  setNotice,
   setDraggingFile,
 }: UseEditorDocumentActionsOptions) {
   const uploadInputRef = useRef<HTMLInputElement>(null)
@@ -67,9 +65,6 @@ export function useEditorDocumentActions({
     syncObjects()
     recordHistory(true)
     resizeDisplay()
-    void deleteProjectDraft().catch(() => {
-      setNotice('Deleted project data could not be cleared from browser storage.')
-    })
   }
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {

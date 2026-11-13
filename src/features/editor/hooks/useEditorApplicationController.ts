@@ -1,3 +1,6 @@
+import { useCallback } from 'react'
+import { loadTemplate } from '../../templates/operations/loadTemplate'
+import type { EditorTemplate } from '../../templates/model/template.types'
 import { createEditorContextValue } from '../createEditorContextValue'
 import type { EditorRuntime, EditorSettings, EditorUiState } from '../model/types'
 import { useEditorDocumentActions } from './useEditorDocumentActions'
@@ -5,8 +8,7 @@ import { useEditorKeyboardShortcuts } from './useEditorKeyboardShortcuts'
 import { useEditorProjectPersistence } from './useEditorProjectPersistence'
 import { useEditorToolActions } from './useEditorToolActions'
 import { useTextAnimation } from './useTextAnimation'
-
-
+import { useEditorPagesController } from './useEditorPagesController'
 export function useEditorApplicationController({
   settings,
   ui,
@@ -34,6 +36,62 @@ export function useEditorApplicationController({
   } = canvasCore
   const { recordHistory, initialize: initializeHistory, touch: touchHistory } = canvasCore.history
   const { fabricCanvas, setCanvasElement, setStageElement, resizeDisplay } = canvasCore.fabric
+  const loadTemplateIntoEditor = useCallback(
+    async (template: EditorTemplate): Promise<void> => {
+      const canvas = canvasRef.current
+      if (!canvas) {
+        throw new Error('The editor canvas is not ready yet.')
+      }
+      cropObjectRef.current = null
+      cropOriginalSnapshotRef.current = null
+      const loaded = await loadTemplate(canvas, template)
+      if (!loaded) {
+        throw new Error('The template could not be loaded.')
+      }
+      selectedFilterRef.current = 'original'
+      filterIntensityRef.current = 100
+      backgroundRemovedRef.current = false
+      backgroundColorRef.current = '#ffffff'
+
+      settings.setSelectedFilter('original')
+      settings.setFilterIntensity(100)
+      settings.setBackgroundRemoved(false)
+      settings.setBackgroundColorState('#ffffff')
+      settings.setBrightness(0)
+      settings.setContrast(0)
+      settings.setSaturation(0)
+      ui.setDimensions({
+        width: canvas.getWidth(),
+        height: canvas.getHeight(),
+      })
+
+      ui.setCropActive(false)
+      ui.setCropRotation(0)
+      ui.setImageThumbnail(template.thumbnail || '')
+      ui.setNotice('Template loaded successfully.')
+
+      settings.setProjectName(template.name)
+      settings.setActiveTool('select')
+      settings.setZoom(1)
+      syncObjects()
+      resizeDisplay()
+      initializeHistory(canvas)
+    },
+    [
+      canvasRef,
+      cropObjectRef,
+      cropOriginalSnapshotRef,
+      selectedFilterRef,
+      filterIntensityRef,
+      backgroundRemovedRef,
+      backgroundColorRef,
+      settings,
+      ui,
+      syncObjects,
+      resizeDisplay,
+      initializeHistory,
+    ],
+  )
   const animation = useTextAnimation({
     canvas: fabricCanvas,
     selectedObject: ui.selectedObject,
@@ -43,30 +101,6 @@ export function useEditorApplicationController({
   })
   const { background, table, pixelDrawing, objectEditing } = editorFeatures
   const { restoreCanvasSnapshot, restoreResize, canvasTransforms, undo, redo } = snapshotController
-
-  useEditorProjectPersistence({
-    canvasRef,
-    fabricCanvas,
-    suppressHistoryRef,
-    userEditedBeforeDraftLoadRef,
-    draftReady: ui.draftReady,
-    setDraftReady: ui.setDraftReady,
-    hasDocument: ui.hasDocument,
-    historyVersion,
-    draftSettings: settings.draftSettings,
-    resizeSettings: {
-      width: canvasTransforms.resize.width,
-      height: canvasTransforms.resize.height,
-      keepRatio: canvasTransforms.resize.keepRatio,
-      scaleArtwork: canvasTransforms.resize.scaleArtwork,
-    },
-    restoreCanvasSnapshot,
-    restoreDraftSettings: settings.restoreDraftSettings,
-    restoreResize,
-    initializeHistory,
-    touchHistory,
-    setNotice: ui.setNotice,
-  })
 
   const documentActions = useEditorDocumentActions({
     uploadOptions: {
@@ -117,7 +151,6 @@ export function useEditorApplicationController({
     recordHistory,
     syncObjects,
     resizeDisplay,
-    setNotice: ui.setNotice,
     setDraggingFile: ui.setDraggingFile,
   })
 
@@ -153,6 +186,57 @@ export function useEditorApplicationController({
     setNotice: ui.setNotice,
   })
 
+  const pages = useEditorPagesController({
+  canvasRef,
+  suppressHistoryRef,
+  cropObjectRef,
+  cropOriginalSnapshotRef,
+  imageObjectRef,
+  imageSourceRef,
+  selectedFilterRef,
+  filterIntensityRef,
+  backgroundRemovedRef,
+  backgroundColorRef,
+  setBackgroundRemoved: settings.setBackgroundRemoved,
+  setBackgroundColor: settings.setBackgroundColorState,
+  setIsRemovingBackground: settings.setIsRemovingBackground,
+  setBackgroundProgress: settings.setBackgroundProgress,
+  setSelectedFilter: settings.setSelectedFilter,
+  setFilterIntensity: settings.setFilterIntensity,
+  setDimensions: ui.setDimensions,
+  syncObjects,
+  resizeDisplay,
+  serializeEditorSnapshot: canvasCore.serializeEditorSnapshot,
+  restoreCanvasSnapshot,
+  initializeHistory,
+})
+
+  useEditorProjectPersistence({
+    canvasRef,
+    fabricCanvas,
+    suppressHistoryRef,
+    userEditedBeforeDraftLoadRef,
+    draftReady: ui.draftReady,
+    setDraftReady: ui.setDraftReady,
+    historyVersion,
+    pagesVersion: pages.version,
+    draftSettings: settings.draftSettings,
+    resizeSettings: {
+      width: canvasTransforms.resize.width,
+      height: canvasTransforms.resize.height,
+      keepRatio: canvasTransforms.resize.keepRatio,
+      scaleArtwork: canvasTransforms.resize.scaleArtwork,
+    },
+    restoreCanvasSnapshot,
+    getPagesSnapshot: pages.getPersistedState,
+    restorePages: pages.restorePersistedState,
+    restoreDraftSettings: settings.restoreDraftSettings,
+    restoreResize,
+    initializeHistory,
+    touchHistory,
+    setNotice: ui.setNotice,
+  })
+
   useEditorKeyboardShortcuts({
     undo,
     redo,
@@ -181,6 +265,7 @@ export function useEditorApplicationController({
       notice: ui.notice,
       setNotice: ui.setNotice,
     },
+    pages
   })
 
   return {
@@ -189,5 +274,6 @@ export function useEditorApplicationController({
     setUploadInputElement: documentActions.setUploadInputElement,
     setCanvasElement,
     setStageElement,
+    loadTemplateIntoEditor,
   }
 }

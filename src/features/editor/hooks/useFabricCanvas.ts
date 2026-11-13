@@ -75,6 +75,7 @@ export function useFabricCanvas({
         selection: true,
         backgroundColor: 'rgba(0,0,0,0)',
       })
+      canvas.upperCanvasEl.draggable = false
       canvasRef.current = canvas
       setFabricCanvas(canvas)
       callbacksRef.current.initializeHistory(canvas)

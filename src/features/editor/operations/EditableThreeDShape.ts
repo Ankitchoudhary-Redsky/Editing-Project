@@ -405,8 +405,8 @@ type ThreeDRotationTarget = FabricObject & {
 export function createThreeDRotationControl(
   isRotationTarget: (object: FabricObject) => object is ThreeDRotationTarget,
 ) {
-  const radius = 21
-  const iconSize = 25
+  const radius = 10
+  const iconSize = 14
 
   return new Control({
     x: 0,

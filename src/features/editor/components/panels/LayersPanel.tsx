@@ -30,12 +30,18 @@ function getLayerThumbnail(object: FabricObject) {
   if (!isCanvasBackedImage && cached?.key === key) return cached.source
 
   try {
-    const size = Math.max(object.getScaledWidth(), object.getScaledHeight(), 1)
-    const source = object.toDataURL({
-      format: 'png',
-      multiplier: Math.min(0.25, 32 / size),
-      enableRetinaScaling: false,
-    })
+    const objectCanvas = object.toCanvasElement({ multiplier: 1, enableRetinaScaling: false })
+    if (!objectCanvas.width || !objectCanvas.height) return ''
+    const thumbnailCanvas = document.createElement('canvas')
+    thumbnailCanvas.width = 32
+    thumbnailCanvas.height = 32
+    const context = thumbnailCanvas.getContext('2d')
+    if (!context) return ''
+    const scale = Math.min(32 / objectCanvas.width, 32 / objectCanvas.height)
+    const width = objectCanvas.width * scale
+    const height = objectCanvas.height * scale
+    context.drawImage(objectCanvas, (32 - width) / 2, (32 - height) / 2, width, height)
+    const source = thumbnailCanvas.toDataURL('image/png')
     layerThumbnailCache.set(object, { key, source })
     return source
   } catch {

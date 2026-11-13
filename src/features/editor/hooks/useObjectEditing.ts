@@ -30,12 +30,14 @@ export function useObjectEditing({
   strokeColor,
   strokeWidth,
   shapeOpacity,
+  manageCanvasEvents = true,
   setActiveTool,
   setTextValue,
   recordHistory,
+  syncObjects,
 }: UseObjectEditingOptions) {
   useEffect(() => {
-    if (!canvas) return
+    if (!canvas || !manageCanvasEvents) return
     const constrainAndSync = (event: { target?: FabricObject }) => {
       const target = event.target
       if (target && isShapeObject(target)) {
@@ -54,7 +56,7 @@ export function useObjectEditing({
       canvas.off('object:scaling', constrainAndSync)
       canvas.off('object:rotating', constrainAndSync)
     }
-  }, [canvas, imageObjectRef])
+  }, [canvas, imageObjectRef, manageCanvasEvents])
 
   const selectedIsShape = Boolean(
     selectedObject && !selectedIsImage && !(selectedObject instanceof IText) && !cropActive,
@@ -117,9 +119,13 @@ export function useObjectEditing({
 
   const addImageToShape = async (file: File) => {
     const canvas = canvasRef.current
-    if (!canvas || !selectedObject || !isShapeObject(selectedObject)) return
+    const name = String(selectedObject?.get('name') ?? '')
+    if (!canvas || !selectedObject || !isShapeObject(selectedObject) || /^line|^arrow/i.test(name)) return
     await addImageInsideShape(canvas, selectedObject, file)
+    canvas.setActiveObject(selectedObject)
+    syncObjects?.()
     recordHistory(true)
+    setActiveTool('shapes')
   }
 
   const updateText = (property: TextProperty, value: string | number) => {
@@ -151,6 +157,13 @@ export function useObjectEditing({
     const active = canvas?.getActiveObject()
     if (!canvas || !active) return
     if (active === imageObjectRef.current) {imageObjectRef.current = null;}
+    const shapeId = active.get('shapeId')
+    if (shapeId) {
+      const linkedObjects = canvas.getObjects().filter((object) =>
+        object.get('textParentId') === shapeId || object.get('imageParentId') === shapeId,
+      )
+      canvas.remove(...linkedObjects)
+    }
     canvas.remove(active)
     canvas.discardActiveObject()
     canvas.requestRenderAll()
@@ -241,7 +254,7 @@ export function useObjectEditing({
     imageSize?: number,
   ) => {
     const canvas = canvasRef.current
-    if (!canvas || !target || target === cropObjectRef.current) return
+    if (!canvas || !target || !canvas.getObjects().includes(target) || target === cropObjectRef.current) return
     const name = target.get('name')
     if (name === DRAWING_LAYER_NAME || name === BACKGROUND_IMAGE_NAME) return
     target.set('shadow', shadow)
