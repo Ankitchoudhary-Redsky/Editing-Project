@@ -100,6 +100,7 @@ export function useEditorDocumentActions({
     cropObjectRef.current = null;
     cropOriginalSnapshotRef.current = null;
     imageObjectRef.current = null;
+    uploadOptions.imageSourceRef.current = "";
     setHasImage(false);
     setHasDocument(false);
     setImageThumbnail("");

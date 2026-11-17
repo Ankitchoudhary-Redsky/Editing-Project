@@ -4,6 +4,16 @@ import { ImagePlus, Music2, RotateCcw, Trash } from 'lucide-react'
 import { useEditor } from '../../../editor/EditorContext'
 import { editorCopy } from '../../model/editorCopy'
 
+type UploadedPage = {
+  id: string
+  pageId: number | null
+  pageNumber: number
+  imageUrl: string
+  fileName: string
+  width: number
+  height: number
+}
+
 export function UploadPanel() {
   const { canvas, fabricCanvas, tools, pages } = useEditor()
 
@@ -21,33 +31,35 @@ export function UploadPanel() {
   }
 
   const showPageOne = canvas.hasImage || canvas.hasDocument || pages.items.length > 0 || canvas.hasDeletedPageOneImage
-  const uploadedPages = [
-    ...(showPageOne
-      ? [{
-          id: 'page-1',
-          pageId: null,
-          pageNumber: 1,
-          imageUrl: pages.activeId === null ? canvas.imageThumbnail || pages.pageOnePreview : pages.pageOnePreview,
-          fileName: 'Current image',
-          width: canvas.dimensions.width,
-          height: canvas.dimensions.height,
-        }]
-      : []),
-    ...pages.items.flatMap((page, index) => {
-      const pageNumber = index + 2
-      return page.imageUrl
-      ? [{
-          id: `page-${page.id}`,
-          pageId: page.id,
-          pageNumber,
-          imageUrl: page.imageUrl,
-          fileName: page.fileName ?? `Page ${pageNumber} image`,
-          width: page.width ?? 0,
-          height: page.height ?? 0,
-        }]
-      : []
-    }),
-  ]
+  const uploadedPages = pages.order.flatMap<UploadedPage>((pageId, index) => {
+    const pageNumber = index + 1
+    if (pageId === null) {
+      if (!showPageOne) return []
+      return [{
+        id: 'page-1',
+        pageId: null,
+        pageNumber,
+        imageUrl: pages.activeId === null
+          ? canvas.hasImage ? canvas.imageThumbnail || pages.pageOnePreview : ''
+          : pages.pageOnePreview,
+        fileName: 'Current image',
+        width: canvas.dimensions.width,
+        height: canvas.dimensions.height,
+      }]
+    }
+ 
+    const page = pages.items.find((item) => item.id === pageId)
+    if (!page?.imageUrl) return []
+    return [{
+      id: `page-${page.id}`,
+      pageId: page.id,
+      pageNumber,
+      imageUrl: page.imageUrl,
+      fileName: page.fileName ?? `Page ${pageNumber} image`,
+      width: page.width ?? 0,
+      height: page.height ?? 0,
+    }]
+  })
 
 
   return (

@@ -128,6 +128,7 @@ export function usePixelDrawing({
         originY: 'top',
         selectable: true,
         evented: true,
+        perPixelTargetFind: true,
       })
       layerImage.set('name', name)
       targetCanvas.add(layerImage)
@@ -156,6 +157,7 @@ export function usePixelDrawing({
 
     return targetCanvas.getObjects()
       .filter((object): object is FabricImage => isDrawingLayerName(object.get('name')) && object instanceof FabricImage)
+      .filter((image) => image.get('layerLocked') !== true)
       .map((image) => {
         const name = String(image.get('name'))
         const element = image.getElement()
@@ -180,6 +182,7 @@ export function usePixelDrawing({
       : [getDrawingLayer(mode)].filter((layer): layer is NonNullable<typeof layer> => layer !== null)
 
     for (const layer of layers) {
+      if (layer.image.get('layerLocked') === true) continue
       const context = layer.canvas.getContext('2d', { willReadFrequently: true })
       if (!context) continue
       const transform = createImageEditingTransform(layer.image)

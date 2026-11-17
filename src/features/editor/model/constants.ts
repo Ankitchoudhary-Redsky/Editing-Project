@@ -23,6 +23,7 @@ export const BASE_IMAGE_PROPERTY = 'isBaseImage'
 export const DEFAULT_PAGE_WIDTH = 1200
 export const DEFAULT_PAGE_HEIGHT = 800
 export const DRAWING_LAYER_NAME = '__pixel_studio_drawing_layer__'
+export const LAYER_DISPLAY_NAME_PROPERTY = 'layerDisplayName'
 export const DRAWING_LAYER_TOOL_NAMES = {
   pencil: `${DRAWING_LAYER_NAME}_pencil`,
   sketch: `${DRAWING_LAYER_NAME}_sketch`,
@@ -188,6 +189,8 @@ export function serializeCanvas(canvas: Canvas) {
     'threeDRotationX',
     'threeDRotationY',
     'threeDRotationZ',
+    LAYER_DISPLAY_NAME_PROPERTY,
+    'layerLocked',
     "shadowSize",
     "shadowArtworkSize",
     "shadowArtworkBaseScaleX",

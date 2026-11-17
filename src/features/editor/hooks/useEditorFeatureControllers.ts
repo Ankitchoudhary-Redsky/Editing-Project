@@ -103,6 +103,7 @@ export function useEditorFeatureControllers({
     canvasRef: refs.canvasRef,
     imageObjectRef: refs.imageObjectRef,
     activeTool: state.activeTool,
+    hasDocument: state.hasDocument,
     shapeToolMode: state.shapeToolMode,
     setActiveTool: actions.setActiveTool,
     shapeKind: state.shapeKind,

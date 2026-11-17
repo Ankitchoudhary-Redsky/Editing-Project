@@ -18,7 +18,7 @@ export function EditorShell({
 
   const handleDragOver = (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
-    tools.setDraggingFile(true);
+    tools.setDraggingFile(event.dataTransfer?.types.includes("Files"));
   };
 
   const handleDragLeave = (event: DragEvent<HTMLElement>) => {

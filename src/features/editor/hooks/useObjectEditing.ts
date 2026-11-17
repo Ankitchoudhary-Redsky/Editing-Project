@@ -11,7 +11,7 @@ import type {
   TextProperty,
   UseObjectEditingOptions,
 } from "../model/types";
-import { BACKGROUND_IMAGE_NAME, isDrawingLayerName, shapeNames } from "../model/constants";
+import { BACKGROUND_IMAGE_NAME, isDrawingLayerName, LAYER_DISPLAY_NAME_PROPERTY, shapeNames } from "../model/constants";
 import { objectName } from "../model/objectName";
 import {
   addImageInsideShape,
@@ -262,16 +262,15 @@ export function useObjectEditing({
   const setLayerLocked = (object: FabricObject, locked: boolean) => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const isPrimaryImage = object === imageObjectRef.current
     object.set({
       layerLocked: locked,
-      selectable: !locked && !isPrimaryImage,
-      evented: !locked && !isPrimaryImage,
-      lockMovementX: locked || isPrimaryImage,
-      lockMovementY: locked || isPrimaryImage,
-      lockScalingX: locked || isPrimaryImage,
-      lockScalingY: locked || isPrimaryImage,
-      lockRotation: locked || isPrimaryImage,
+      selectable: !locked ,
+      evented: !locked ,
+      lockMovementX: locked ,
+      lockMovementY: locked,
+      lockScalingX: locked ,
+      lockScalingY: locked ,
+      lockRotation: locked ,
     })
     if (locked && canvas.getActiveObject() === object) canvas.discardActiveObject()
     canvas.requestRenderAll()
@@ -282,7 +281,11 @@ export function useObjectEditing({
     const canvas = canvasRef.current
     const normalizedName = name.trim()
     if (!canvas || !normalizedName) return
-    object.set('name', normalizedName)
+    if (isDrawingLayerName(object.get('name'))) {
+      object.set(LAYER_DISPLAY_NAME_PROPERTY, normalizedName)
+    } else {
+      object.set('name', normalizedName)
+    }
     canvas.requestRenderAll()
     recordHistory(true)
   }
@@ -294,11 +297,33 @@ export function useObjectEditing({
     const canvas = canvasRef.current;
     if (!canvas) return;
     if (direction === "forward") canvas.bringObjectForward(object);
-    else if (object !== imageObjectRef.current)
+    else if (direction === "backward")
       canvas.sendObjectBackwards(object);
     canvas.requestRenderAll();
     recordHistory(true);
   };
+
+  const handleReorder = (draggedIndex: number, index: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const objects = canvas.getObjects();
+    if (
+      draggedIndex < 0 ||
+      draggedIndex >= objects.length ||
+      index < 0 ||
+      index >= objects.length
+    )
+      return;
+    const draggedObject = objects[draggedIndex];
+    if (!draggedObject || typeof draggedObject.get != "function" || typeof draggedObject.set != "function") 
+       return;
+
+    canvas.remove(draggedObject);
+    const targetIndex = Math.min(index, canvas.getObjects().length);
+    canvas.insertAt(targetIndex, draggedObject);
+    canvas.requestRenderAll();
+    recordHistory(true);
+  }
 
   const selectLayers = (objects: FabricObject[]) => {
     const activeCanvas = canvasRef.current;
@@ -433,6 +458,7 @@ export function useObjectEditing({
     selectLayers,
     deleteLayers,
     moveLayers,
+    handleReorder,
     duplicateLayers,
     moveLayer,
     updateShapeAppearance,

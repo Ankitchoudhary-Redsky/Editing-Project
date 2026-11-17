@@ -81,12 +81,15 @@ export function useEditorPagesController({
   const [switching, setSwitching] = useState(false)
   const [pageOnePreview, setPageOnePreview] = useState('')
   const [persistedStateVersion, setPersistedStateVersion] = useState(0)
+  const [pageOrder, setPageOrderState] = useState<Array<number | null>>([null])
 
   const itemsRef = useRef<AddedEditorPage[]>([])
   const activeIdRef = useRef<number | null>(null)
   const pageOneSnapshotRef = useRef<string | undefined>(undefined)
   const pageOneImageSourceRef = useRef('')
   const actionsRef = useRef<AddedPageActions | null>(null)
+  const pageOrderRef = useRef<Array<number | null>>([null])
+
 
   // Keep refs in sync so async page switching always reads the latest state.
   const setItems = useCallback<Dispatch<SetStateAction<AddedEditorPage[]>>>(
@@ -97,6 +100,17 @@ export function useEditorPagesController({
 
       itemsRef.current = nextItems
       setItemsState(nextItems)
+      const validIds = new Set<number | null>([null, ...nextItems.map((page) => page.id)])
+      const nextOrder = pageOrderRef.current.filter((PageId) => validIds.has(PageId))
+      nextItems.forEach((page) => {
+        if (!nextOrder.includes(page.id)) {
+          nextOrder.push(page.id)
+        }
+      })
+      if (nextOrder.some((pageId, index) => pageId !== pageOrderRef.current[index])|| nextOrder.length !== pageOrderRef.current.length) {
+        pageOrderRef.current = nextOrder
+        setPageOrderState(nextOrder)
+      }
       setPersistedStateVersion((version) => version + 1)
     },
     [],
@@ -166,6 +180,34 @@ export function useEditorPagesController({
     setItems,
   ])
 
+  const setPageOrder = useCallback((nextOrder: Array<number | null>) => {
+    pageOrderRef.current = nextOrder
+    setPageOrderState(nextOrder)
+    setPersistedStateVersion((version) => version + 1)
+  }, [])
+
+  const reorder = useCallback((
+      fromId: number | null,
+      toId: number | null,
+    ) => {
+      if (fromId === toId) return
+ 
+      const currentOrder = pageOrderRef.current
+ 
+      const fromIndex = currentOrder.indexOf(fromId)
+      const toIndex = currentOrder.indexOf(toId)
+ 
+      if (fromIndex === -1 || toIndex === -1) return
+ 
+      const nextOrder = [...currentOrder]
+      const [movedPage] = nextOrder.splice(fromIndex, 1)
+ 
+      nextOrder.splice(toIndex, 0, movedPage)
+ 
+      setPageOrder(nextOrder)
+  }, [setPageOrder])
+ 
+
   const createBlankSnapshot = useCallback((source: string): string => {
     const parsed = JSON.parse(source) as SnapshotData
 
@@ -195,12 +237,38 @@ export function useEditorPagesController({
     pageOneSnapshot: pageOneSnapshotRef.current,
     pageOneImageSource: pageOneImageSourceRef.current,
     pageOnePreview,
-  }), [activeId, items, pageOnePreview])
+    pageOrder,
+  }), [activeId, items, pageOnePreview, pageOrder])
 
   const restorePersistedState = useCallback((saved?: PersistedEditorPages) => {
     const restoredItems = Array.isArray(saved?.items)
       ? saved.items.filter((page) => page && Number.isInteger(page.id))
       : []
+
+    const validIds = new Set<number | null>([
+      null,
+      ...restoredItems.map((page) => page.id),
+    ])
+ 
+    const restoredOrder = Array.isArray(saved?.pageOrder)
+      ? saved.pageOrder.filter(
+          (id): id is number | null => validIds.has(id),
+        )
+      : [null, ...restoredItems.map((page) => page.id)]
+ 
+    const uniqueOrder = restoredOrder.filter(
+      (id, index) => restoredOrder.indexOf(id) === index,
+    )
+ 
+    for (const id of validIds) {
+      if (!uniqueOrder.includes(id)) {
+        uniqueOrder.push(id)
+      }
+    }
+ 
+    pageOrderRef.current = uniqueOrder
+    setPageOrderState(uniqueOrder)
+ 
     const requestedActiveId = saved?.activeId ?? null
     const restoredActiveId = requestedActiveId === null || restoredItems.some((page) => page.id === requestedActiveId)
       ? requestedActiveId
@@ -346,6 +414,27 @@ export function useEditorPagesController({
     actionsRef.current?.delete(pageId)
     }, [])
 
+  const deleteFirstPage = useCallback(async () => {
+    const firstPage = itemsRef.current[0]
+    if (!firstPage) return false
+    await select(firstPage.id)
+    if (activeIdRef.current !== firstPage.id) return false
+    saveActivePage()
+    const promotedPage = itemsRef.current.find(
+        (page) => page.id === firstPage.id,
+    )
+    if (!promotedPage) return false
+    pageOneSnapshotRef.current = promotedPage.snapshot
+    pageOneImageSourceRef.current = promotedPage.imageSource || promotedPage.imageUrl || ''
+    setPageOnePreview(promotedPage.preview || '')
+    setItems((current) =>
+        current.filter((page) => page.id !== promotedPage.id),
+    )
+    setActiveId(null)
+    return true
+  }, [select, saveActivePage, setItems, setActiveId])
+ 
+
   const registerActions = useCallback((actions: AddedPageActions | null) => {
     actionsRef.current = actions
   }, [])
@@ -366,5 +455,8 @@ export function useEditorPagesController({
     select,
     getSnapshot,
     registerActions,
+    deleteFirstPage,
+    reorder,
+    order: pageOrder,
   }
 }

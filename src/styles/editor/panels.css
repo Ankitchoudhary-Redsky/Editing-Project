@@ -79,6 +79,7 @@
 }
 .panel-subtools {
   display: flex;
+  flex:0 0 auto;
   gap: 4px;
   padding: 9px 12px;
   overflow-x: auto;
@@ -691,7 +692,12 @@
 }
 .layer-row.selected {
   border-color: #d4e6d9;
-  background: #f0f7f2;
+  background: #e5f2e9;
+  box-shadow: inset 3px 0 #2c7660;
+}
+.layer-row.selected .layer-select {
+  color: #214f40;
+  font-weight: 650;
 }
 .layer-row.hidden .layer-select { opacity: 0.55; }
 .layer-rename-input { flex: 1; min-width: 0; height: 28px; padding: 0 6px; border: 1px solid #94b7a0; border-radius: 4px; color: #34443b; font: inherit; font-size: 11px; }
@@ -1506,3 +1512,10 @@
 .page-icon-button.delete-page-icon { color: #a5534b; }
 .page-icon-button.delete-page-icon:hover { color: #8d3932; background: #fff0ed; }
 .page-upload-input { display: none; }
+.uploaded-pages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow: auto;
+}

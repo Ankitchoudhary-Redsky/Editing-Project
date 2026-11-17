@@ -23,9 +23,7 @@ import {
   threeDShapeGroups,
   updateThreeDRotation,
 } from '../../operations/threeDShapes'
-import { threeDEmojiAssets, threeDEmojiCategories, type ThreeDEmojiCategory } from '../../operations/threeDEmojiAssets'
-import { addThreeDEmoji as addModelThreeDEmoji } from '../../operations/threeDEmojis'
-
+import { threeDEmojiAssets, type ThreeDEmojiCategory } from '../../operations/threeDEmojiAssets'
 const lineStyles = [
   { style: 'straight', label: 'Straight', icon: Minus },
   { style: 'curve-up', label: 'Curve up', icon: Spline },
@@ -59,7 +57,6 @@ export function ShapesPanel() {
   const [active3DGroup, setActive3DGroup] = useState<(typeof threeDShapeGroups)[number]>(threeDShapeGroups[0])
   const [activeEmojiCategory, setActiveEmojiCategory] = useState<'All' | ThreeDEmojiCategory | (typeof generatedEmojiCategories)[number]>('All')
   const [emojiPreviews, setEmojiPreviews] = useState<Record<string, string>>({})
-  const [loadingEmojiId, setLoadingEmojiId] = useState<string | null>(null)
   const selectedThreeDName = String(canvas.selected?.get('name') ?? '')
   const hasSelectedThreeDObject = selectedThreeDName.startsWith('3D ')
 
@@ -119,22 +116,6 @@ export function ShapesPanel() {
       console.error('Failed to prepare 3D shape tools:', error)
       tools.setNotice('Could not initialize Three.js in this browser.')
     } finally {
-      setAddingShape(false)
-    }
-  }
-
-  const addEmoji = async (emoji: (typeof threeDEmojiAssets)[number]) => {
-    if (!fabricCanvas || addingShape) return
-    setAddingShape(true)
-    setLoadingEmojiId(emoji.id)
-    try {
-      await addModelThreeDEmoji(fabricCanvas, emoji)
-      tools.setNotice(`${emoji.displayName} 3D emoji added.`)
-    } catch (error) {
-      console.error(`Could not load 3D emoji ${emoji.id}:`, error)
-      tools.setNotice(`Could not load the ${emoji.displayName} 3D model.`)
-    } finally {
-      setLoadingEmojiId(null)
       setAddingShape(false)
     }
   }
@@ -361,7 +342,7 @@ export function ShapesPanel() {
             <section className="three-d-shape-group">
               <span className="field-label">3D Emoji Library</span>
               <div className="three-d-category-tabs emoji-category-tabs" role="group" aria-label="Emoji categories">
-                {(['All', ...new Set([...threeDEmojiCategories, ...generatedEmojiCategories])] as const).map((category) => (
+                {(['All', ...new Set([...generatedEmojiCategories])] as const).map((category) => (
                   <button
                     key={category}
                     type="button"
@@ -369,23 +350,6 @@ export function ShapesPanel() {
                     aria-pressed={activeEmojiCategory === category}
                     onClick={() => setActiveEmojiCategory(category)}
                   >{category}</button>
-                ))}
-              </div>
-              {loadingEmojiId && <p className="three-d-loading" role="status">Loading {threeDEmojiAssets.find((emoji) => emoji.id === loadingEmojiId)?.displayName} model…</p>}
-              <div className="three-d-emoji-grid">
-                {filteredThreeDEmojiAssets.map((emoji) => (
-                  <button
-                    key={emoji.id}
-                    type="button"
-                    className="three-d-emoji-choice"
-                    disabled={addingShape}
-                    onClick={() => void addEmoji(emoji)}
-                    aria-label={`Add 3D ${emoji.displayName} emoji`}
-                    title={`Add ${emoji.displayName}`}
-                  >
-                    <img src={emoji.thumbnail} alt="" />
-                    <small>{emoji.displayName}</small>
-                  </button>
                 ))}
               </div>
               <div className="three-d-emoji-grid generated-emoji-grid">
@@ -401,7 +365,7 @@ export function ShapesPanel() {
                   >
                     <span className="three-d-emoji-preview" aria-hidden="true">
                       {emojiPreviews[emoji.emoji]
-                        ? <img src={emojiPreviews[emoji.emoji]} alt="" />
+                        ? <img src={emojiPreviews[emoji.emoji]} alt="" width="50" height="50" />
                         : <span>{emoji.emoji}</span>}
                     </span>
                     <small>{emoji.label}</small>

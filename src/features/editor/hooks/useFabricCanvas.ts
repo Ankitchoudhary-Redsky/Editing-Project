@@ -4,6 +4,36 @@ import { Canvas, type FabricObject } from 'fabric'
 import { EditableThreeDShape, disposeSharedThreeDRenderer } from '../operations/EditableThreeDShape'
 import { EditableThreeDEmoji } from '../operations/EditableThreeDEmoji'
 
+
+function renderRotationControl(ctx: CanvasRenderingContext2D, left: number, top: number) {
+  ctx.save()
+  ctx.translate(left, top)
+  ctx.fillStyle = '#ffffff'
+  ctx.strokeStyle = '#2c7660'
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  ctx.arc(0, 0, 11, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  ctx.strokeStyle = '#2c7660'
+  ctx.lineWidth = 1.8
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.beginPath()
+  ctx.arc(0, 0, 5, -Math.PI * 0.78, Math.PI * 0.55)
+  ctx.stroke()
+  const arrowX = Math.cos(Math.PI * 0.55) * 5
+  const arrowY = Math.sin(Math.PI * 0.55) * 5
+  ctx.beginPath()
+  ctx.moveTo(arrowX, arrowY)
+  ctx.lineTo(arrowX - 3.2, arrowY - 0.4)
+  ctx.moveTo(arrowX, arrowY)
+  ctx.lineTo(arrowX - 0.4, arrowY - 3.2)
+  ctx.stroke()
+  ctx.restore()
+}
+ 
+
 function calculateFitScale(canvas: Canvas, stage: HTMLDivElement) {
   const bounds = stage.getBoundingClientRect()
   return Math.max(
@@ -86,6 +116,11 @@ export function useFabricCanvas({
         if (callbacks.shouldSyncObjects?.() !== false) callbacks.syncObjects()
         callbacks.recordHistory()
       }
+      const objectAdded = (event: { target?: FabricObject }) => {
+        const rotationControl = event.target?.controls?.mtr
+        if (rotationControl) rotationControl.render = renderRotationControl
+        changed()
+      }
       const selectionChanged = () => callbacksRef.current.syncSelection()
   const userInteracted = () => callbacksRef.current.onUserInteraction?.()
       const releaseThreeDObject = (event: { target?: FabricObject }) => {
@@ -98,7 +133,7 @@ export function useFabricCanvas({
       canvas.on('selection:created', selectionChanged)
       canvas.on('selection:updated', selectionChanged)
       canvas.on('selection:cleared', selectionChanged)
-      canvas.on('object:added', changed)
+      canvas.on('object:added', objectAdded)
       canvas.on('object:modified', changed)
       canvas.on('object:removed', changed)
       canvas.on('text:changed', changed)
@@ -108,7 +143,7 @@ export function useFabricCanvas({
         canvas?.off('selection:created', selectionChanged)
         canvas?.off('selection:updated', selectionChanged)
         canvas?.off('selection:cleared', selectionChanged)
-        canvas?.off('object:added', changed)
+        canvas?.off('object:added', objectAdded)
         canvas?.off('object:modified', changed)
         canvas?.off('object:removed', changed)
         canvas?.off('text:changed', changed)

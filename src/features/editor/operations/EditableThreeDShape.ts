@@ -39,7 +39,7 @@ function getRotate3dIcon(onLoad?: () => void) {
 
   const svg = renderToStaticMarkup(
     createElement(Rotate3d, {
-      size: 24,
+      size: 32,
       color: '#ffffff',
       strokeWidth: 2.5,
     })
@@ -410,8 +410,8 @@ export function createThreeDRotationControl(
   isRotationTarget: (object: FabricObject) => object is ThreeDRotationTarget,
   axis: RotationAxis = 'xy',
 ) {
-  const radius = 10
-  const iconSize = 14
+  const radius = 22
+  const iconSize = 32
 
   return new Control({
     x: axis === 'z' ? 0.5 : 0,
@@ -420,6 +420,9 @@ export function createThreeDRotationControl(
     offsetY: 0,
     sizeX: radius * 2 + 8,
     sizeY: radius * 2 + 8,
+    touchSizeX: radius * 2 + 12,
+    touchSizeY: radius * 2 + 12,
+
     actionName: 'rotate3d',
     cursorStyle: 'grab',
 
@@ -468,10 +471,10 @@ export function createThreeDRotationControl(
         0, 0, radius
       )
 
-    //   background.addColorStop(0, 'rgba(255,255,255,0.98)')
+      background.addColorStop(0 ,'#527d69')
     //   background.addColorStop(0.45, 'rgba(245,247,250,0.96)')
     //   background.addColorStop(0.8, 'rgba(220,224,230,0.92)')
-    //   background.addColorStop(1, 'rgba(255,255,255,0.98)')
+      background.addColorStop(1, '#244b3b')
 
       ctx.fillStyle = background
       ctx.fill()
@@ -480,8 +483,8 @@ export function createThreeDRotationControl(
       // 2. Transparent glass border
       ctx.beginPath()
       ctx.arc(0, 0, radius - 0.5, 0, Math.PI * 2)
-      ctx.strokeStyle = 'rgba(150, 160, 175, 0.42)'
-      ctx.lineWidth = 1.2
+      ctx.strokeStyle = 'rgba(255,255,255,0.92)'
+      ctx.lineWidth = 1.5
       ctx.stroke()
 
       // 3. Inner glossy edge

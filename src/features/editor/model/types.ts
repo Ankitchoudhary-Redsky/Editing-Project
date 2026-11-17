@@ -30,6 +30,7 @@ export type EditorTool =
   | "resize"
   | "text"
   | "shapes"
+  | "retouch"
   | "adjust"
   | "music"
   | "filters"
@@ -210,6 +211,7 @@ export type PersistedEditorPages = {
   pageOneSnapshot?: string
   pageOneImageSource?: string
   pageOnePreview?: string
+  pageOrder?: Array<number|null>
 }
 export type AddedPageActions = {
   replace: (pageId: number) => void
@@ -277,6 +279,7 @@ export type UseShapeDrawingOptions = {
   canvasRef: MutableRefObject<Canvas | null>;
   imageObjectRef: MutableRefObject<FabricImage | null>;
   activeTool: EditorTool;
+  hasDocument: boolean;
   shapeToolMode: ShapeToolMode
   setActiveTool: (tool: EditorTool) => void
   shapeKind: ShapeKind;
@@ -378,11 +381,14 @@ export interface EditorContextValue {
     saveActivePage: () => void
     getPersistedState: () => PersistedEditorPages
     restorePersistedState: (pages?: PersistedEditorPages) => void
+    deleteFirstPage: () => Promise<boolean>
     replace: (pageId: number) => void
     delete: (pageId: number) => void
     select: (pageId: number | null) => Promise<void>
     getSnapshot: (pageId: number | null) => string | undefined
     registerActions: (actions: AddedPageActions | null) => void
+    order: Array<number|null>
+    reorder: (fromId: number | null , toId: number | null) => void
   }
 
   history: {
@@ -529,6 +535,10 @@ export interface EditorContextValue {
     moveLayer: (
       object: FabricObject,
       direction: "forward" | "backward",
+    ) => void;
+    handleReorder: (
+      fromIndex: number,
+      toIndex: number,
     ) => void;
     moveLayers: (
       objects: FabricObject[],

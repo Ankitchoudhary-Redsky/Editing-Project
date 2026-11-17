@@ -14,6 +14,7 @@ export function useShapeDrawing({
   activeTool,
   shapeToolMode,
   setActiveTool,
+  hasDocument,
   shapeKind,
   threeDShapeKind,
   lineStyle,
@@ -42,44 +43,39 @@ export function useShapeDrawing({
     const drawingThreeD = shapeToolActive && shapeToolMode === '3d'
     const drawingActive = drawing || drawingThreeD
     ;(canvas as typeof canvas & { isDrawingThreeDShape?: boolean }).isDrawingThreeDShape = drawingThreeD
-    canvas.selection = !shapeToolActive || shapeToolMode === '2d';
+    canvas.selection = !drawingActive;
     canvas.skipTargetFind = drawing;
     if (drawingActive) canvas.discardActiveObject();
     canvas.defaultCursor = drawingActive ? "crosshair" : "default";
-    // canvas.hoverCursor = 'move'
-    const backgroundLayers = canvas.getObjects().filter((object) => object.get('name') === BACKGROUND_IMAGE_NAME)
-    backgroundLayers.forEach((object) => {
+    canvas.hoverCursor =  drawingActive ? "crosshair" :'move' 
+    canvas.requestRenderAll()
+    const isBackgroundImage = (object: FabricObject) =>
+      object === imageObjectRef.current || object.get('name') === BACKGROUND_IMAGE_NAME
+    const setImageDrawingTargeting = (object: FabricObject) => {
+      if (!isBackgroundImage(object)) return
       const locked = object.get('layerLocked') === true
       object.set({
         selectable: !drawingActive && !locked,
         evented: !locked,
-        lockMovementX: drawingActive || locked,
-        lockMovementY: drawingActive || locked,
-        lockScalingX: drawingActive || locked,
-        lockScalingY: drawingActive || locked,
-        lockRotation: drawingActive || locked,
       })
-    })
-    if (drawingActive && backgroundLayers.some((object) => canvas.getActiveObject() === object)) {
+    }
+    canvas.getObjects().forEach(setImageDrawingTargeting)
+    const handleObjectAdded = (event: { target?: FabricObject }) => {
+      if (event.target) setImageDrawingTargeting(event.target)
+    }
+    canvas.on('object:added', handleObjectAdded)
+    if (drawingActive && canvas.getActiveObject() && isBackgroundImage(canvas.getActiveObject()!)) {
       canvas.discardActiveObject()
     }
-    canvas.requestRenderAll()
-    canvas.hoverCursor = drawingActive ? "crosshair" : "move";
-
+ 
     const handlePointerDown = (event: { e: TPointerEvent }) => {
+      if ((!drawing && !drawingThreeD) || !hasDocument) return
       const target = canvas.findTarget(event.e)
-      if (!drawing && !drawingThreeD) return
-      if (
-        target &&
-        target !== imageObjectRef.current &&
-        target.get('name') !== BACKGROUND_IMAGE_NAME
-      ) {
-        return
-      }
-      const backgroundTarget = target?.get('name') === BACKGROUND_IMAGE_NAME ? target : null
-      if (backgroundTarget) {
-        canvas.discardActiveObject()
-      }
+      if (target && !isBackgroundImage(target)) return
+      const backgroundTarget = target && isBackgroundImage(target)
+        ? target
+        : target ? null : imageObjectRef.current
+ 
       const bounds = getImageBounds(canvas, imageObjectRef.current)
       const pointer = canvas.getPointer(event.e)
       const start = {
@@ -142,12 +138,10 @@ export function useShapeDrawing({
         point = { x: drawingState.start.x + directionX * size, y: drawingState.start.y + directionY * size }
       }
       const dragDistance = Math.hypot(point.x - drawingState.start.x, point.y - drawingState.start.y)
-      if (drawingState.pendingBackgroundClick) {
-        if (dragDistance >= 4) {
-          drawingState.pendingBackgroundClick = false
-        }
+      if (dragDistance >= 7) {
+        drawingState.hasDragged = true
+        drawingState.pendingBackgroundClick = false
       }
-      if (dragDistance >= 4) drawingState.hasDragged = true
       const left = Math.min(drawingState.start.x, point.x)
       const top = Math.min(drawingState.start.y, point.y)
       const width = Math.max(1, Math.abs(point.x - drawingState.start.x))
@@ -178,16 +172,7 @@ export function useShapeDrawing({
       if (drawingState.pendingBackgroundClick && drawingState.backgroundTarget) {
         if (drawingState.preview) canvas.remove(drawingState.preview)
         const background = drawingState.backgroundTarget
-        background.set({
-          selectable: true,
-          evented: true,
-          lockMovementX: false,
-          lockMovementY: false,
-          lockScalingX: false,
-          lockScalingY: false,
-          lockRotation: false,
-        })
-        canvas.setActiveObject(background)
+        if (background.get('layerLocked') !== true) canvas.setActiveObject(background)
         canvas.requestRenderAll()
         suppressHistoryRef.current = false
         setActiveTool('layers')
@@ -218,26 +203,21 @@ export function useShapeDrawing({
       canvas.off('mouse:down', handlePointerDown)
       canvas.off('mouse:move', handlePointerMove)
       canvas.off('mouse:up', handlePointerUp)
+      canvas.off('object:added', handleObjectAdded)
       if (shapeDrawingRef.current?.preview) canvas.remove(shapeDrawingRef.current.preview)
       shapeDrawingRef.current = null
       suppressHistoryRef.current = false
       canvas.skipTargetFind = false
       canvas.selection = true
-      ;(canvas as typeof canvas & { isDrawingThreeDShape?: boolean }).isDrawingThreeDShape = false
-      backgroundLayers.forEach((object) => {
+      canvas.requestRenderAll()
+      canvas.getObjects().forEach((object) => {
+        if(!isBackgroundImage(object)) return
         const locked = object.get('layerLocked') === true
         object.set({
           selectable: !locked,
           evented: !locked,
-          lockMovementX: locked,
-          lockMovementY: locked,
-          lockScalingX: locked,
-          lockScalingY: locked,
-          lockRotation: locked,
         })
       })
-      syncObjects()
-      canvas.requestRenderAll()
     }
   }, [activeTool, canvasInstance, canvasRef, fillColor, imageObjectRef, lineStyle, recordHistory, setActiveTool, shapeKind, shapeOpacity, shapeToolMode, strokeColor, strokeWidth, suppressHistoryRef, syncObjects, threeDShapeKind, transparentFill])
 }

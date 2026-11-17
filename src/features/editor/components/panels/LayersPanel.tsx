@@ -54,6 +54,7 @@ export function LayersPanel() {
   const [checked, setChecked] = useState<FabricObject[]>([])
   const [renamingObject, setRenamingObject] = useState<FabricObject | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const cancelRenameRef = useRef(false)
   const contentObjects = canvas.objects.filter((object) => {
     const name = object.get('name')
@@ -211,6 +212,25 @@ export function LayersPanel() {
           <div
             key={isTable ? `table-${tableId}` : `${index}-${layerName}`}
             className={`layer-row ${isSelected ? 'selected' : ''} ${object.visible === false ? 'hidden' : ''}`}
+            draggable={!isLocked && renamingObject !== object}
+            onDragStart={(event) => {
+              setDraggedIndex(index)
+              event.dataTransfer.dropEffect = 'move';
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'move';
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (draggedIndex === null || draggedIndex === index)  {
+                setDraggedIndex(null)
+                return
+              } 
+              shapes.handleReorder(draggedIndex, index)
+              setDraggedIndex(null)          
+            }}
+            onDragEnd={() => setDraggedIndex(null)}
           >
             {!isTable && (
               <button
@@ -284,7 +304,7 @@ export function LayersPanel() {
               className="layer-mini"
               title={isLocked ? 'Unlock layer' : 'Lock layer'}
               aria-label={`${isLocked ? 'Unlock' : 'Lock'} ${layerName}`}
-              disabled={isTable || isDrawingLayer}
+              disabled={isTable}
               onClick={() => shapes.setLayerLocked(object, !isLocked)}
             >
               {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
@@ -294,7 +314,7 @@ export function LayersPanel() {
               className="layer-mini"
               title="Rename layer"
               aria-label={`Rename ${layerName}`}
-              disabled={isTable || isDrawingLayer}
+              disabled={isTable}
               onClick={() => {
                 setRenameValue(layerName)
                 setRenamingObject(object)
