@@ -78,13 +78,13 @@ export function useImageUpload({
         originX: 'left',
         originY: 'top',
         isBaseImage: true,
-        selectable: false,
-        evented: false,
-        lockMovementX: true,
-        lockMovementY: true,
-        lockScalingX: true,
-        lockScalingY: true,
-        lockRotation: true,
+        selectable: true,
+        evented: true,
+        lockMovementX: false,
+        lockMovementY: false,
+        lockScalingX: false,
+        lockScalingY: false,
+        lockRotation: false,
       })
       image.set('name', file.name.replace(/\.[^.]+$/, '').slice(0, 24) || 'Image')
       canvas.add(image)

@@ -79,6 +79,7 @@
 }
 .panel-subtools {
   display: flex;
+  flex: 0 0 auto;
   gap: 4px;
   padding: 9px 12px;
   overflow-x: auto;
@@ -724,7 +725,8 @@
 .layer-heading { display: flex; justify-content: space-between; padding: 2px 1px 5px; color: #9aa39d; font-size: 9px; font-weight: 700; letter-spacing: .5px; }
 .layer-row { display: flex; min-height: 43px; align-items: center; gap: 2px; padding: 3px; border: 1px solid transparent; border-radius: 5px; }
 .layer-row:hover { background: #f7f9f7; }
-.layer-row.selected { border-color: #d4e6d9; background: #f0f7f2; }
+.layer-row.selected { border-color: #2c7660; background: #e5f2e9; box-shadow: inset 3px 0 #2c7660; }
+.layer-row.selected .layer-select { color: #214f40; font-weight: 650; }
 .layer-select { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; overflow: hidden; border: 0; color: #47574d; background: transparent; text-align: left; font: inherit; font-size: 11px; cursor: pointer; }
 .layer-select > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .layer-thumb { display: grid; width: 26px; height: 26px; flex: 0 0 26px; place-items: center; border-radius: 4px; color: #6d8979; background: #eaf1ec; }
@@ -842,3 +844,10 @@
 .page-icon-button.delete-page-icon { color: #a5534b; }
 .page-icon-button.delete-page-icon:hover { color: #8d3932; background: #fff0ed; }
 .page-upload-input { display: none; }
+.uploaded-pages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow: auto;
+}

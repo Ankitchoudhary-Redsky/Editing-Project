@@ -86,8 +86,9 @@ export function usePixelDrawing({
         top: 0,
         originX: 'left',
         originY: 'top',
-        selectable: false,
-        evented: false,
+        selectable: true,
+        evented: true,
+        perPixelTargetFind: true,
       })
       layerImage.set('name', DRAWING_LAYER_NAME)
       targetCanvas.add(layerImage)

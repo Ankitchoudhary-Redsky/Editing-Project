@@ -53,6 +53,7 @@ export function LayersPanel() {
   const { canvas, shapes, table, tools } = useEditor()
   const [renamingObject, setRenamingObject] = useState<FabricObject | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const layerEntries: Array<{
     object: FabricObject
     index: number
@@ -88,7 +89,30 @@ export function LayersPanel() {
           shapes.renameLayer(object, renameValue)
           setRenamingObject(null)
         }
-        return <div key={isTable ? `table-${tableId}` : `${index}-${layerName}`} className={`layer-row ${isSelected ? 'selected' : ''} ${object.visible ? '' : 'hidden'}`}>
+        return <div key={isTable ? `table-${tableId}` : `${index}-${layerName}`} 
+        className={`layer-row ${isSelected ? 'selected' : ''} ${object.visible ? '' : 'hidden'}`}
+        draggable={!isLocked && renamingObject !== object}
+        onDragOver={(event) => {
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'move'
+        }}
+        onDragStart={(event) => {
+          setDraggedIndex(index)
+          event.dataTransfer.effectAllowed = 'move'
+        }}
+        onDrop={(event) => {
+          event.preventDefault()
+          if (draggedIndex === null || draggedIndex === index) {
+            setDraggedIndex(null)
+            return
+          }
+          shapes.handleReorder(draggedIndex, index)
+          setDraggedIndex(null)
+        }}
+        onDragEnd={() => {
+          setDraggedIndex(null)
+        }}
+        >
           {renamingObject === object ? <input
             className="layer-rename-input"
             aria-label="Layer name"

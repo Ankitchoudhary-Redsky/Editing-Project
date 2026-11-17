@@ -6,7 +6,7 @@ import type {
   OriginalImageState,
   UseMagicImageRemovalOptions,
 } from '../model/types'
-import { createImageEditingTransform, createVisibleImageCanvas, getImageBrushScale, toImagePoint } from '../operations/pixelCanvas'
+import { createImageEditingTransform, createVisibleImageCanvas, getImageBrushScale, toImagePoint, createFilteredImageCanvas } from '../operations/pixelCanvas'
 
 export function useMagicImageRemoval({
   canvasRef,
@@ -23,6 +23,7 @@ export function useMagicImageRemoval({
   const transformRef = useRef<ImageEditingTransform | null>(null)
   const removalInProgressRef = useRef(false)
   const originalImageStateRef = useRef<OriginalImageState | null>(null)
+  const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
   const restoreOriginalImage = useCallback((targetCanvas: Canvas | null, image: FabricImage, state: OriginalImageState) => {
     image.setElement(state.element)
@@ -72,7 +73,35 @@ export function useMagicImageRemoval({
       context.fill()
     }
     context.restore()
+    const sourceCanvas = sourceCanvasRef.current
+    const sourceContext = sourceCanvas?.getContext('2d')
 
+    if (sourceContext && sourceCanvas) {
+      sourceContext.save()
+      sourceContext.globalCompositeOperation = 'destination-out'
+      sourceContext.lineCap = 'round'
+      sourceContext.lineJoin = 'round'
+      sourceContext.lineWidth = lineWidth
+
+      sourceContext.beginPath()
+      sourceContext.moveTo(fromX, fromY)
+      sourceContext.lineTo(toX, toY)
+      sourceContext.stroke()
+
+      if (isDot) {
+        sourceContext.beginPath()
+        sourceContext.arc(
+          fromX,
+          fromY,
+          lineWidth / 2,
+          0,
+          Math.PI * 2,
+        )
+        sourceContext.fill()
+      }
+
+      sourceContext.restore()
+    }
     image.dirty = true
     targetCanvas.requestRenderAll()
   }, [brushSizeRef, canvasRef])
@@ -86,7 +115,9 @@ export function useMagicImageRemoval({
       return false
     }
 
-    const preview = createVisibleImageCanvas(image)
+    const sourceCanvas = createVisibleImageCanvas(image)
+    const preview = createFilteredImageCanvas(image)
+    sourceCanvasRef.current = sourceCanvas
     const context = preview.getContext('2d')
     if (!context) {
       setNotice('Could not edit this image.')
@@ -138,13 +169,15 @@ export function useMagicImageRemoval({
     const image = imageRef.current
     const targetCanvas = targetCanvasRef.current
     const originalState = originalImageStateRef.current
+    const sourceCanvas = sourceCanvasRef.current
+    sourceCanvasRef.current = null
     previewCanvasRef.current = null
     previewContextRef.current = null
     imageRef.current = null
     targetCanvasRef.current = null
     transformRef.current = null
     originalImageStateRef.current = null
-    if (!preview || !image || !targetCanvas || !originalState) {
+    if (!preview || !sourceCanvas || !image || !targetCanvas || !originalState) {
       removalInProgressRef.current = false
       return
     }
@@ -154,7 +187,14 @@ export function useMagicImageRemoval({
         restoreOriginalImage(targetCanvas, image, originalState)
         return
       }
-      image.filters = originalState.filters
+      image.setElement(sourceCanvas)
+      image.set({
+        width: sourceCanvas.width,
+        height: sourceCanvas.height,
+        cropX: 0,
+        cropY: 0,
+        filters: originalState.filters,
+      })
       image.applyFilters()
       image.setCoords()
       targetCanvas.requestRenderAll()

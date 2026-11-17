@@ -115,6 +115,7 @@ export function createEditorContextValue({
       delete: features.objectEditing.deleteSelected,
       updateAppearance: features.objectEditing.updateShapeAppearance,
       moveLayer: features.objectEditing.moveLayer,
+      handleReorder: features.objectEditing.handleReorder,
       selectLayer: features.objectEditing.selectLayer,
       setLayerVisibility: features.objectEditing.setLayerVisibility,
       setLayerLocked: features.objectEditing.setLayerLocked,

@@ -14,7 +14,7 @@ import type { useEditorProjectSettingsState } from '../hooks/useEditorProjectSet
 import type { useTextAnimation } from '../hooks/useTextAnimation'
 
 export type EditorMode = 'image' | 'video'
-export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers' | 'shadows' | 'video-upload' | 'video-trim' | 'animate'
+export type EditorTool = 'upload' | 'select' | 'crop' | 'resize' | 'text' | 'shapes' | 'retouch' | 'adjust' | 'music' | 'filters' | 'background' | 'draw-remove' | 'stickers' | 'layers' | 'shadows' | 'video-upload' | 'video-trim' | 'animate'
 export type DrawingMode = 'pencil' | 'sketch' | 'marker' | 'highlighter' | 'eraser' | 'magic-remover' | 'lasso'
 export type ShapeKind = 'rect' | 'roundRect' | 'square' | 'circle' | 'ellipse' | 'line' | 'dashedLine' | 'dottedLine' | 'arrow' | 'doubleArrow' | 'curvedArrow' | 'triangle' | 'rightTriangle' | 'diamond' | 'star' | 'pentagon' | 'hexagon' | 'octagon' | 'heart' | 'cross' | 'plus' | 'minus' | 'chevron' | 'parallelogram' | 'speechBubble' | 'cloud' | 'ring' | 'donut' | 'arc'
 export type ThreeDShapeKind = 'sphere' | 'cube' | 'box' | 'roundedBox' | 'cylinder' | 'cone' | 'torus' | 'torusKnot' | 'capsule' | 'plane' | 'circle' | 'ring' | 'tetrahedron' | 'octahedron' | 'dodecahedron' | 'icosahedron' | 'diamond' | 'pyramid' | 'triangularPrism' | 'pentagonalPrism' | 'hexagonalPrism' | 'starExtrusion' | 'heartExtrusion' | 'arrow' | 'heart' | 'star' | 'sparkle' | 'check' | 'lightning' | 'cloud' | 'speech' | 'plus' | 'cross' | 'play' | 'flower' | 'crown' | 'hexagon'
@@ -128,6 +128,7 @@ export type PersistedEditorPages = {
   pageOneSnapshot?: string
   pageOneImageSource?: string
   pageOnePreview?: string
+  pageOrder?: Array<number | null>
 }
 export type AddedPageActions = {
   replace: (pageId: number) => void
@@ -281,11 +282,14 @@ export interface EditorContextValue {
     saveActivePage: () => void
     getPersistedState: () => PersistedEditorPages
     restorePersistedState: (pages?: PersistedEditorPages) => void
+    deleteFirstPage: () => Promise<boolean>
     replace: (pageId: number) => void
     delete: (pageId: number) => void
     select: (pageId: number | null) => Promise<void>
     getSnapshot: (pageId: number | null) => string | undefined
     registerActions: (actions: AddedPageActions | null) => void
+    order: Array<number | null>
+    reorder: (fromId: number | null, toId: number | null) => void
   }
 
   history: {
@@ -386,6 +390,7 @@ export interface EditorContextValue {
     delete: () => void
     updateAppearance: (property: 'fill' | 'stroke' | 'strokeWidth' | 'opacity', value: string | number) => void
     moveLayer: (object: FabricObject, direction: 'forward' | 'backward') => void
+    handleReorder: (fromIndex: number, toIndex: number) => void
     selectLayer: (object: FabricObject) => void
     setLayerVisibility: (object: FabricObject, visible: boolean) => void
     setLayerLocked: (object: FabricObject, locked: boolean) => void

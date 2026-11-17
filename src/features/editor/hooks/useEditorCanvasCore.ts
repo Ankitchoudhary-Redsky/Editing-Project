@@ -43,6 +43,8 @@ export function useEditorCanvasCore({
     if (!canvas) return
 
     const active = canvas.getActiveObject() ?? null
+    const drawingLayer = canvas.getObjects().find((object) => object.get('name') === DRAWING_LAYER_NAME)
+    drawingLayer?.set('perPixelTargetFind', active !== drawingLayer)
     setSelectedObject(active)
     setSelectedIsImage(active === imageObjectRef.current)
   }, [setSelectedIsImage, setSelectedObject])
@@ -63,35 +65,44 @@ export function useEditorCanvasCore({
         !item.get('threeDType') &&
         !item.get('emojiId'),
     )
+    const imageLocked = image?.get('layerLocked') === true
     if (image && (
-      image.selectable || image.evented || !image.lockMovementX || !image.lockMovementY ||
-      !image.lockScalingX || !image.lockScalingY || !image.lockRotation
+      image.selectable !== !imageLocked || image.evented !== !imageLocked ||
+      image.lockMovementX !== imageLocked || image.lockMovementY !== imageLocked ||
+      image.lockScalingX !== imageLocked || image.lockScalingY !== imageLocked ||
+      image.lockRotation !== imageLocked
     )) {
       image.set({
-        selectable: false,
-        evented: false,
-        lockMovementX: true,
-        lockMovementY: true,
-        lockScalingX: true,
-        lockScalingY: true,
-        lockRotation: true,
+        selectable: !imageLocked,
+        evented: !imageLocked,
+        lockMovementX: imageLocked,
+        lockMovementY: imageLocked,
+        lockScalingX: imageLocked,
+        lockScalingY: imageLocked,
+        lockRotation: imageLocked,
       })
     }
     const drawingLayer = currentObjects.find((item) => item.get('name') === DRAWING_LAYER_NAME)
-    if (drawingLayer && (
-      drawingLayer.selectable || drawingLayer.evented || !drawingLayer.lockMovementX ||
-      !drawingLayer.lockMovementY || !drawingLayer.lockScalingX || !drawingLayer.lockScalingY ||
-      !drawingLayer.lockRotation
-    )) {
-      drawingLayer.set({
-        selectable: false,
-        evented: false,
-        lockMovementX: true,
-        lockMovementY: true,
-        lockScalingX: true,
-        lockScalingY: true,
-        lockRotation: true,
-      })
+    if (drawingLayer) {
+      const drawingLayerLocked = drawingLayer.get('layerLocked') === true
+      if (
+        drawingLayer.selectable !== !drawingLayerLocked || drawingLayer.evented !== !drawingLayerLocked ||
+        drawingLayer.lockMovementX !== drawingLayerLocked || drawingLayer.lockMovementY !== drawingLayerLocked ||
+        drawingLayer.lockScalingX !== drawingLayerLocked || drawingLayer.lockScalingY !== drawingLayerLocked ||
+        drawingLayer.lockRotation !== drawingLayerLocked ||
+        drawingLayer.perPixelTargetFind !== (canvas.getActiveObject() !== drawingLayer)
+      ) {
+        drawingLayer.set({
+          selectable: !drawingLayerLocked,
+          evented: !drawingLayerLocked,
+          perPixelTargetFind: canvas.getActiveObject() !== drawingLayer,
+          lockMovementX: drawingLayerLocked,
+          lockMovementY: drawingLayerLocked,
+          lockScalingX: drawingLayerLocked,
+          lockScalingY: drawingLayerLocked,
+          lockRotation: drawingLayerLocked,
+        })
+      }
     }
     const imageObject = image instanceof FabricImage ? image : null
     if (imageObjectRef.current !== imageObject) {

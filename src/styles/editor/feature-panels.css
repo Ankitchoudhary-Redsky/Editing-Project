@@ -436,6 +436,20 @@
 .three-d-shape-preview.model-play { clip-path: polygon(12% 3%, 96% 50%, 12% 97%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
 .three-d-shape-preview.model-flower { clip-path: polygon(50% 0, 61% 27%, 83% 10%, 79% 38%, 100% 50%, 74% 61%, 90% 84%, 62% 78%, 50% 100%, 39% 73%, 16% 90%, 22% 62%, 0 50%, 27% 39%, 10% 16%, 38% 22%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
 .three-d-shape-preview.model-crown { clip-path: polygon(3% 30%, 27% 48%, 40% 14%, 53% 48%, 79% 13%, 96% 30%, 86% 89%, 13% 89%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-box { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-torusKnot { clip-path: polygon(50% 0, 61% 27%, 83% 10%, 79% 38%, 100% 50%, 74% 61%, 90% 84%, 62% 78%, 50% 100%, 39% 73%, 16% 90%, 22% 62%, 0 50%, 27% 39%, 10% 16%, 38% 22%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-plane { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-circle { clip-path: circle(50% at 50% 50%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-tetrahedron { clip-path: polygon(50% 0, 100% 100%, 0 100%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-octahedron { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-dodecahedron { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-icosahedron { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-roundedBox { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); border-radius: 10%; background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-triangularPrism { clip-path: polygon(50% 0, 100% 100%, 0 100%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-pentagonalPrism { clip-path: polygon(50% 0, 100% 38%, 81% 100%, 19% 100%, 0 38%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-hexagonalPrism { clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-starExtrusion { clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); background: linear-gradient(145deg, #fff8, var(--shape-color) 48%, #172b4666); }
+.three-d-shape-preview.model-heartExtrusion { clip-path: polygon(50% 92%, 42% 85%, 32% 76%, 22% 66%, 14% 56%, 9% 46%, 8% 36%, 11% 26%, 18% 18%, 27% 14%, 36% 15%, 44% 20%, 50% 29%, 56% 20%, 64% 15%, 73% 14%, 82% 18%, 89% 26%, 92% 36%, 91% 46%, 86% 56%, 78% 66%, 68% 76%, 58% 85%); background: linear-gradient(145deg, #ffffffcc 0%, var(--shape-color) 48%, #172b4666 100%); }
 .three-d-character-choice { aspect-ratio: 1; border: 1px solid var(--line); border-radius: 4px; color: #426dbf; background: linear-gradient(145deg, #fff, #edf2ff); box-shadow: 1px 2px 0 #9bb1dc; font: 700 15px 'Avenir Next', 'Segoe UI', sans-serif; text-shadow: 1px 1px #fff, 2px 2px #9bb1dc; cursor: pointer; }
 .three-d-emoji-choice > span { font-size: 28px; line-height: 1; filter: drop-shadow(2px 3px 2px #1d312533); }
 .three-d-emoji-choice > img { display: block; width: 38px; height: 38px; object-fit: contain; filter: drop-shadow(2px 3px 2px #1d312533); }

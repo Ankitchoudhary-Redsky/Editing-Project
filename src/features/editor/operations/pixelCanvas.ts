@@ -57,3 +57,30 @@ export function createVisibleImageCanvas(image: FabricImage) {
   )
   return output
 }
+
+export function createFilteredImageCanvas(image: FabricImage) {
+  const source = image.getElement()
+  const width = Math.max(1, Math.round(image.width))
+  const height = Math.max(1, Math.round(image.height))
+
+  const output = document.createElement('canvas')
+  output.width = width
+  output.height = height
+
+  const context = output.getContext('2d')
+  if (!context) throw new Error('Could not edit this image.')
+
+  context.drawImage(
+    source,
+    image.cropX || 0,
+    image.cropY || 0,
+    image.width,
+    image.height,
+    0,
+    0,
+    width,
+    height,
+  )
+
+  return output
+}
