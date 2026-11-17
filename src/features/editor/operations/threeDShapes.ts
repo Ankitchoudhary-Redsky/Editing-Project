@@ -586,7 +586,7 @@ async function renderShape(kind: ThreeDShapeKind, color: string, rotation: Three
   return imageUrl
 }
 
-async function addRenderedImage(canvas: Canvas, imageUrl: string, label: string, sizeMultiplier = 1, properties: Record<string, string | number> = {}, maxSize = 340): Promise<FabricImage> {
+async function addRenderedImage(canvas: Canvas, imageUrl: string, label: string, sizeMultiplier = 1, properties: Record<string, string | number> = {}, maxSize = 900): Promise<FabricImage> {
   const image = await FabricImage.fromURL(imageUrl)
   const size = Math.min(maxSize, Math.max(120, Math.min(canvas.getWidth(), canvas.getHeight()) * 0.42 * sizeMultiplier))
   const imageScale = size / Math.max(image.width, image.height)
@@ -610,7 +610,7 @@ async function addRenderedImage(canvas: Canvas, imageUrl: string, label: string,
 }
 
 export async function addThreeDShape(canvas: Canvas, kind: ThreeDShapeKind, color: string, label: string) {
-  await addRenderedImage(canvas, await renderShape(kind, color, initialShapeRotation), label, 1, {
+  await addRenderedImage(canvas, await renderShape(kind, color, initialShapeRotation), label, 1.5, {
     threeDType: 'shape',
     threeDShapeKind: kind,
     threeDColor: color,
@@ -1148,7 +1148,7 @@ export function renderThreeDEmojiThumbnail(emoji: string): Promise<string> {
 }
 
 export async function addThreeDCharacter(canvas: Canvas, character: string, color = '#e879bf') {
-  await addRenderedImage(canvas, await renderThreeDCharacter(character, color, initialCharacterRotation), character, 1.35, {
+  await addRenderedImage(canvas, await renderThreeDCharacter(character, color, initialCharacterRotation), character, 1.5, {
     threeDType: 'character',
     threeDCharacter: character,
     threeDColor: color,

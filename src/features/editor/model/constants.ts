@@ -13,7 +13,6 @@ import {
   Library,
   Moon,
   Sparkles,
-  Type,
 } from "lucide-react";
 import { Canvas } from "fabric";
 import type { DrawingMode, EditorTool, ShapeKind } from "./types";
@@ -218,19 +217,6 @@ function getImageSourceToken(source: string) {
 
 export function resolveImageSourceToken(token: string) {
   return tokenToSource.get(token);
-}
-
-export function getImageSourceTokens() {
-  return Object.fromEntries(tokenToSource)
-}
-
-export function restoreImageSourceTokens(sources: Record<string, string>) {
-  for (const [token, source] of Object.entries(sources)) {
-    tokenToSource.set(token, source)
-    sourceToToken.set(source, token)
-    const tokenId = Number(token.match(/_(\d+)__$/)?.[1])
-    if (Number.isFinite(tokenId)) nextSourceId = Math.max(nextSourceId, tokenId + 1)
-  }
 }
 
 export function getImageSourceTokens() {

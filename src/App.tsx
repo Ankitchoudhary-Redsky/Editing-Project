@@ -18,6 +18,7 @@ function App() {
     setUploadInputElement,
     setCanvasElement,
     setStageElement,
+    loadTemplateIntoEditor,
   } = useEditorApplicationController({ settings, ui: uiState, runtime });
 
   return (

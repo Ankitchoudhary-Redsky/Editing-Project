@@ -71,7 +71,7 @@ export function useShapeDrawing({
     const handlePointerDown = (event: { e: TPointerEvent }) => {
       const target = canvas.findTarget(event.e)
       if ((!drawing && !drawingThreeD) || !hasDocument) return
-      if (target && target.get('name') !== BACKGROUND_IMAGE_NAME) {
+      if (target && target !== imageObjectRef.current && target.get('name') !== BACKGROUND_IMAGE_NAME) {
         return
       }
       const backgroundTarget = target?.get('name') === BACKGROUND_IMAGE_NAME ? target : null
@@ -164,50 +164,6 @@ export function useShapeDrawing({
       constrainShapeToImage(canvas, imageObjectRef.current, drawingState.preview)
       canvas.requestRenderAll()
     }
-      const drawingState = shapeDrawingRef.current;
-      if (!drawing || !drawingState) return;
-      const bounds = getImageBounds(canvas, imageObjectRef.current);
-      const pointer = canvas.getPointer(event.e);
-      const point = {
-        x: Math.max(
-          bounds.left,
-          Math.min(bounds.left + bounds.width, pointer.x),
-        ),
-        y: Math.max(
-          bounds.top,
-          Math.min(bounds.top + bounds.height, pointer.y),
-        ),
-      };
-      const left = Math.min(drawingState.start.x, point.x);
-      const top = Math.min(drawingState.start.y, point.y);
-      const width = Math.max(1, Math.abs(point.x - drawingState.start.x));
-      const height = Math.max(1, Math.abs(point.y - drawingState.start.y));
-      if (drawingState.preview) canvas.remove(drawingState.preview);
-      const preview = buildShapeObject(
-        {
-          kind: shapeKind,
-          fill: fillColor,
-          transparentFill,
-          stroke: strokeColor,
-          strokeWidth,
-          opacity: shapeOpacity,
-          name: shapeNames[shapeKind],
-          lineStyle,
-        },
-        {
-          left,
-          top,
-          width,
-          height,
-          directionX: point.x < drawingState.start.x ? -1 : 1,
-          directionY: point.y < drawingState.start.y ? -1 : 1,
-        },
-      );
-      constrainShapeToImage(canvas, imageObjectRef.current, preview);
-      drawingState.preview = preview;
-      canvas.add(preview);
-      canvas.requestRenderAll();
-    };
 
     const handlePointerUp = () => {
       const drawingState = shapeDrawingRef.current;
@@ -274,6 +230,8 @@ export function useShapeDrawing({
     lineStyle,
     recordHistory,
     shapeKind,
+    shapeToolMode,
+    threeDShapeKind,
     shapeOpacity,
     strokeColor,
     strokeWidth,

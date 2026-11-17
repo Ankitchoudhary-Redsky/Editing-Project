@@ -13,7 +13,7 @@ export function EditorShell({
   setCanvasElement,
   setStageElement,
 }: EditorShellProps) {
-  const { tools, canvas, handleDrop } = useEditor();
+  const { tools, handleDrop } = useEditor();
 
   const handleDragOver = (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
@@ -43,8 +43,8 @@ export function EditorShell({
         }}
       />
       <section className="editor-body">
-        {canvas.hasDocument && <ToolRail />}
-        {canvas.hasDocument && <ToolPanel />}
+        <ToolRail />
+        <ToolPanel />
         <EditorWorkspace
           historyVersion={historyVersion}
           setCanvasElement={setCanvasElement}

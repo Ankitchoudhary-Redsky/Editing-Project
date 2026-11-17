@@ -25,6 +25,7 @@ export function useEditorDocumentActions({
   recordHistory,
   syncObjects,
   resizeDisplay,
+  setNotice,
   setDraggingFile,
 }: UseEditorDocumentActionsOptions) {
   const uploadInputRef = useRef<HTMLInputElement>(null);

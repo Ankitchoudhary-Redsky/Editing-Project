@@ -150,6 +150,15 @@ export class EditableThreeDEmoji extends Rect {
     this.dirty = true
   }
 
+  setRotation(rotation: { x: number; y: number; z: number }) {
+    this.emojiRotationX = rotation.x
+    this.emojiRotationY = rotation.y
+    this.emojiRotationZ = rotation.z
+    this.updateModelRotation()
+    this.dirty = true
+    this.canvas?.requestRenderAll()
+  }
+
   beginRotationDrag(event: TPointerEvent, axis: RotationAxis) {
     const point = getClientPoint(event)
     if (!point) return

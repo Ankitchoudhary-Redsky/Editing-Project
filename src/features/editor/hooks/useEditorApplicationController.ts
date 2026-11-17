@@ -151,6 +151,7 @@ export function useEditorApplicationController({
     recordHistory,
     syncObjects,
     resizeDisplay,
+    setNotice: ui.setNotice,
     setDraggingFile: ui.setDraggingFile,
   })
 

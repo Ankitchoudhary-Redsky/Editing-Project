@@ -1,5 +1,5 @@
-import { useCallback, useEffect } from 'react'
-import { FabricImage, IText, Shadow, type FabricObject } from 'fabric'
+import { useCallback, useEffect, useRef } from 'react'
+import { ActiveSelection, FabricImage, IText, Shadow, type FabricObject } from 'fabric'
 import type { TextDesignOptions, TextProperty, UseObjectEditingOptions } from '../model/types'
 import { shapeNames } from '../model/constants'
 import { objectName } from '../model/objectName'
@@ -30,18 +30,16 @@ export function useObjectEditing({
   strokeColor,
   strokeWidth,
   shapeOpacity,
-  manageCanvasEvents = true,
   setActiveTool,
   setTextValue,
   recordHistory,
-  syncObjects,
 }: UseObjectEditingOptions) {
   useEffect(() => {
     if (!canvas) return
     const constrainAndSync = (event: { target?: FabricObject }) => {
       const target = event.target;
       if (target && isShapeObject(target)) {
-        constrainShapeToCanvas(canvas, target);
+        constrainShapeToImage(canvas, imageObjectRef.current, target);
         syncImageWithShape(canvas, target);
         syncTextWithShape(canvas, target);
       } else if (target instanceof IText) {
@@ -185,6 +183,47 @@ export function useObjectEditing({
     recordHistory(true)
   }, [canvasRef, imageObjectRef, recordHistory])
 
+  const clipboardRef = useRef<FabricObject | null>(null)
+
+  const copySelection = async () => {
+    const active = canvasRef.current?.getActiveObject()
+    if (!active) return
+    clipboardRef.current = await active.clone()
+  }
+
+  const pasteSelection = async () => {
+    const canvas = canvasRef.current
+    const source = clipboardRef.current
+    if (!canvas || !source) return
+    const clone = await source.clone()
+    clone.set({
+      left: (source.left ?? 0) + 24,
+      top: (source.top ?? 0) + 24,
+      name: `${objectName(source, 0)} copy`,
+    })
+    constrainShapeToImage(canvas, imageObjectRef.current, clone)
+    canvas.add(clone)
+    canvas.setActiveObject(clone)
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const copyStyleSelection = () => {
+    const canvas = canvasRef.current
+    const target = canvas?.getActiveObject()
+    if (!canvas || !selectedObject || !target || target === selectedObject) return
+    target.set({
+      fill: selectedObject.fill,
+      stroke: selectedObject.stroke,
+      strokeWidth: selectedObject.strokeWidth,
+      opacity: selectedObject.opacity,
+      shadow: selectedObject.shadow,
+    })
+    target.setCoords()
+    canvas.requestRenderAll()
+    recordHistory()
+  }
+
   const duplicateSelected = async () => {
     const canvas = canvasRef.current;
     const active = canvas?.getActiveObject();
@@ -204,6 +243,43 @@ export function useObjectEditing({
     if (!canvas) return
     canvas.setActiveObject(object)
     canvas.requestRenderAll()
+  }
+
+  const setLayerVisibility = (object: FabricObject, visible: boolean) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    object.set('visible', visible)
+    if (!visible && canvas.getActiveObject() === object) canvas.discardActiveObject()
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const setLayerLocked = (object: FabricObject, locked: boolean) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const isPrimaryImage = object === imageObjectRef.current
+    object.set({
+      layerLocked: locked,
+      selectable: !locked && !isPrimaryImage,
+      evented: !locked && !isPrimaryImage,
+      lockMovementX: locked || isPrimaryImage,
+      lockMovementY: locked || isPrimaryImage,
+      lockScalingX: locked || isPrimaryImage,
+      lockScalingY: locked || isPrimaryImage,
+      lockRotation: locked || isPrimaryImage,
+    })
+    if (locked && canvas.getActiveObject() === object) canvas.discardActiveObject()
+    canvas.requestRenderAll()
+    recordHistory(true)
+  }
+
+  const renameLayer = (object: FabricObject, name: string) => {
+    const canvas = canvasRef.current
+    const normalizedName = name.trim()
+    if (!canvas || !normalizedName) return
+    object.set('name', normalizedName)
+    canvas.requestRenderAll()
+    recordHistory(true)
   }
 
   const moveLayer = (
@@ -342,7 +418,14 @@ export function useObjectEditing({
     copyStyleSelection,
     duplicateSelected,
     selectLayer,
+    setLayerVisibility,
+    setLayerLocked,
+    renameLayer,
     moveLayer,
+    selectLayers,
+    deleteLayers,
+    moveLayers,
+    duplicateLayers,
     updateShapeAppearance,
     updateShadow,
   };

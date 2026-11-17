@@ -185,6 +185,27 @@
 .canvas-surface canvas.upper-canvas {
   touch-action: none;
 }
+.three-d-rotate-handle {
+  position: absolute;
+  z-index: 6;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(50, 116, 93, 0.28);
+  border-radius: 50%;
+  color: #32745d;
+  background: radial-gradient(circle at 32% 26%, #fff, #f3f7f4 72%, #e1ebe4);
+  box-shadow: 0 3px 12px rgba(34, 55, 43, 0.2), inset 0 1px 2px #fff;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.three-d-rotate-handle:active {
+  cursor: grabbing;
+}
 .floating-object-toolbar {
   position: absolute;
   z-index: 7;

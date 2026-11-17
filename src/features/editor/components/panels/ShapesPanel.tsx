@@ -9,10 +9,10 @@ import {
 import { useEditor } from '../../EditorContext'
 import { BACKGROUND_IMAGE_NAME, shapeNames } from '../../model/constants'
 import type { ShapeKind } from '../../model/types'
-import { prepareThreeDShapes } from '../../operations/EditableThreeDShape'
 import {
   addThreeDCharacter,
   addThreeDEmoji,
+  addThreeDShape,
   isThreeDRotatable,
   recolorThreeDCharacter,
   renderThreeDEmojiThumbnail,
@@ -107,14 +107,13 @@ export function ShapesPanel() {
     }
   }
 
-  const chooseThreeDShape = async (kind: (typeof threeDShapeChoices)[number]['kind'], label: string) => {
-    if (addingShape) return
+  const chooseThreeDShape = async (kind: (typeof threeDShapeChoices)[number]['kind'], color: string, label: string) => {
+    if (!canvas.hasImage || !fabricCanvas || addingShape) return
     try {
       setAddingShape(true)
-      await prepareThreeDShapes()
+      await addThreeDShape(fabricCanvas, kind, color, label)
       shapes.setThreeDKind(kind)
-      tools.setActive('shapes')
-      tools.setNotice(`${label} selected. Drag on the canvas to draw it.`)
+      tools.setNotice(`${label} added to the canvas.`)
     } catch (error) {
       console.error('Failed to prepare 3D shape tools:', error)
       tools.setNotice('Could not initialize Three.js in this browser.')
@@ -332,8 +331,8 @@ export function ShapesPanel() {
                     type="button"
                     className={`three-d-shape-choice ${shapes.threeDKind === shape.kind ? 'selected' : ''}`}
                     disabled={addingShape}
-                    onClick={() => void chooseThreeDShape(shape.kind, shape.label)}
-                    title={`Select ${shape.label} drawing tool`}
+                    onClick={() => void chooseThreeDShape(shape.kind, shape.color, shape.label)}
+                    title={`Add ${shape.label} to the canvas`}
                   >
                     <span className={`three-d-shape-preview model-${shape.kind}`} style={{ '--shape-color': shape.color } as React.CSSProperties} aria-hidden="true" />
                     <span>{shape.label}</span>
@@ -417,7 +416,7 @@ export function ShapesPanel() {
                 : filteredThreeDEmojiChoices.length === 0 && filteredThreeDEmojiAssets.length === 0 && <p className="panel-note">No matching 3D emojis.</p>}
         </section>}
       </fieldset>
-      <p className="panel-note draw-hint">{!canvas.hasDocument ? 'Add a layer to use shape tools.' : mode === '2d' ? `Drag to draw a ${shapeNames[shapes.kind].toLowerCase()}; hold Shift to constrain proportions.` : `Drag to draw a 3D ${threeDShapeChoices.find((shape) => shape.kind === shapes.threeDKind)?.label.toLowerCase() ?? 'shape'}. Drag the center rotate handle for X/Y; drag the Z handle for Z.`}</p>
+      <p className="panel-note draw-hint">{!canvas.hasDocument ? 'Add a layer to use shape tools.' : mode === '2d' ? `Drag to draw a ${shapeNames[shapes.kind].toLowerCase()}; hold Shift to constrain proportions.` : 'Click any 3D item to add it centered. Drag its rotate handle to turn it; hold Shift while dragging for Z rotation.'}</p>
     </div>
   )
 }

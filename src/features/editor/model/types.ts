@@ -62,7 +62,7 @@ export type ShapeKind =
   | 'dashedLine' | 'dottedLine' | "arrow"
   | 'doubleArrow' | 'curvedArrow' | "triangle"
   | 'rightTriangle' | 'diamond' | "star"
-  | "pentagon"; | 'hexagon' | 'octagon' | 'heart' | 'cross' | 'plus' | 'minus' | 'chevron' | 'parallelogram' | 'speechBubble' | 'cloud' | 'ring' | 'donut' | 'arc'
+  | "pentagon" | 'hexagon' | 'octagon' | 'heart' | 'cross' | 'plus' | 'minus' | 'chevron' | 'parallelogram' | 'speechBubble' | 'cloud' | 'ring' | 'donut' | 'arc'
 export type ThreeDShapeKind = 'sphere' | 'cube' | 'box' | 'roundedBox' | 'cylinder' | 'cone' | 'torus' | 'torusKnot' | 'capsule' | 'plane' | 'circle' | 'ring' | 'tetrahedron' | 'octahedron' | 'dodecahedron' | 'icosahedron' | 'diamond' | 'pyramid' | 'triangularPrism' | 'pentagonalPrism' | 'hexagonalPrism' | 'starExtrusion' | 'heartExtrusion' | 'arrow' | 'heart' | 'star' | 'sparkle' | 'check' | 'lightning' | 'cloud' | 'speech' | 'plus' | 'cross' | 'play' | 'flower' | 'crown' | 'hexagon'
 export type ShapeToolMode = '2d' | '3d'
 export type LineStyle = "straight" | "curve-up" | "curve-down";

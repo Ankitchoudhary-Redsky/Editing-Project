@@ -33,8 +33,10 @@ export function getImageBrushScale(
   return transform.brushScale
 }
 
-export function createVisibleImageCanvas(image: FabricImage) {
-  const source = image._originalElement
+export function createVisibleImageCanvas(
+  image: FabricImage,
+  source = image._originalElement,
+) {
   const width = Math.max(1, Math.round(image.width))
   const height = Math.max(1, Math.round(image.height))
   const output = document.createElement('canvas')
