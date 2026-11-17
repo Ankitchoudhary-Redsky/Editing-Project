@@ -71,7 +71,7 @@ export function useEditorApplicationController({
       ui.setNotice('Template loaded successfully.')
 
       settings.setProjectName(template.name)
-      settings.setActiveTool('select')
+      settings.setActiveTool('draw-remove')
       settings.setZoom(1)
       syncObjects()
       resizeDisplay()
@@ -151,6 +151,7 @@ export function useEditorApplicationController({
     recordHistory,
     syncObjects,
     resizeDisplay,
+    setNotice: ui.setNotice,
     setDraggingFile: ui.setDraggingFile,
   })
 

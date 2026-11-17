@@ -1,10 +1,32 @@
-import { useCallback, useEffect } from 'react'
-import { FabricImage, IText, Shadow, type FabricObject } from 'fabric'
-import type { TextDesignOptions, TextProperty, UseObjectEditingOptions } from '../model/types'
-import { BACKGROUND_IMAGE_NAME, DRAWING_LAYER_NAME, shapeNames } from '../model/constants'
-import { objectName } from '../model/objectName'
-import { addImageInsideShape, constrainShapeToImage, createShapeObject, isShapeObject, syncImageWithShape } from '../operations/shapeObjects'
-import { createTextInsideShape, createTextObject, syncParentShapeForText, syncTextWithShape, updateLinkedTextFontSize } from '../operations/textObjects'
+import { useCallback, useEffect } from "react";
+import {
+  ActiveSelection,
+  FabricImage,
+  IText,
+  Shadow,
+  type FabricObject,
+} from "fabric";
+import type {
+  TextDesignOptions,
+  TextProperty,
+  UseObjectEditingOptions,
+} from "../model/types";
+import { BACKGROUND_IMAGE_NAME, isDrawingLayerName, shapeNames } from "../model/constants";
+import { objectName } from "../model/objectName";
+import {
+  addImageInsideShape,
+  constrainShapeToCanvas,
+  createShapeObject,
+  isShapeObject,
+  syncImageWithShape,
+} from "../operations/shapeObjects";
+import {
+  createTextInsideShape,
+  createTextObject,
+  syncParentShapeForText,
+  syncTextWithShape,
+  updateLinkedTextFontSize,
+} from "../operations/textObjects";
 
 export function useObjectEditing({
   canvas,
@@ -37,34 +59,37 @@ export function useObjectEditing({
   syncObjects,
 }: UseObjectEditingOptions) {
   useEffect(() => {
-    if (!canvas || !manageCanvasEvents) return
+    if (!canvas || !manageCanvasEvents) return;
     const constrainAndSync = (event: { target?: FabricObject }) => {
-      const target = event.target
+      const target = event.target;
       if (target && isShapeObject(target)) {
-        constrainShapeToImage(canvas, imageObjectRef.current, target)
-        syncImageWithShape(canvas, target)
-        syncTextWithShape(canvas, target)
+        constrainShapeToCanvas(canvas, target);
+        syncImageWithShape(canvas, target);
+        syncTextWithShape(canvas, target);
       } else if (target instanceof IText) {
-        syncParentShapeForText(canvas, target)
+        syncParentShapeForText(canvas, target);
       }
-    }
-    canvas.on('object:moving', constrainAndSync)
-    canvas.on('object:scaling', constrainAndSync)
-    canvas.on('object:rotating', constrainAndSync)
+    };
+    canvas.on("object:moving", constrainAndSync);
+    canvas.on("object:scaling", constrainAndSync);
+    canvas.on("object:rotating", constrainAndSync);
     return () => {
-      canvas.off('object:moving', constrainAndSync)
-      canvas.off('object:scaling', constrainAndSync)
-      canvas.off('object:rotating', constrainAndSync)
-    }
-  }, [canvas, imageObjectRef, manageCanvasEvents])
+      canvas.off("object:moving", constrainAndSync);
+      canvas.off("object:scaling", constrainAndSync);
+      canvas.off("object:rotating", constrainAndSync);
+    };
+  }, [canvas, imageObjectRef, manageCanvasEvents]);
 
   const selectedIsShape = Boolean(
-    selectedObject && !selectedIsImage && !(selectedObject instanceof IText) && !cropActive,
-  )
+    selectedObject &&
+    !selectedIsImage &&
+    !(selectedObject instanceof IText) &&
+    !cropActive,
+  );
 
   const createText = (design?: TextDesignOptions) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     createTextObject(canvas, {
       value: design?.value ?? textValue,
       fontFamily: design?.fontFamily ?? fontFamily,
@@ -78,14 +103,14 @@ export function useObjectEditing({
       fontStyle: design?.fontStyle,
       backgroundColor: design?.backgroundColor,
       textAlign: design?.textAlign,
-    })
-    recordHistory(true)
-    setActiveTool('text')
-  }
+    });
+    recordHistory(true);
+    setActiveTool("text");
+  };
 
   const addShape = () => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     createShapeObject(canvas, {
       kind: shapeKind,
       fill: fillColor,
@@ -95,13 +120,13 @@ export function useObjectEditing({
       opacity: shapeOpacity,
       name: shapeNames[shapeKind],
       lineStyle,
-    })
-    recordHistory(true)
-  }
+    });
+    recordHistory(true);
+  };
 
   const addTextToShape = () => {
-    const canvas = canvasRef.current
-    if (!canvas || !selectedObject || !isShapeObject(selectedObject)) return
+    const canvas = canvasRef.current;
+    if (!canvas || !selectedObject || !isShapeObject(selectedObject)) return;
     const text = createTextInsideShape(canvas, selectedObject, {
       value: textValue,
       fontFamily,
@@ -112,51 +137,80 @@ export function useObjectEditing({
       outlineWidth: textOutlineWidth,
       shadow: textShadow,
       backgroundColor: textBackground,
-    })
-    canvas.setActiveObject(text)
-    recordHistory(true)
-  }
+    });
+    canvas.setActiveObject(text);
+    recordHistory(true);
+  };
 
   const addImageToShape = async (file: File) => {
-    const canvas = canvasRef.current
+    const canvas = canvasRef.current;
     const name = String(selectedObject?.get('name') ?? '')
-    if (!canvas || !selectedObject || !isShapeObject(selectedObject) || /^line|^arrow/i.test(name)) return
-    await addImageInsideShape(canvas, selectedObject, file)
+    if (!canvas || !selectedObject || !isShapeObject(selectedObject) || /^line|^arrow/i.test(name)) return;
+    await addImageInsideShape(canvas, selectedObject, file);
     canvas.setActiveObject(selectedObject)
     syncObjects?.()
-    recordHistory(true)
+    recordHistory(true);
     setActiveTool('shapes')
-  }
+  };
 
   const updateText = (property: TextProperty, value: string | number) => {
-    const active = canvasRef.current?.getActiveObject()
-    if (!(active instanceof IText)) return
-    if (property === 'shadow') {
-      const shadow = value === 'none'
-        ? null
-        : new Shadow({
-          color: 'rgba(12, 20, 17, 0.48)',
-          blur: value === 'soft' ? 12 : 3,
-          offsetX: 2,
-          offsetY: value === 'soft' ? 5 : 3,
-        })
-      active.set('shadow', shadow)
-    } else if (property === 'fontSize' && active.get('textParentId')) {
-      updateLinkedTextFontSize(canvasRef.current!, active as IText, Number(value))
+    const active = canvasRef.current?.getActiveObject();
+    if (!(active instanceof IText)) return;
+    if (property === "shadow") {
+      const shadow =
+        value === "none"
+          ? null
+          : new Shadow({
+              color: "rgba(12, 20, 17, 0.48)",
+              blur: value === "soft" ? 12 : 3,
+              offsetX: 2,
+              offsetY: value === "soft" ? 5 : 3,
+            });
+      active.set("shadow", shadow);
+    } else if (property === "fontSize" && active.get("textParentId")) {
+      updateLinkedTextFontSize(
+        canvasRef.current!,
+        active as IText,
+        Number(value),
+      );
     } else {
-      active.set(property, value)
+      active.set(property, value);
     }
-    active.setCoords()
-    canvasRef.current?.requestRenderAll()
-    recordHistory()
-    if (property === 'text') setTextValue(String(value))
-  }
+    active.setCoords();
+    canvasRef.current?.requestRenderAll();
+    recordHistory();
+    if (property === "text") setTextValue(String(value));
+  };
+
+  const updateSignatureStyle = (
+    nextFontFamily: string,
+    nextFontStyle: string,
+    nextFontWeight: string,
+  ) => {
+    const active = canvasRef.current?.getActiveObject();
+    if (!(active instanceof IText) || active.get("name") !== "Signature")
+      return;
+    active.set({
+      fontFamily: nextFontFamily,
+      fontStyle: nextFontStyle,
+      fontWeight: nextFontWeight,
+    });
+    active.setCoords();
+    canvasRef.current?.requestRenderAll();
+    recordHistory();
+  };
 
   const deleteSelected = useCallback(() => {
-    const canvas = canvasRef.current
-    const active = canvas?.getActiveObject()
-    if (!canvas || !active) return
-    if (active === imageObjectRef.current) {imageObjectRef.current = null;}
+    const canvas = canvasRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    if (active === imageObjectRef.current) {{
+      canvas
+        .getObjects()
+        .filter((object) => object.get("name") === "editor-frame-overlay")
+        .forEach((object) => canvas.remove(object));
+      imageObjectRef.current = null;
+    };}
     const shapeId = active.get('shapeId')
     if (shapeId) {
       const linkedObjects = canvas.getObjects().filter((object) =>
@@ -164,32 +218,37 @@ export function useObjectEditing({
       )
       canvas.remove(...linkedObjects)
     }
-    canvas.remove(active)
-    canvas.discardActiveObject()
-    canvas.requestRenderAll()
-    recordHistory(true)
-  }, [canvasRef, imageObjectRef, recordHistory])
+    canvas.remove(active);
+    canvas.discardActiveObject();
+    canvas.requestRenderAll();
+    syncObjects?.();
+    recordHistory(true);
+  }, [canvasRef, imageObjectRef, recordHistory, syncObjects]);
 
   const duplicateSelected = async () => {
-    const canvas = canvasRef.current
-    const active = canvas?.getActiveObject()
-    if (!canvas || !active) return
-    const clone = await active.clone()
-    clone.set({ left: (active.left ?? 0) + 24, top: (active.top ?? 0) + 24 })
-    clone.set('name', `${objectName(active, 0)} copy`)
-    constrainShapeToImage(canvas, imageObjectRef.current, clone)
-    canvas.add(clone)
-    canvas.setActiveObject(clone)
-    canvas.requestRenderAll()
-    recordHistory(true)
-  }
+    const canvas = canvasRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    const clone = await active.clone([
+      "chartConfigJson",
+      "chartType",
+      "chartConfig",
+    ]);
+    clone.set({ left: (active.left ?? 0) + 24, top: (active.top ?? 0) + 24 });
+    clone.set("name", `${objectName(active, 0)} copy`);
+    constrainShapeToCanvas(canvas, clone);
+    canvas.add(clone);
+    canvas.setActiveObject(clone);
+    canvas.requestRenderAll();
+    recordHistory(true);
+  };
 
   const selectLayer = (object: FabricObject) => {
-    const canvas = canvasRef.current
-    if (!canvas || object.get('layerLocked') === true) return
-    canvas.setActiveObject(object)
-    canvas.requestRenderAll()
-  }
+    const canvas = canvasRef.current;
+    if (!canvas || object.get('layerLocked') === true) return;
+    canvas.setActiveObject(object);
+    canvas.requestRenderAll();
+  };
 
   const setLayerVisibility = (object: FabricObject, visible: boolean) => {
     const canvas = canvasRef.current
@@ -228,24 +287,97 @@ export function useObjectEditing({
     recordHistory(true)
   }
 
-  const moveLayer = (object: FabricObject, direction: 'forward' | 'backward') => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    if (direction === 'forward') canvas.bringObjectForward(object)
-    else if (object !== imageObjectRef.current) canvas.sendObjectBackwards(object)
-    canvas.requestRenderAll()
-    recordHistory(true)
-  }
+  const moveLayer = (
+    object: FabricObject,
+    direction: "forward" | "backward",
+  ) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (direction === "forward") canvas.bringObjectForward(object);
+    else if (object !== imageObjectRef.current)
+      canvas.sendObjectBackwards(object);
+    canvas.requestRenderAll();
+    recordHistory(true);
+  };
+
+  const selectLayers = (objects: FabricObject[]) => {
+    const activeCanvas = canvasRef.current;
+    if (!activeCanvas) return;
+    if (!objects.length) activeCanvas.discardActiveObject();
+    else if (objects.length === 1) activeCanvas.setActiveObject(objects[0]);
+    else
+      activeCanvas.setActiveObject(
+        new ActiveSelection(objects, { canvas: activeCanvas }),
+      );
+    activeCanvas.requestRenderAll();
+  };
+
+  const deleteLayers = (objects: FabricObject[]) => {
+    const activeCanvas = canvasRef.current;
+    if (!activeCanvas || !objects.length) return;
+    activeCanvas.discardActiveObject();
+    objects.forEach((object) => {
+      if (object === imageObjectRef.current) {
+        activeCanvas
+          .getObjects()
+          .filter((item) => item.get("name") === "editor-frame-overlay")
+          .forEach((item) => activeCanvas.remove(item));
+        imageObjectRef.current = null;
+      }
+      activeCanvas.remove(object);
+    });
+    activeCanvas.requestRenderAll();
+    syncObjects?.();
+    recordHistory(true);
+  };
+
+  const moveLayers = (
+    objects: FabricObject[],
+    direction: "forward" | "backward",
+  ) => {
+    const activeCanvas = canvasRef.current;
+    if (!activeCanvas || !objects.length) return;
+    const ordered = direction === "forward" ? objects : [...objects].reverse();
+    ordered.forEach((object) => {
+      if (direction === "forward") activeCanvas.bringObjectForward(object);
+      else if (object !== imageObjectRef.current)
+        activeCanvas.sendObjectBackwards(object);
+    });
+    activeCanvas.requestRenderAll();
+    recordHistory(true);
+  };
+
+  const duplicateLayers = async (objects: FabricObject[]) => {
+    const activeCanvas = canvasRef.current;
+    if (!activeCanvas || !objects.length) return [];
+    const copies = await Promise.all(objects.map((object) => object.clone()));
+    copies.forEach((copy, index) => {
+      const source = objects[index];
+      copy.set({ left: (source.left ?? 0) + 24, top: (source.top ?? 0) + 24 });
+      copy.set("name", `${objectName(source, index)} copy`);
+      constrainShapeToCanvas(activeCanvas, copy);
+      activeCanvas.add(copy);
+    });
+    selectLayers(copies);
+    recordHistory(true);
+    return copies;
+  };
 
   const updateShapeAppearance = (
-    property: 'fill' | 'stroke' | 'strokeWidth' | 'opacity',
+    property: "fill" | "stroke" | "strokeWidth" | "opacity",
     value: string | number,
   ) => {
-    if (!selectedObject || selectedIsImage || selectedObject instanceof IText || selectedObject === cropObjectRef.current) return
-    selectedObject.set(property, value)
-    canvasRef.current?.requestRenderAll()
-    recordHistory()
-  }
+    if (
+      !selectedObject ||
+      selectedIsImage ||
+      selectedObject instanceof IText ||
+      selectedObject === cropObjectRef.current
+    )
+      return;
+    selectedObject.set(property, value);
+    canvasRef.current?.requestRenderAll();
+    recordHistory();
+  };
 
   const updateShadow = (
     shadow: Shadow | null,
@@ -256,29 +388,33 @@ export function useObjectEditing({
     const canvas = canvasRef.current
     if (!canvas || !target || !canvas.getObjects().includes(target) || target === cropObjectRef.current) return
     const name = target.get('name')
-    if (name === DRAWING_LAYER_NAME || name === BACKGROUND_IMAGE_NAME) return
+    if (isDrawingLayerName(name) || name === BACKGROUND_IMAGE_NAME) return
     target.set('shadow', shadow)
     if (size !== undefined) target.set('shadowSize', size)
     if (imageSize !== undefined && target instanceof FabricImage) {
-      const currentScaleX = target.scaleX ?? 1
-      const currentScaleY = target.scaleY ?? 1
-      const baseScaleX = Number(target.get('shadowArtworkBaseScaleX') ?? currentScaleX)
-      const baseScaleY = Number(target.get('shadowArtworkBaseScaleY') ?? currentScaleY)
-      const center = target.getCenterPoint()
+      const currentScaleX = target.scaleX ?? 1;
+      const currentScaleY = target.scaleY ?? 1;
+      const baseScaleX = Number(
+        target.get("shadowArtworkBaseScaleX") ?? currentScaleX,
+      );
+      const baseScaleY = Number(
+        target.get("shadowArtworkBaseScaleY") ?? currentScaleY,
+      );
+      const center = target.getCenterPoint();
       target.set({
-        scaleX: baseScaleX * imageSize / 100,
-        scaleY: baseScaleY * imageSize / 100,
+        scaleX: (baseScaleX * imageSize) / 100,
+        scaleY: (baseScaleY * imageSize) / 100,
         shadowArtworkSize: imageSize,
         shadowArtworkBaseScaleX: baseScaleX,
         shadowArtworkBaseScaleY: baseScaleY,
-      })
-      target.setPositionByOrigin(center, 'center', 'center')
+      });
+      target.setPositionByOrigin(center, "center", "center");
     }
-    target.setCoords()
-    if (canvas.getActiveObject() !== target) canvas.setActiveObject(target)
-    canvas.requestRenderAll()
-    recordHistory()
-  }
+    target.setCoords();
+    if (canvas.getActiveObject() !== target) canvas.setActiveObject(target);
+    canvas.requestRenderAll();
+    recordHistory();
+  };
 
   return {
     selectedIsShape,
@@ -287,14 +423,19 @@ export function useObjectEditing({
     addImageToShape,
     addShape,
     updateText,
+    updateSignatureStyle,
     deleteSelected,
     duplicateSelected,
     selectLayer,
     setLayerVisibility,
     setLayerLocked,
     renameLayer,
+    selectLayers,
+    deleteLayers,
+    moveLayers,
+    duplicateLayers,
     moveLayer,
     updateShapeAppearance,
     updateShadow,
-  }
+  };
 }

@@ -1,29 +1,42 @@
-import { useEditor } from '../EditorContext'
-import { editorToolCategories } from '../model/constants'
-import { editorHeadings } from '../model/editorCopy'
-import { AdjustmentsPanel } from './panels/AdjustmentsPanel'
-import { UploadPanel } from './panels/UploadPanel'
-import { CropPanel } from './panels/CropPanel'
-import { ResizePanel } from './panels/ResizePanel'
-import { TextPanel } from './panels/TextPanel'
-import { ShapesPanel } from './panels/ShapesPanel'
-import { FiltersPanel } from './panels/FiltersPanel'
-import { BackgroundPanel } from './panels/BackgroundPanel'
-import { DrawingPanel } from './panels/DrawingPanel'
-import { StickersPanel } from './panels/StickersPanel'
-import { VideoUploadPanel } from './panels/VideoUploadPanel'
-import { VideoTrimPanel } from './panels/VideoTrimPanel'
+import { useEditor } from "../EditorContext";
+import { useTemplateFeature } from '../../templates/components/TemplateFeatureContext'
+import { editorToolCategories } from "../model/constants";
+import { editorHeadings } from "../model/editorCopy";
+import { AdjustmentsPanel } from "./panels/AdjustmentsPanel";
+import { UploadPanel } from "./panels/UploadPanel";
+import { LibraryPanel } from './panels/LibraryPanel'
+import { CropPanel } from "./panels/CropPanel";
+import { ResizePanel } from "./panels/ResizePanel";
+import { TextPanel } from "./panels/TextPanel";
+import { ShapesPanel } from "./panels/ShapesPanel";
+import { FiltersPanel } from "./panels/FiltersPanel";
+import { BackgroundPanel } from "./panels/BackgroundPanel";
+import { DrawingPanel } from "./panels/DrawingPanel";
+import { StickersPanel } from "./panels/StickersPanel";
+import { VideoUploadPanel } from "./panels/VideoUploadPanel";
+import { VideoTrimPanel } from "./panels/VideoTrimPanel";
 
-import { LayersPanel } from './panels/LayersPanel'
-import { ShadowPanel } from './panels/ShadowPanel'
-import { AnimatePanel } from './panels/AnimatePanel'
+import { LayersPanel } from "./panels/LayersPanel";
+import { SignaturePanel } from "./panels/SignaturePanel";
+import { StickyNotePanel } from "./panels/StickyNotePanel";
+import { FramesLayoutPanel } from "./panels/FramesLayoutPanel";
+import { ChartPanel } from "./panels/ChartPanel";
+import { ShadowPanel } from "./panels/ShadowPanel";
+import { AnimatePanel } from "./panels/AnimatePanel";
 
 export function ToolPanel() {
-  const { canvas, pages, tools } = useEditor()
+  const { canvas, pages, tools } = useEditor();
+  const { openGallery } = useTemplateFeature()
   const isPageSwitching = pages?.switching ?? false
-  if (tools.active === 'music') return null
-  const activeCategory = editorToolCategories.find((category) => category.tools.some(({ id }) => id === tools.active)) ?? editorToolCategories[0]
-  const panelHeading = editorHeadings.toolPanels[tools.active as keyof typeof editorHeadings.toolPanels] ?? activeCategory.label
+  if (tools.active === "music") return null;
+  const activeCategory =
+    editorToolCategories.find((category) =>
+      category.tools.some(({ id }) => id === tools.active),
+    ) ?? editorToolCategories[0];
+  const panelHeading =
+    editorHeadings.toolPanels[
+      tools.active as keyof typeof editorHeadings.toolPanels
+    ] ?? activeCategory.label;
 
   return (
     <aside
@@ -32,20 +45,28 @@ export function ToolPanel() {
       aria-busy={isPageSwitching}
     >
       <div className={`panel-heading ${activeCategory.tools.length > 1 ? 'has-subtools' : ''}`}>
-        <div><h3 className="panel-kicker">{panelHeading}</h3></div>
+        
+        <div>
+          <h3 className="panel-kicker">{panelHeading}</h3>
+        </div>
+      
       </div>
       {activeCategory.tools.length > 1 && (
-        <nav className="panel-subtools" aria-label={`${activeCategory.label} tools`}>
+        <nav
+          className="panel-subtools"
+          aria-label={`${activeCategory.label} tools`}
+        >
           {activeCategory.tools.map(({ id, label }) => (
             <button
               key={id}
               type="button"
-              className={`panel-subtool ${tools.active === id ? 'active' : ''}`}
-              disabled={(id === 'crop' || id === 'resize') && !canvas.hasDocument}
+              className={`panel-subtool ${tools.active === id ? "active" : ""}`}
+              disabled={(id === "crop" || id === "resize") && !canvas.hasDocument}
               aria-pressed={tools.active === id}
               onClick={() => {
-                tools.setActive(id)
-                if (id === 'crop') tools.beginCrop()
+                tools.setActive(id);
+                if (id === 'templates') openGallery()
+                if (id === "crop") tools.beginCrop();
               }}
             >
               {label}
@@ -53,21 +74,26 @@ export function ToolPanel() {
           ))}
         </nav>
       )}
-      {tools.active === 'upload' && <UploadPanel />}
-      {tools.active === 'crop' && <CropPanel />}
-      {tools.active === 'resize' && <ResizePanel />}
-      {tools.active === 'text' && <TextPanel />}
-      {tools.active === 'shapes' && <ShapesPanel />}
-      {tools.active === 'adjust' && <AdjustmentsPanel />}
-      {tools.active === 'filters' && <FiltersPanel />}
-      {tools.active === 'background' && <BackgroundPanel />}
-      {tools.active === 'draw-remove' && <DrawingPanel />}
-      {tools.active === 'stickers' && <StickersPanel />}
-      {tools.active === 'video-upload' && <VideoUploadPanel />}
-      {tools.active === 'video-trim' && <VideoTrimPanel />}
-      {tools.active === 'layers' && <LayersPanel />}
-      {tools.active === 'shadows' && <ShadowPanel />}
-      {tools.active === 'animate' && <AnimatePanel />}
+      {tools.active === "upload" && <UploadPanel />}
+      {(tools.active === 'library' || tools.active === 'templates') && <LibraryPanel />}
+      {tools.active === "crop" && <CropPanel />}
+      {tools.active === "resize" && <ResizePanel />}
+      {tools.active === "text" && <TextPanel />}
+      {tools.active === "shapes" && <ShapesPanel />}
+      {tools.active === "adjust" && <AdjustmentsPanel />}
+      {tools.active === "filters" && <FiltersPanel />}
+      {tools.active === "background" && <BackgroundPanel />}
+      {tools.active === "draw-remove" && <DrawingPanel />}
+      {tools.active === "stickers" && <StickersPanel />}
+      {tools.active === "signature" && <SignaturePanel />}
+      {tools.active === "sticky-note" && <StickyNotePanel />}
+      {tools.active === "video-upload" && <VideoUploadPanel />}
+      {tools.active === "video-trim" && <VideoTrimPanel />}
+      {tools.active === "layers" && <LayersPanel />}
+      {tools.active === "frames-layout" && <FramesLayoutPanel />}
+      {tools.active === "charts" && <ChartPanel />}
+      {tools.active === "shadows" && <ShadowPanel />}
+      {tools.active === "animate" && <AnimatePanel />}
     </aside>
-  )
+  );
 }

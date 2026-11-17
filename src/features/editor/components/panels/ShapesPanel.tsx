@@ -93,7 +93,7 @@ export function ShapesPanel() {
   )
 
   const add3DElement = async (label: string, render: () => Promise<void>) => {
-    if (!canvas.hasImage || !fabricCanvas || addingShape) return
+    if (!canvas.hasDocument || !fabricCanvas || addingShape) return
 
     try {
       setAddingShape(true)
@@ -417,7 +417,7 @@ export function ShapesPanel() {
                 : filteredThreeDEmojiChoices.length === 0 && filteredThreeDEmojiAssets.length === 0 && <p className="panel-note">No matching 3D emojis.</p>}
         </section>}
       </fieldset>
-      <p className="panel-note draw-hint">{!canvas.hasDocument ? 'Add a layer to use shape tools.' : mode === '2d' ? `Drag to draw a ${shapeNames[shapes.kind].toLowerCase()}; hold Shift to constrain proportions.` : `Drag to draw a 3D ${threeDShapeChoices.find((shape) => shape.kind === shapes.threeDKind)?.label.toLowerCase() ?? 'shape'}. Drag the center rotate handle for X/Y; drag the Z handle for Z.`}</p>
+      <p className="panel-note draw-hint">{!canvas.hasDocument ? 'Add a layer to use shape tools.' : mode === '2d' ? `Drag to draw a ${shapeNames[shapes.kind].toLowerCase()}; hold Shift to constrain proportions.` : `Drag to draw a 3D ${threeDShapeChoices.find((shape) => shape.kind === shapes.threeDKind)?.label.toLowerCase() ?? 'shape'}. Drag the center handle to rotate X/Y; drag the upper-right handle to rotate Z.`}</p>
     </div>
   )
 }

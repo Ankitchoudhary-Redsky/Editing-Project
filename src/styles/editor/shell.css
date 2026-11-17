@@ -20,6 +20,7 @@
 }
 
 .topbar {
+  z-index: 4;
   display: flex;
   flex: 0 0 64px;
   align-items: center;
@@ -32,9 +33,9 @@
 
 .mode-switch {
   display: flex;
-  flex: 1;
+  flex: 0 0 auto;
   max-width: 150px;
-  align-items: flex-start;
+  align-items: center;
   gap: 2px;
   padding: 3px;
   border: 1px solid #e0e5e1;
@@ -66,7 +67,7 @@
 }
 
 .brand-lockup,
-.project-title,
+/* .project-title, */
 .top-actions,
 .project-name,
 .save-status,
@@ -81,11 +82,12 @@
 .export-info {
   display: flex;
   align-items: center;
-  gap:10px;
+  gap: 10px;
 }
 
 .brand-lockup {
   gap: 2px;
+  flex: 0 0 130px;
   min-width: 190px;
 }
 /* .brand-mark { width: 26px; height: 26px; position: relative; display: grid; place-items: center; border-radius: 8px; background: var(--accent); transform: rotate(-4deg); }
@@ -107,19 +109,25 @@
   color: var(--accent);
   font-weight: 400;
 }
+
 .project-title {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-left: 10px;
 }
-
+.project-title > div:first-child {
+  flex: 0 1 auto;
+  width: 100%;
+  min-width: 0;
+}
 .project-name {
   display: flex;
-  align-items: center;
-  gap: 7px;
+  width: 100%;
   max-width: 130px;
   min-width: 0;
+  align-items: center;
+  gap: 7px;
   padding: 0;
   border: 0;
   color: #2e3934;
@@ -128,8 +136,26 @@
   font-weight: 600;
   cursor: pointer;
 }
+.project-title .project-title-input {
+  box-sizing: border-box;
+  width: min(260px, 44vw);
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid #a8cabb;
+  border-radius: 4px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .project-name-text {
+  /* display: block;
+  flex: 1 1 auto; */
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -142,15 +168,6 @@
   height: 14px;
 }
 
-.project-title input {
-  width: min(260px, 44vw);
-  padding: 3px 6px;
-  border: 1px solid #a8cabb;
-  border-radius: 4px;
-  color: var(--ink);
-  background: white;
-  font: inherit;
-}
 .save-status {
   gap: 6px;
   color: #8b938e;
@@ -164,6 +181,7 @@
   background: #71a98b;
 }
 .top-actions {
+  flex: 0 0 auto;
   margin-left: auto;
 }
 .icon-button,
@@ -246,4 +264,8 @@
   display: flex;
   flex: 1;
   min-height: 0;
+}
+
+.editor-app:has(.workspace.focus-mode) > .topbar {
+  display: none;
 }

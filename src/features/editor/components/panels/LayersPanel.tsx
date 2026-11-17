@@ -1,8 +1,8 @@
-import { ArrowDown, ArrowUp, Eye, EyeOff, FileImage, Lock, Pencil, Shapes, Table2, Trash2, Type, Unlock } from 'lucide-react'
+import { ArrowDown, ArrowUp, CopyPlus, Eye, EyeOff, FileImage, Lock, Pencil, Shapes, Square, SquareCheck, Table2, Trash2, Type, Unlock } from 'lucide-react'
 import { FabricImage, IText, type FabricObject } from 'fabric'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useEditor } from '../../EditorContext'
-import { BACKGROUND_IMAGE_NAME } from '../../model/constants'
+import { BACKGROUND_IMAGE_NAME, isDrawingLayerName } from '../../model/constants'
 import { objectName } from '../../model/objectName'
 import type { CachedLayerThumbnail } from '../../model/types'
 import { getTableId } from '../../operations/tableGeometry'
@@ -51,17 +51,26 @@ function getLayerThumbnail(object: FabricObject) {
 
 export function LayersPanel() {
   const { canvas, shapes, table, tools } = useEditor()
+  const [checked, setChecked] = useState<FabricObject[]>([])
   const [renamingObject, setRenamingObject] = useState<FabricObject | null>(null)
   const [renameValue, setRenameValue] = useState('')
-  const layerEntries: Array<{
-    object: FabricObject
-    index: number
-    tableId: number | null
-  }> = []
+  const cancelRenameRef = useRef(false)
+  const contentObjects = canvas.objects.filter((object) => {
+    const name = object.get('name')
+    return name !== 'editor-frame-overlay'
+  })
+  const layerObjects = contentObjects.filter(
+    (object) =>
+      getTableId(object) === null &&
+      (object.selectable !== false || isDrawingLayerName(object.get('name'))) &&
+      object.get('layerLocked') !== true,
+  )
+  const activeChecked = checked.filter((object) => layerObjects.includes(object))
+  const layerEntries: Array<{ object: FabricObject; index: number; tableId: number | null }> = []
   const seenTableIds = new Set<number>()
 
-  for (let index = canvas.objects.length - 1; index >= 0; index -= 1) {
-    const object = canvas.objects[index]
+  for (let index = contentObjects.length - 1; index >= 0; index -= 1) {
+    const object = contentObjects[index]
     const tableId = getTableId(object)
     if (tableId === null) {
       layerEntries.push({ object, index, tableId: null })
@@ -71,63 +80,284 @@ export function LayersPanel() {
     }
   }
 
+  const allSelected = layerObjects.length > 0 && activeChecked.length === layerObjects.length
+
+  const toggleLayer = (object: FabricObject) => {
+    if (isDrawingLayerName(object.get('name')) && object.get('layerLocked') !== true) {
+      object.set({ selectable: true, evented: true })
+    }
+    const next = activeChecked.includes(object)
+      ? activeChecked.filter((item) => item !== object)
+      : [...activeChecked, object]
+    setChecked(next)
+    if (table.editing) table.finishEditing()
+    shapes.selectLayers(next)
+  }
+
+  const toggleAll = () => {
+    const next = activeChecked.length === layerObjects.length ? [] : [...layerObjects]
+    setChecked(next)
+    if (table.editing) table.finishEditing()
+    shapes.selectLayers(next)
+  }
+
+  const moveSelection = (direction: "forward" | "backward") => {
+    if (!activeChecked.length) return
+    shapes.moveLayers(activeChecked, direction)
+  }
+
+  const removeLayer = (object: FabricObject) => {
+    shapes.deleteLayers([object])
+    setChecked((current) => current.filter((item) => item !== object))
+  }
+
+  const deleteChecked = () => {
+    shapes.deleteLayers(activeChecked)
+    setChecked([])
+  }
+
+  const duplicateChecked = async () => {
+    const copies = await shapes.duplicateLayers(activeChecked)
+    setChecked(copies)
+  }
+
   return (
     <div className="panel-content layers-content">
-      <div className="layer-heading"><span>{layerEntries.length} layers</span><span>TOP</span></div>
+      <div className="layer-heading">
+        <span>{activeChecked.length ? `${activeChecked.length} selected` : `${layerEntries.length} layers`}</span>
+        <button
+          type="button"
+          className="layer-select-all"
+          onClick={toggleAll}
+          title={allSelected ? "Clear selection" : "Select all layers"}
+          aria-label={allSelected ? "Clear selection" : "Select all layers"}
+        >
+          {allSelected ? <SquareCheck size={16} /> : <Square size={16} />}
+          <span>{allSelected ? "Clear" : "All"}</span>
+        </button>
+      </div>
+      <div
+        className="layer-bulk-actions"
+        aria-label="Actions for selected layers"
+      >
+        <button
+          type="button"
+          className="mini-button"
+          title="Duplicate selected layers"
+          aria-label="Duplicate selected layers"
+          disabled={!activeChecked.length}
+          onClick={() => void duplicateChecked()}
+        >
+          <CopyPlus size={15} />
+        </button>
+        <button
+          type="button"
+          className="mini-button"
+          title="Move selected layers forward"
+          aria-label="Move selected layers forward"
+          disabled={!activeChecked.length}
+          onClick={() => moveSelection("forward")}
+        >
+          <ArrowUp size={15} />
+        </button>
+        <button
+          type="button"
+          className="mini-button"
+          title="Move selected layers backward"
+          aria-label="Move selected layers backward"
+          disabled={!activeChecked.length}
+          onClick={() => moveSelection("backward")}
+        >
+          <ArrowDown size={15} />
+        </button>
+        <button
+          type="button"
+          className="mini-button danger-action"
+          title="Delete selected layers"
+          aria-label="Delete selected layers"
+          disabled={!activeChecked.length}
+          onClick={deleteChecked}
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
       {layerEntries.map(({ object, index, tableId }) => {
         const isTable = tableId !== null
-        const Icon = isTable ? Table2 : object instanceof FabricImage ? FileImage : object instanceof IText ? Type : Shapes
-        const thumbnail = isTable ? '' : getLayerThumbnail(object)
-        const layerName = isTable ? `Table ${tableId}` : objectName(object, index)
+        const isDrawingLayer = isDrawingLayerName(object.get('name'))
         const isLocked = object.get('layerLocked') === true
+        const Icon = isTable
+          ? Table2
+          : object instanceof FabricImage
+            ? FileImage
+            : object instanceof IText
+              ? Type
+              : Shapes
+        const layerName = isTable ? `Table ${tableId}` : objectName(object, index)
+        const thumbnail = isTable ? '' : getLayerThumbnail(object)
         const isSelected = isTable
           ? table.activeId === tableId && table.editing
-          : canvas.selected === object
+          : activeChecked.includes(object) || canvas.selected === object
         const finishRename = () => {
+          if (cancelRenameRef.current) {
+            cancelRenameRef.current = false
+            return
+          }
           if (renamingObject !== object) return
           shapes.renameLayer(object, renameValue)
           setRenamingObject(null)
         }
-        return <div key={isTable ? `table-${tableId}` : `${index}-${layerName}`} className={`layer-row ${isSelected ? 'selected' : ''} ${object.visible ? '' : 'hidden'}`}>
-          {renamingObject === object ? <input
-            className="layer-rename-input"
-            aria-label="Layer name"
-            autoFocus
-            value={renameValue}
-            onChange={(event) => setRenameValue(event.target.value)}
-            onBlur={finishRename}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => {
-              event.stopPropagation()
-              if (event.key === 'Enter') event.currentTarget.blur()
-              if (event.key === 'Escape') setRenamingObject(null)
-            }}
-          /> : <button className="layer-select" disabled={isLocked} onClick={() => {
-            if (isTable) table.select(tableId)
-            else {
-              table.finishEditing()
-              if (object.get('name') === BACKGROUND_IMAGE_NAME) tools.setActive('layers')
-              shapes.selectLayer(object)
-            }
-          }}><span className="layer-thumb">{thumbnail ? <img src={thumbnail} alt="" /> : <Icon size={16} />}</span><span>{layerName}</span></button>}
-          <button className="layer-mini" title={object.visible ? 'Hide layer' : 'Show layer'} aria-label={`${object.visible ? 'Hide' : 'Show'} ${layerName}`} disabled={isTable} onClick={() => shapes.setLayerVisibility(object, !object.visible)}>{object.visible ? <Eye size={14} /> : <EyeOff size={14} />}</button>
-          <button className="layer-mini" title={isLocked ? 'Unlock layer' : 'Lock layer'} aria-label={`${isLocked ? 'Unlock' : 'Lock'} ${layerName}`} disabled={isTable} onClick={() => shapes.setLayerLocked(object, !isLocked)}>{isLocked ? <Lock size={14} /> : <Unlock size={14} />}</button>
-          <button className="layer-mini" title="Rename layer" aria-label={`Rename ${layerName}`} disabled={isTable} onClick={() => { setRenameValue(layerName); setRenamingObject(object) }}><Pencil size={14} /></button>
-          <button className="layer-mini" title="Move forward" onClick={() => isTable ? table.moveLayer(tableId, 'forward') : shapes.moveLayer(object, 'forward')}><ArrowUp size={14} /></button>
-          <button className="layer-mini" title="Move backward" onClick={() => isTable ? table.moveLayer(tableId, 'backward') : shapes.moveLayer(object, 'backward')}><ArrowDown size={14} /></button>
-          <button className="layer-mini delete-mini" title="Delete layer" onClick={() => {
-            if (isTable) {
-              table.select(tableId)
-              table.deleteTable()
-            } else {
-              shapes.selectLayer(object)
-              shapes.delete()
-            }
-          }}><Trash2 size={14} /></button>
-        </div>
+
+        return (
+          <div
+            key={isTable ? `table-${tableId}` : `${index}-${layerName}`}
+            className={`layer-row ${isSelected ? 'selected' : ''} ${object.visible === false ? 'hidden' : ''}`}
+          >
+            {!isTable && (
+              <button
+                type="button"
+                className="layer-check"
+                aria-label={`${activeChecked.includes(object) ? 'Deselect' : 'Select'} ${layerName}`}
+                aria-pressed={activeChecked.includes(object)}
+                disabled={isLocked || (object.selectable === false && !isDrawingLayer)}
+                onClick={() => toggleLayer(object)}
+              >
+                {activeChecked.includes(object) ? <SquareCheck size={18} /> : <Square size={18} />}
+              </button>
+            )}
+            {renamingObject === object ? (
+              <input
+                className="layer-rename-input"
+                aria-label="Layer name"
+                autoFocus
+                value={renameValue}
+                onChange={(event) => setRenameValue(event.target.value)}
+                onBlur={finishRename}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => {
+                  event.stopPropagation()
+                  if (event.key === 'Enter') event.currentTarget.blur()
+                  if (event.key === 'Escape') {
+                    cancelRenameRef.current = true
+                    setRenamingObject(null)
+                  }
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                className="layer-select"
+                disabled={!isTable && (isLocked || (object.selectable === false && !isDrawingLayer))}
+                onClick={() => {
+                  if (isTable) {
+                    if (activeChecked.length) {
+                      setChecked([])
+                      shapes.selectLayers([])
+                    }
+                    table.finishEditing()
+                    table.select(tableId)
+                    return
+                  }
+                  setChecked([object])
+                  if (table.editing) table.finishEditing()
+                  if (object.get('name') === BACKGROUND_IMAGE_NAME) tools.setActive('layers')
+                  shapes.selectLayer(object)
+                }}
+              >
+                <span className="layer-thumb">
+                  {thumbnail ? <img src={thumbnail} alt="" /> : <Icon size={16} />}
+                </span>
+                <span>{layerName}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              className="layer-mini"
+              title={object.visible === false ? 'Show layer' : 'Hide layer'}
+              aria-label={`${object.visible === false ? 'Show' : 'Hide'} ${layerName}`}
+              disabled={isTable}
+              onClick={() => shapes.setLayerVisibility(object, object.visible === false)}
+            >
+              {object.visible === false ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+            <button
+              type="button"
+              className="layer-mini"
+              title={isLocked ? 'Unlock layer' : 'Lock layer'}
+              aria-label={`${isLocked ? 'Unlock' : 'Lock'} ${layerName}`}
+              disabled={isTable || isDrawingLayer}
+              onClick={() => shapes.setLayerLocked(object, !isLocked)}
+            >
+              {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
+            </button>
+            <button
+              type="button"
+              className="layer-mini"
+              title="Rename layer"
+              aria-label={`Rename ${layerName}`}
+              disabled={isTable || isDrawingLayer}
+              onClick={() => {
+                setRenameValue(layerName)
+                setRenamingObject(object)
+              }}
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              type="button"
+              className="layer-mini"
+              title="Move forward"
+              aria-label={`Move ${layerName} forward`}
+              onClick={() => isTable
+                ? table.moveLayer(tableId, 'forward')
+                : shapes.moveLayers(activeChecked.includes(object) ? activeChecked : [object], 'forward')}
+            >
+              <ArrowUp size={14} />
+            </button>
+            <button
+              type="button"
+              className="layer-mini"
+              title="Move backward"
+              aria-label={`Move ${layerName} backward`}
+              onClick={() => isTable
+                ? table.moveLayer(tableId, 'backward')
+                : shapes.moveLayers(activeChecked.includes(object) ? activeChecked : [object], 'backward')}
+            >
+              <ArrowDown size={14} />
+            </button>
+            <button
+              type="button"
+              className="layer-mini delete-mini"
+              title="Delete layer"
+              aria-label={`Delete ${layerName}`}
+              onClick={() => {
+                if (isTable) {
+                  table.select(tableId)
+                  table.deleteTable()
+                } else {
+                  removeLayer(object)
+                }
+              }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        )
       })}
-      {!layerEntries.length && <p className="panel-note">Add text or shapes to start building your layers.</p>}
-      {canvas.selected && getTableId(canvas.selected) === null && !table.editing && <div className="object-actions layer-actions"><button className="secondary-button" onClick={() => void shapes.duplicate()}><FileImage size={15} /> Duplicate</button><button className="secondary-button danger-action" onClick={shapes.delete}><Trash2 size={15} /> Delete</button></div>}
+      {!layerEntries.length && (
+        <p className="panel-note">
+          Add text or shapes to start building your layers.
+        </p>
+      )}
+      {canvas.selected && getTableId(canvas.selected) === null && !table.editing && (
+        <div className="object-actions layer-actions">
+          <button type="button" className="secondary-button" onClick={() => void shapes.duplicate()}>
+            <CopyPlus size={15} /> Duplicate
+          </button>
+          <button type="button" className="secondary-button danger-action" onClick={shapes.delete}>
+            <Trash2 size={15} /> Delete
+          </button>
+        </div>
+      )}
     </div>
   )
 }

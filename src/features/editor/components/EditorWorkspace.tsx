@@ -1,10 +1,24 @@
+import { CopyPlus,
+  Eraser,
+  Fullscreen,
+  LockKeyhole,
+  Minimize2,
+  Highlighter,
+  MoveHorizontal,
+  MoveVertical,
+  Paintbrush,
+  Pencil, Trash2,
+  UnlockKeyhole,
+  Upload,
+  Copy, Plus, Rotate3D, RotateCcw,
+} from "lucide-react";
 import type { DragEvent, PointerEvent as ReactPointerEvent, ReactNode, Ref } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FabricImage } from 'fabric'
-import { Copy, Eraser, Highlighter, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Plus, Rotate3D, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { UploadLanding } from "./UploadLanding";
 
 import { useEditor } from '../EditorContext'
-import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, DRAWING_LAYER_NAME } from '../model/constants'
+import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, isDrawingLayerName } from '../model/constants'
 import { objectName } from '../model/objectName'
 import type { CanvasSurfaceProps, DrawingMode } from '../model/types'
 import { getThreeDRotation, isThreeDRotatable, updateThreeDRotation } from '../operations/threeDShapes'
@@ -37,18 +51,18 @@ function CanvasSurface({
   onDrop,
   children,
 }: WorkspaceCanvasSurfaceProps) {
-  const cursorElementRef = useRef<HTMLDivElement | null>(null)
-  const cursorPositionRef = useRef<{ x: number; y: number } | null>(null)
+  const cursorElementRef = useRef<HTMLDivElement | null>(null);
+  const cursorPositionRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    const cursor = cursorElementRef.current
-    const position = cursorPositionRef.current
-    if (!cursor || !showDrawingCursor || !position) return
+    const cursor = cursorElementRef.current;
+    const position = cursorPositionRef.current;
+    if (!cursor || !showDrawingCursor || !position) return;
 
-    cursor.style.left = `${position.x}px`
-    cursor.style.top = `${position.y}px`
-    cursor.style.visibility = 'visible'
-  }, [showDrawingCursor, CursorIcon])
+    cursor.style.left = `${position.x}px`;
+    cursor.style.top = `${position.y}px`;
+    cursor.style.visibility = "visible";
+  }, [showDrawingCursor, CursorIcon]);
 
   return (
     <div
@@ -59,24 +73,26 @@ function CanvasSurface({
       onDragOver={onDragOver}
       onDrop={onDrop}
       onPointerMoveCapture={(event) => {
-        if (!showDrawingCursor) return
-        const bounds = event.currentTarget.getBoundingClientRect()
-        const pointerScale = bounds.width / event.currentTarget.offsetWidth || 1
+        if (!showDrawingCursor) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const pointerScale =
+          bounds.width / event.currentTarget.offsetWidth || 1;
         const position = {
           x: (event.clientX - bounds.left) / pointerScale,
           y: (event.clientY - bounds.top) / pointerScale,
-        }
-        cursorPositionRef.current = position
-        const cursor = cursorElementRef.current
+        };
+        cursorPositionRef.current = position;
+        const cursor = cursorElementRef.current;
         if (cursor) {
-          cursor.style.left = `${position.x}px`
-          cursor.style.top = `${position.y}px`
-          cursor.style.visibility = 'visible'
+          cursor.style.left = `${position.x}px`;
+          cursor.style.top = `${position.y}px`;
+          cursor.style.visibility = "visible";
         }
       }}
       onPointerLeave={() => {
-        cursorPositionRef.current = null
-        if (cursorElementRef.current) cursorElementRef.current.style.visibility = 'hidden'
+        cursorPositionRef.current = null;
+        if (cursorElementRef.current)
+          cursorElementRef.current.style.visibility = "hidden";
       }}
     >
       <canvas ref={setCanvasElement} />
@@ -85,7 +101,7 @@ function CanvasSurface({
         <div
           ref={cursorElementRef}
           className="drawing-cursor"
-          style={{ visibility: 'hidden' }}
+          style={{ visibility: "hidden" }}
           aria-hidden="true"
         >
           {!isResizeCursor && (
@@ -94,11 +110,83 @@ function CanvasSurface({
               style={{ width: brushSize, height: brushSize }}
             />
           )}
-          <span className={isResizeCursor ? 'drawing-cursor-icon table-resize-cursor' : 'drawing-cursor-icon'}>
+          <span
+            className={
+              isResizeCursor
+                ? "drawing-cursor-icon table-resize-cursor"
+                : "drawing-cursor-icon"
+            }
+          >
             <CursorIcon size={17} strokeWidth={2.2} />
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+function FloatingObjectToolbar({
+  stageRef,
+}: {
+  stageRef: React.RefObject<HTMLDivElement | null>
+}) {
+  const { canvas, fabricCanvas, shapes } = useEditor()
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
+
+  useEffect(() => {
+    const active = canvas.selected
+    const stage = stageRef.current
+    const fabricElement = fabricCanvas?.getElement()
+    if (!active || !stage || !fabricCanvas || !fabricElement || active.get('name') === 'Crop area') {
+      setPosition(null)
+      return
+    }
+
+    const updatePosition = () => {
+      const activeBounds = active.getBoundingRect()
+      const stageBounds = stage.getBoundingClientRect()
+      const canvasBounds = fabricElement.getBoundingClientRect()
+      const canvasOffsetX = canvasBounds.left - stageBounds.left
+      const canvasOffsetY = canvasBounds.top - stageBounds.top
+      const scaleX = canvasBounds.width / fabricCanvas.getWidth()
+      const scaleY = canvasBounds.height / fabricCanvas.getHeight()
+      const right = canvasOffsetX + (activeBounds.left + activeBounds.width) * scaleX
+      const top = canvasOffsetY + activeBounds.top * scaleY - 10
+      const toolbarWidth = 104
+
+      setPosition({
+        left: Math.max(toolbarWidth + 8, Math.min(stageBounds.width - 8, right)),
+        top: Math.max(8, top),
+      })
+    }
+
+    updatePosition()
+    fabricCanvas.on('after:render', updatePosition)
+    window.addEventListener('resize', updatePosition)
+    return () => {
+      fabricCanvas.off('after:render', updatePosition)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [canvas.selected, fabricCanvas, stageRef])
+
+  if (!position) return null
+
+
+
+  return (
+    <div
+      className="floating-object-toolbar"
+      style={{ left: position.left, top: position.top }}
+      onPointerDown={(event) => event.stopPropagation()}
+      role="toolbar"
+      aria-label="Selected object actions"
+    >
+      <button type="button" title="Duplicate" aria-label="Duplicate selected object" onClick={() => void shapes.duplicate()}>
+        <CopyPlus size={19} strokeWidth={2} />
+      </button>
+      <button type="button" className="floating-delete-button" title="Delete" aria-label="Delete selected object" onClick={shapes.delete}>
+        <Trash2 size={19} strokeWidth={2} />
+      </button>
     </div>
   )
 }
@@ -115,6 +203,7 @@ export function EditorWorkspace({
   setCanvasElement,
   setStageElement,
 }: EditorWorkspaceProps & { historyVersion: number }) {
+  const stageRef = useRef<HTMLDivElement | null>(null)
   const {
     canvas,
     fabricCanvas,
@@ -136,7 +225,11 @@ export function EditorWorkspace({
       saveActivePage,
       registerActions: registerPageActions,
     },
-  } = useEditor()
+  } = useEditor();
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [showFullScreen, setShowFullScreen] = useState(false);
+  const [uploadingInitialImage, setUploadingInitialImage] = useState(false);
   const [dropTargetPageId, setDropTargetPageId] = useState<number | null>(null)
   const [canvasSurfaceSize, setCanvasSurfaceSize] = useState({ width: 0, height: 0 })
   const nextPageIdRef = useRef(2)
@@ -166,17 +259,22 @@ export function EditorWorkspace({
     pencil: Pencil,
     eraser: Eraser,
     highlighter: Highlighter,
-    'magic-remover': Paintbrush,
-  }
+    "magic-remover": Paintbrush,
+  };
 
-  const DrawingCursorIcon = drawingCursorIcons[drawing.activeMode]
-  const showDrawingCursor = tools.active === 'draw-remove' && Boolean(DrawingCursorIcon)
-  const resizeCursor = table.resizeHover === 'column'
-    ? MoveHorizontal
-    : table.resizeHover === 'row'
-      ? MoveVertical
-      : undefined
-  const CursorIcon = resizeCursor ?? DrawingCursorIcon
+  const DrawingCursorIcon = drawingCursorIcons[drawing.activeMode];
+  const showDrawingCursor =
+    tools.active === "draw-remove" && Boolean(DrawingCursorIcon);
+  const resizeCursor =
+    table.resizeHover === "column"
+      ? MoveHorizontal
+      : table.resizeHover === "row"
+        ? MoveVertical
+        : undefined;
+
+  const CursorIcon = resizeCursor ?? DrawingCursorIcon;
+  const currentZoom = canvas.zoom;
+  const setZoom = canvas.setZoom;
 
   const scrollToPage = useCallback((pageId: number | null) => {
     const pageElement = thumbnailElementsRef.current.get(pageId)
@@ -252,17 +350,19 @@ export function EditorWorkspace({
     observer.observe(surface)
     return () => observer.disconnect()
   }, [canvas.dimensions.height, canvas.dimensions.width, canvas.fitScale, canvas.zoom])
-  const [imagePreviewUrl, setImagePreviewUrl] = useState('')
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   useEffect(() => {
-    if (!canvas.hasImage || !fabricCanvas || tools.active !== 'music') return
+    if (!canvas.hasImage || !fabricCanvas || tools.active !== "music") return;
 
     const frame = window.requestAnimationFrame(() => {
-      setImagePreviewUrl(fabricCanvas.toDataURL({ format: 'png', multiplier: 1 }))
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [canvas.hasImage, fabricCanvas, historyVersion, tools.active])
+      setImagePreviewUrl(
+        fabricCanvas.toDataURL({ format: "png", multiplier: 1 }),
+      );
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [canvas.hasImage, fabricCanvas, historyVersion, tools.active]);
 
-  const selectedThreeDObject = canvas.hasImage && canvas.selected instanceof FabricImage && isThreeDRotatable(canvas.selected)
+  const selectedThreeDObject = canvas.selected instanceof FabricImage && isThreeDRotatable(canvas.selected)
     ? canvas.selected
     : null
   const selectedThreeDBounds = selectedThreeDObject?.getBoundingRect()
@@ -353,13 +453,54 @@ export function EditorWorkspace({
     stage.scrollTop = Math.max(0, Math.min(maxScrollTop, stage.scrollTop + scrollDelta))
   }
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
+    event.preventDefault();
     if (event.dataTransfer.types.includes('application/x-estudio-page-image')) {
       autoScrollStage(event)
       return
     }
-    if (event.dataTransfer.types.includes('Files')) tools.setDraggingFile(true)
-  }
+    if (event.dataTransfer.types.includes('Files')) tools.setDraggingFile(true);
+  };
+
+  useEffect(() => {
+    if (!showFullScreen) return;
+
+    fabricCanvas?.discardActiveObject();
+    fabricCanvas?.requestRenderAll();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowFullScreen(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [fabricCanvas, showFullScreen]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const handleWheel = (event: globalThis.WheelEvent) => {
+      // Only intercept pinch-to-zoom / modified wheel gestures.
+      if (!event.ctrlKey && !event.metaKey) return;
+
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+
+      const zoomFactor = Math.exp(-event.deltaY * 0.01);
+      const nextZoom = Math.min(3, Math.max(0.1, currentZoom * zoomFactor));
+
+      setZoom(nextZoom);
+    };
+
+    viewport.addEventListener("wheel", handleWheel, {
+      passive: false,
+    });
+
+    return () => {
+      viewport.removeEventListener("wheel", handleWheel);
+    };
+  }, [currentZoom, setZoom]);
 
   const handlePageImageDragStart = (event: DragEvent<HTMLDivElement>, pageId: number | null) => {
     if (!fabricCanvas || !event.dataTransfer) {
@@ -403,7 +544,7 @@ export function EditorWorkspace({
           typeof object.src === 'string'
         )) &&
         object.name !== BACKGROUND_IMAGE_NAME &&
-        object.name !== DRAWING_LAYER_NAME,
+        !isDrawingLayerName(object.name),
       ))
     } catch {
       return false
@@ -700,11 +841,14 @@ export function EditorWorkspace({
 
   return (
     <section
-      className={`workspace ${editorMode.active === 'video' ? 'video-mode' : ''} ${tools.active === 'music' ? 'music-mode' : ''}`}
+      className={`workspace ${editorMode.active === "video" ? "video-mode" : ""} ${tools.active === "music" ? " music-mode" : ""}${showFullScreen ? " focus-mode" : ""}`}
     >
       <div
         className="stage"
-        ref={setStageRef}
+        ref={(element) => {
+          stageRef.current = element
+          setStageRef(element)
+        }}
         onDragOver={handleDragOver}
         onDragLeave={() => tools.setDraggingFile(false)}
         onDrop={handleWorkspaceDrop}
@@ -745,6 +889,18 @@ export function EditorWorkspace({
               ><Rotate3D size={18} strokeWidth={1.8} /></button>
               )}
             </CanvasSurface>
+            {(!canvas.hasDocument || uploadingInitialImage) &&
+            editorMode.active === "image" && (
+              <UploadLanding
+                restoring={false}
+                onUploadStart={() => setUploadingInitialImage(true)}
+                onUploadFinish={() => setUploadingInitialImage(false)}
+                onUpload={(file, onProgress) =>
+                  tools.uploadFile(file, onProgress)
+                }
+              />
+            )}
+
             {canvas.hasImage && editorMode.active === 'image' && (
             <div
               className="page-image-tools first-page-image-tools"
@@ -765,7 +921,8 @@ export function EditorWorkspace({
               </button>
             </div>
             )}
-            {!canvas.hasDocument && (
+            
+            {/* {!canvas.hasDocument && (
             <div className="empty-prompt">
               <div className="empty-art">
                 <div className="empty-sun" />
@@ -780,33 +937,43 @@ export function EditorWorkspace({
               </button>
               <span className="empty-format">PNG · JPG · WEBP</span>
             </div>
-            )}
+            )} */}
           </div>
 
-          {editorMode.active === 'video' && tools.active !== 'music' && (
+          {editorMode.active === "video" && tools.active !== "music" && (
             <div className="video-workspace-preview">
             {videoClip.url ? (
               <video
                 src={videoClip.url}
                 controls
-                onLoadedMetadata={(event) => videoClip.setDuration(event.currentTarget.duration)}
+                onLoadedMetadata={(event) =>
+                  videoClip.setDuration(event.currentTarget.duration)
+                }
                 aria-label="Uploaded video preview"
               />
             ) : (
               <div className="video-empty-state">
                 <Upload size={25} />
                 <strong>Start with a video</strong>
-                <button className="primary-button" onClick={() => tools.setActive('video-upload')}>Upload video</button>
+                <button
+                  className="primary-button"
+                  onClick={() => tools.setActive("video-upload")}
+                >
+                  Upload video
+                </button>
               </div>
             )}
             </div>
           )}
 
-          {editorMode.active === 'video' && videoClip.isTrimming && (
+          {editorMode.active === "video" && videoClip.isTrimming && (
             <div className="video-trim-loading" role="status" aria-live="polite">
             <span className="video-trim-spinner" aria-hidden="true" />
             <strong>Preparing your trimmed video</strong>
-            <span>Playing audio while the clip is processed. Your download will start when it finishes.</span>
+            <span>
+              Playing audio while the clip is processed. Your download will
+              start when it finishes.
+            </span>
             </div>
           )}
 
@@ -814,7 +981,9 @@ export function EditorWorkspace({
             <div className="drop-cover">
               <div>
                 <Upload size={24} />
-                <strong>Drop {editorMode.active === 'video' ? 'video' : 'image'} to open</strong>
+                <strong>
+                Drop {editorMode.active === "video" ? "video" : "image"} to open
+              </strong>
               </div>
             </div>
           )}
@@ -822,7 +991,7 @@ export function EditorWorkspace({
         </div>
       </div>
 
-      {editorMode.active === 'image' && (
+      {canvas.hasDocument && editorMode.active === 'image' && (
         <div className="workspace-pages">
           <div className="page-thumbnails" ref={thumbnailStripRef} aria-label="Pages">
             <div
@@ -956,23 +1125,104 @@ export function EditorWorkspace({
           </div>
         </div>
       )}
+        { canvas.hasDocument && (
+        <div className="workspace-footer">
+          <span>
+            <span className="status-dot" />{" "}
+            {editorMode.active === "video"
+              ? videoClip.file
+                ? "Video loaded"
+                : "No video selected"
+              : canvas.selected
+                ? `${objectName(canvas.selected, 0)} selected`
+                : canvas.hasDocument
+                  ? "Ready to edit"
+                  : "No image selected"}
+          </span>
 
-      <div className="workspace-footer">
-        <span>
-          <span className="status-dot" />{' '}
-          {editorMode.active === 'video'
-            ? videoClip.file ? 'Video loaded' : 'No video selected'
-            : canvas.selected
-            ? `${objectName(canvas.selected, 0)} selected`
-            : canvas.hasDocument
-              ? 'Ready to edit'
-              : 'No image selected'}
-        </span>
+          <div className="footer-zoom">
+            <button
+              className={`zoom-button image-resize-lock${canvas.imageResizeLocked ? " active" : ""}`}
+              onClick={canvas.toggleImageResizeLock}
+              aria-label={
+                canvas.imageResizeLocked
+                  ? "Unlock image movement and resizing"
+                  : "Lock image movement and resizing"
+              }
+              title={
+                canvas.imageResizeLocked
+                  ? "Unlock image movement and resizing"
+                  : "Lock image movement and resizing"
+              }
+              disabled={!canvas.hasImage}
+            >
+              {canvas.imageResizeLocked ? (
+                <LockKeyhole size={15} />
+              ) : (
+                <UnlockKeyhole size={15} />
+              )}
+            </button>
 
-        <span>{editorMode.active === 'video'
-          ? videoClip.file ? `Local video · ${videoClip.duration ? `${videoClip.duration.toFixed(1)} s` : 'reading duration'}` : 'Local video workspace'
-          : `Local document · ${canvas.dimensions.width} × ${canvas.dimensions.height}`}</span>
-      </div>
+            <button
+              className="zoom-button"
+              onClick={() => canvas.setZoom(Math.max(0.1, canvas.zoom - 0.1))}
+              aria-label="Zoom out"
+              disabled={canvas.zoom <= 0.1}
+            >
+              −
+            </button>
+
+            <input
+              className="zoom-slider"
+              type="range"
+              min="0.1"
+              max="3"
+              step="0.05"
+              value={canvas.zoom}
+              onChange={(event) => canvas.setZoom(Number(event.target.value))}
+              aria-label="Canvas zoom"
+            />
+
+            <button
+              className="zoom-button"
+              onClick={() => canvas.setZoom(Math.min(3, canvas.zoom + 0.1))}
+              aria-label="Zoom in"
+              disabled={canvas.zoom >= 3}
+            >
+              +
+            </button>
+
+            <button
+              className="zoom-percentage"
+              onClick={() => canvas.setZoom(1)}
+              title="Reset zoom to 100%"
+            >
+              {Math.round(canvas.zoom * 100)}%
+            </button>
+          </div>
+
+          <span className="workspace-document-status">
+            Local document · {canvas.dimensions.width} ×{" "}
+            {canvas.dimensions.height}
+          </span>
+          <button
+            className="zoom-button fullscreen-toggle"
+            type="button"
+            onClick={() => setShowFullScreen((current) => !current)}
+            aria-label={
+              showFullScreen
+                ? "Exit canvas focus mode"
+                : "Enter canvas focus mode"
+            }
+            aria-pressed={showFullScreen}
+            title={
+              showFullScreen ? "Exit canvas focus mode (Esc)" : "Expand canvas"
+            }
+          >
+            {showFullScreen ? <Minimize2 size={16} /> : <Fullscreen size={16} />}
+          </button>
+        </div>
+      )}
 
       {fabricCanvas && (
         <ImageMusicVideoExport
@@ -980,10 +1230,10 @@ export function EditorWorkspace({
           hasImage={canvas.hasImage}
           imagePreviewUrl={imagePreviewUrl}
           imageDimensions={canvas.dimensions}
-          isActive={tools.active === 'music'}
-          onBack={() => tools.setActive('adjust')}
+          isActive={tools.active === "music"}
+          onBack={() => tools.setActive("adjust")}
         />
       )}
     </section>
-  )
+  );
 }

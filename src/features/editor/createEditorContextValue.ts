@@ -1,5 +1,8 @@
-import { IText } from 'fabric'
-import type { CreateEditorContextValueOptions, EditorContextValue } from './model/types'
+import { IText } from "fabric";
+import type {
+  CreateEditorContextValueOptions,
+  EditorContextValue,
+} from "./model/types";
 
 export function createEditorContextValue({
   settings,
@@ -12,28 +15,33 @@ export function createEditorContextValue({
   ui,
   pages,
 }: CreateEditorContextValueOptions): EditorContextValue {
-  const { fabricCanvas, fitScale, fitToScreen } = canvasCore.fabric
-  const selectedText = ui.selectedObject instanceof IText ? ui.selectedObject : null
+  const { fabricCanvas, fitScale, fitToScreen } = canvasCore.fabric;
+  const selectedText =
+    ui.selectedObject instanceof IText ? ui.selectedObject : null;
 
   return {
     editorMode: {
       active: settings.editorMode,
       setActive: (mode) => {
-        settings.setEditorMode(mode)
-        toolActions.setActiveEditorTool(mode === 'image' ? 'upload' : 'video-upload')
+        settings.setEditorMode(mode);
+        toolActions.setActiveEditorTool(
+          mode === "image" ? "upload" : "video-upload",
+        );
       },
     },
     videoClip: settings.videoClip,
     fabricCanvas,
     canvas: {
       dimensions: ui.dimensions,
-      hasDocument: ui.hasDocument,
+      hasDocument: ui.hasDocument || pages.activeId !== null,
       hasImage: ui.hasImage,
       hasDeletedPageOneImage: false,
       imageThumbnail: ui.imageThumbnail,
       selected: ui.selectedObject,
       objects: ui.objects,
       selectedIsImage: ui.selectedIsImage,
+      imageResizeLocked: canvasCore.imageResizeLocked,
+      toggleImageResizeLock: canvasCore.toggleImageResizeLock,
       zoom: settings.zoom,
       setZoom: settings.setZoom,
       fitScale,
@@ -57,6 +65,7 @@ export function createEditorContextValue({
       setActive: toolActions.setActiveEditorTool,
       openFilePicker: documentActions.openFilePicker,
       uploadFile: documentActions.uploadFile,
+      addSignatureImage: documentActions.addSignatureImage,
       beginCrop: snapshot.canvasTransforms.crop.begin,
       setDraggingFile: ui.setDraggingFile,
       notice: ui.notice,
@@ -86,6 +95,7 @@ export function createEditorContextValue({
       setShadow: settings.setTextShadow,
       add: features.objectEditing.createText,
       update: features.objectEditing.updateText,
+      updateSignatureStyle: features.objectEditing.updateSignatureStyle,
     },
     shapes: {
       selected: ui.selectedObject,
@@ -113,9 +123,13 @@ export function createEditorContextValue({
       addImage: features.objectEditing.addImageToShape,
       duplicate: features.objectEditing.duplicateSelected,
       delete: features.objectEditing.deleteSelected,
+      duplicateLayers: features.objectEditing.duplicateLayers,
+      deleteLayers: features.objectEditing.deleteLayers,
+      moveLayers: features.objectEditing.moveLayers,
       updateAppearance: features.objectEditing.updateShapeAppearance,
       moveLayer: features.objectEditing.moveLayer,
       selectLayer: features.objectEditing.selectLayer,
+      selectLayers: features.objectEditing.selectLayers,
       setLayerVisibility: features.objectEditing.setLayerVisibility,
       setLayerLocked: features.objectEditing.setLayerLocked,
       renameLayer: features.objectEditing.renameLayer,
@@ -149,25 +163,25 @@ export function createEditorContextValue({
     setVideoAudio: settings.setVideoAudio,
     draggingFile: ui.draggingFile,
     handleDrop: (event) => {
-      if (settings.editorMode !== 'video') {
-        documentActions.handleDrop(event)
-        return
+      if (settings.editorMode !== "video") {
+        documentActions.handleDrop(event);
+        return;
       }
-      event.preventDefault()
-      event.stopPropagation()
-      ui.setDraggingFile(false)
-      const file = event.dataTransfer.files[0]
-      if (!file) return
-      if (!file.type.startsWith('video/')) {
-        ui.setNotice('Choose a video file to continue.')
-        return
+      event.preventDefault();
+      event.stopPropagation();
+      ui.setDraggingFile(false);
+      const file = event.dataTransfer.files[0];
+      if (!file) return;
+      if (!file.type.startsWith("video/")) {
+        ui.setNotice("Choose a video file to continue.");
+        return;
       }
       if (file.size > 500 * 1024 * 1024) {
-        ui.setNotice('Videos must be smaller than 500 MB.')
-        return
+        ui.setNotice("Videos must be smaller than 500 MB.");
+        return;
       }
-      settings.videoClip.setFile(file)
-      ui.setNotice('')
+      settings.videoClip.setFile(file);
+      ui.setNotice("");
     },
     filters: {
       selected: settings.selectedFilter,
@@ -202,6 +216,7 @@ export function createEditorContextValue({
       share: toolActions.shareDesign,
     },
     table: features.table,
+    framesLayout: features.framesLayout,
 
-  }
+  };
 }

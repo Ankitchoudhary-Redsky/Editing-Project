@@ -1,5 +1,6 @@
 import type { DragEvent } from 'react'
 import { ImagePlus, Music2, RotateCcw, Trash } from 'lucide-react'
+
 import { useEditor } from '../../../editor/EditorContext'
 import { editorCopy } from '../../model/editorCopy'
 
@@ -48,12 +49,13 @@ export function UploadPanel() {
     }),
   ]
 
+
   return (
     <div className="panel-content">
       <button
         className="upload-drop"
         disabled={pages.switching}
-        onClick={tools.openFilePicker}
+        type="button" onClick={tools.openFilePicker}
         onDragOver={handleUploadDragOver}
         onDrop={handleUploadDrop}
       >

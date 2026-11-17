@@ -8,68 +8,91 @@ import {
   Video,
   Scissors,
   Layers3,
+  Library,
+  PanelsTopLeft,
+  ChartNoAxesColumnIncreasing,
   Moon,
   Sparkles,
   Type,
-} from 'lucide-react'
-import { Canvas } from 'fabric'
-import type { DrawingMode, EditorTool, ShapeKind } from './types'
+} from "lucide-react";
+import { Canvas } from "fabric";
+import type { DrawingMode, EditorTool, ShapeKind } from "./types";
 
-export const BACKGROUND_IMAGE_NAME = '__pixel_studio_background_image__'
+export const BACKGROUND_IMAGE_NAME = "__pixel_studio_background_image__";
 export const BASE_IMAGE_PROPERTY = 'isBaseImage'
 export const DEFAULT_PAGE_WIDTH = 1200
 export const DEFAULT_PAGE_HEIGHT = 800
 export const DRAWING_LAYER_NAME = '__pixel_studio_drawing_layer__'
+export const DRAWING_LAYER_TOOL_NAMES = {
+  pencil: `${DRAWING_LAYER_NAME}_pencil`,
+  sketch: `${DRAWING_LAYER_NAME}_sketch`,
+  marker: `${DRAWING_LAYER_NAME}_marker`,
+  highlighter: `${DRAWING_LAYER_NAME}_highlighter`,
+} as const
+
+export function isDrawingLayerName(name: unknown) {
+  return typeof name === 'string' && (
+    name === DRAWING_LAYER_NAME ||
+    Object.values(DRAWING_LAYER_TOOL_NAMES).some((layerName) => layerName === name)
+  )
+}
 
 export const editorToolCategories: {
-  id: string
-  label: string
-  icon: typeof Upload
-  defaultTool: EditorTool
-  tools: { id: EditorTool; label: string }[]
+  id: string;
+  label: string;
+  icon: typeof Upload;
+  defaultTool: EditorTool;
+  tools: { id: EditorTool; label: string }[];
 }[] = [
   { id: 'upload', label: 'Upload', icon: Upload, defaultTool: 'upload', tools: [{ id: 'upload', label: 'Images' }] },
+  { id: 'library', label: 'Library', icon: Library, defaultTool: 'library', tools: [{ id: 'library', label: 'Uploads' }, { id: 'templates', label: 'Templates' }] },
   { id: 'transform', label: 'Transform', icon: MousePointer2, defaultTool: 'crop', tools: [{ id: 'crop', label: 'Crop' }, { id: 'resize', label: 'Resize' }] },
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal, defaultTool: 'adjust', tools: [{ id: 'adjust', label: 'Adjustments' }] },
   { id: 'effects', label: 'Effects', icon: WandSparkles, defaultTool: 'filters', tools: [{ id: 'filters', label: 'Filters' }, { id: 'background', label: 'Background' }] },
   { id: 'text', label: 'Text', icon: Type, defaultTool: 'text', tools: [{ id: 'text', label: 'Text' }] },
-  { id: 'elements', label: 'Elements', icon: Shapes, defaultTool: 'shapes', tools: [{ id: 'shapes', label: 'Shapes' }, { id: 'stickers', label: 'Stickers' }] },
+  { id: "elements",label: "Elements",icon: Shapes,defaultTool: "shapes",tools: [{ id: "shapes", label: "Shapes" },{ id: "stickers", label: "Stickers" },{ id: "signature", label: "Signature" },{ id: "sticky-note", label: "Sticky note" },],},
+  { id: 'frames-layout', label: 'Frames', icon: PanelsTopLeft, defaultTool: 'frames-layout', tools: [{ id: 'frames-layout', label: 'Frame layout' }] },
+  { id: 'charts', label: 'Charts', icon: ChartNoAxesColumnIncreasing, defaultTool: 'charts', tools: [{ id: 'charts', label: 'Charts' }] },
   { id: 'animate', label: 'Animate', icon: Sparkles, defaultTool: 'animate', tools: [{ id: 'animate', label: 'Animations' }] },
   { id: 'retouch', label: 'Retouch', icon: Pencil, defaultTool: 'draw-remove', tools: [{ id: 'draw-remove', label: 'Retouch' }] },
   { id: 'layers', label: 'Layers', icon: Layers3, defaultTool: 'layers', tools: [{ id: 'layers', label: 'Layers' }] },
   { id: 'shadows', label: 'Shadows', icon: Moon, defaultTool: 'shadows', tools: [{ id: 'shadows', label: 'Shadows' }] },
 ]
 
-export const videoTools: { id: EditorTool; label: string; icon: typeof Upload }[] = [
-  { id: 'video-upload', label: 'Upload video', icon: Video },
-  { id: 'video-trim', label: 'Trim video', icon: Scissors },
-]
+export const videoTools: {
+  id: EditorTool;
+  label: string;
+  icon: typeof Upload;
+}[] = [
+  { id: "video-upload", label: "Upload video", icon: Video },
+  { id: "video-trim", label: "Trim video", icon: Scissors },
+];
 
 export const cropRatios: Record<string, number | null> = {
   Free: null,
-  '1:1': 1,
-  '4:3': 4 / 3,
-  '16:9': 16 / 9,
-  '3:2': 3 / 2,
-}
+  "1:1": 1,
+  "4:3": 4 / 3,
+  "16:9": 16 / 9,
+  "3:2": 3 / 2,
+};
 
 export const shapeNames: Record<ShapeKind, string> = {
-  rect: 'Rectangle',
-  roundRect: 'Rounded rectangle',
+  rect: "Rectangle",
+  roundRect: "Rounded rectangle",
   square: 'Square',
-  circle: 'Circle',
-  ellipse: 'Ellipse',
-  line: 'Line',
+  circle: "Circle",
+  ellipse: "Ellipse",
+  line: "Line",
   dashedLine: 'Dashed line',
   dottedLine: 'Dotted line',
-  arrow: 'Arrow',
+  arrow: "Arrow",
   doubleArrow: 'Double arrow',
   curvedArrow: 'Curved arrow',
-  triangle: 'Triangle',
+  triangle: "Triangle",
   rightTriangle: 'Right triangle',
   diamond: 'Diamond',
-  star: 'Star',
-  pentagon: 'Pentagon',
+  star: "Star",
+  pentagon: "Pentagon",
   hexagon: 'Hexagon',
   octagon: 'Octagon',
   heart: 'Heart',
@@ -83,47 +106,54 @@ export const shapeNames: Record<ShapeKind, string> = {
   ring: 'Ring',
   donut: 'Donut',
   arc: 'Arc',
-}
+};
 
 export const resizePresets = [
-  { label: 'Square', width: 1080, height: 1080 },
-  { label: 'Portrait', width: 1080, height: 1350 },
-  { label: 'Landscape', width: 1600, height: 900 },
-  { label: 'Story', width: 1080, height: 1920 },
-]
+  { label: "Square", width: 1080, height: 1080 },
+  { label: "Portrait", width: 1080, height: 1350 },
+  { label: "Landscape", width: 1600, height: 900 },
+  { label: "Story", width: 1080, height: 1920 },
+];
 
-export const textFontFamilies = ['Georgia', 'Arial', 'Verdana', 'Trebuchet MS', 'Courier New', 'Times New Roman']
+export const textFontFamilies = [
+  "Georgia",
+  "Arial",
+  "Verdana",
+  "Trebuchet MS",
+  "Courier New",
+  "Times New Roman",
+];
 
 export const drawingModeDescriptions: Record<DrawingMode, string> = {
-  pencil: 'Draw freehand strokes on your image.',
-  sketch: 'Create light, fine sketch strokes.',
-  marker: 'Draw bold, opaque marker strokes.',
-  highlighter: 'Add broad, translucent highlight strokes.',
-  eraser: 'Erase pencil strokes from your design.',
-  'magic-remover': 'Brush over image areas to make them transparent.',
-  lasso: 'Draw around an image area to select it.',
-}
+  pencil: "Draw freehand strokes on your image.",
+  sketch: "Create light, fine sketch strokes.",
+  marker: "Draw bold, opaque marker strokes.",
+  highlighter: "Add broad, translucent highlight strokes.",
+  eraser: "Erase pencil strokes from your design.",
+  "magic-remover": "Brush over image areas to make them transparent.",
+  lasso: "Draw around an image area to select it.",
+};
 
-export const IMAGE_SOURCE_TOKEN = '__pixel_studio_image_source__'
-let nextSourceId = 1
+export const IMAGE_SOURCE_TOKEN = "__pixel_studio_image_source__";
+let nextSourceId = 1;
 
-const sourceToToken = new Map<string, string>()
-const tokenToSource = new Map<string, string>()
+const sourceToToken = new Map<string, string>();
+const tokenToSource = new Map<string, string>();
 
 function getImageSourceToken(source: string) {
-  const existing = sourceToToken.get(source)
-  if (existing) return existing
+  const existing = sourceToToken.get(source);
+  if (existing) return existing;
 
-  const token = `__pixel_studio_image_source_${nextSourceId++}__`
+  const token = `__pixel_studio_image_source_${nextSourceId++}__`;
 
-  sourceToToken.set(source, token)
-  tokenToSource.set(token, source)
+  sourceToToken.set(source, token);
+  tokenToSource.set(token, source);
 
-  return token
+  return token;
 }
 
 export function resolveImageSourceToken(token: string) {
-  return tokenToSource.get(token)
+  return tokenToSource.get(token);
 }
 
 export function getImageSourceTokens() {
@@ -141,15 +171,15 @@ export function restoreImageSourceTokens(sources: Record<string, string>) {
 
 export function serializeCanvas(canvas: Canvas) {
   const scene = canvas.toObject([
-    'name',
+    "name",
     BASE_IMAGE_PROPERTY,
-    'textAnimation',
-    'shapeId',
-    'textParentId',
-    'textParentWidth',
-    'textParentHeight',
-    'textParentFontSize',
-    'imageParentId',
+    "textAnimation",
+    "shapeId",
+    "textParentId",
+    "textParentWidth",
+    "textParentHeight",
+    "textParentFontSize",
+    "imageParentId",
     'threeDType',
     'threeDShapeKind',
     'threeDCharacter',
@@ -158,26 +188,30 @@ export function serializeCanvas(canvas: Canvas) {
     'threeDRotationX',
     'threeDRotationY',
     'threeDRotationZ',
-    'shadowSize',
-    'shadowArtworkSize',
-    'shadowArtworkBaseScaleX',
-    'shadowArtworkBaseScaleY',
-  ]) as Record<string, unknown>
+    "shadowSize",
+    "shadowArtworkSize",
+    "shadowArtworkBaseScaleX",
+    "shadowArtworkBaseScaleY",
+  ]) as Record<string, unknown>;
   const replaceImageSources = (value: unknown) => {
     if (Array.isArray(value)) {
-      value.forEach(replaceImageSources)
-      return
+      value.forEach(replaceImageSources);
+      return;
     }
-    if (!value || typeof value !== 'object') return
+    if (!value || typeof value !== "object") return;
     for (const [key, child] of Object.entries(value)) {
-      if (key === 'src' && typeof child === 'string' && child.startsWith('data:image/')) {
-        ;(value as Record<string, unknown>)[key] = getImageSourceToken(child)
+      if (
+        key === "src" &&
+        typeof child === "string" &&
+        child.startsWith("data:image/")
+      ) {
+        (value as Record<string, unknown>)[key] = getImageSourceToken(child);
       } else {
-        replaceImageSources(child)
+        replaceImageSources(child);
       }
     }
-  }
-  replaceImageSources(scene)
+  };
+  replaceImageSources(scene);
 
-  return JSON.stringify({ width: canvas.getWidth(), height: canvas.getHeight(), scene })
+  return JSON.stringify({ width: canvas.getWidth(), height: canvas.getHeight(), scene });
 }

@@ -273,6 +273,10 @@ export class EditableThreeDShape extends Rect {
       rotate3d: createThreeDRotationControl(
         (object): object is EditableThreeDShape => object instanceof EditableThreeDShape,
       ),
+      rotate3dZ: createThreeDRotationControl(
+        (object): object is EditableThreeDShape => object instanceof EditableThreeDShape,
+        'z',
+      ),
     }
     this.initializeScene()
     this.updateMesh()
@@ -318,7 +322,7 @@ export class EditableThreeDShape extends Rect {
 
   if (!deltaX && !deltaY) return false
 
-  const rotateAroundZ = 'shiftKey' in event && event.shiftKey === true
+  const rotateAroundZ = drag.axis === 'z' || ('shiftKey' in event && event.shiftKey === true)
 
   this.rotateFromDrag(deltaX, deltaY, rotateAroundZ)
 
@@ -404,13 +408,14 @@ type ThreeDRotationTarget = FabricObject & {
 
 export function createThreeDRotationControl(
   isRotationTarget: (object: FabricObject) => object is ThreeDRotationTarget,
+  axis: RotationAxis = 'xy',
 ) {
   const radius = 10
   const iconSize = 14
 
   return new Control({
-    x: 0,
-    y: 0,
+    x: axis === 'z' ? 0.5 : 0,
+    y: axis === 'z' ? -0.35 : 0,
     offsetX: 0,
     offsetY: 0,
     sizeX: radius * 2 + 8,
@@ -423,7 +428,7 @@ export function createThreeDRotationControl(
 
       if (!isRotationTarget(shape)) return false
 
-      shape.beginRotationDrag(event, 'xy')
+      shape.beginRotationDrag(event, axis)
       return true
     },
 

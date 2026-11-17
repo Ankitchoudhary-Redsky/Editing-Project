@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { FabricImage, Shadow, type FabricObject } from 'fabric'
 import { useEditor } from '../../EditorContext'
-import { BACKGROUND_IMAGE_NAME, DRAWING_LAYER_NAME } from '../../model/constants'
+import { BACKGROUND_IMAGE_NAME, isDrawingLayerName } from '../../model/constants'
 import { objectName } from '../../model/objectName'
 
 const presets = [
@@ -79,7 +79,7 @@ function getShadowSettings(shadow: Shadow | null | undefined, shadowSize = 50) {
 
 function isEditableObject(object: FabricObject | null) {
   const name = object?.get('name')
-  return Boolean(object && name !== DRAWING_LAYER_NAME && name !== BACKGROUND_IMAGE_NAME)
+  return Boolean(object && !isDrawingLayerName(name) && name !== BACKGROUND_IMAGE_NAME)
 }
 
 export function ShadowPanel() {

@@ -97,6 +97,10 @@ export class EditableThreeDEmoji extends Rect {
       rotate3d: createThreeDRotationControl(
         (object): object is EditableThreeDEmoji => object instanceof EditableThreeDEmoji,
       ),
+      rotate3dZ: createThreeDRotationControl(
+        (object): object is EditableThreeDEmoji => object instanceof EditableThreeDEmoji,
+        'z',
+      ),
     }
   }
 
@@ -165,7 +169,7 @@ export class EditableThreeDEmoji extends Rect {
     drag.lastX = point.x
     drag.lastY = point.y
     if (!deltaX && !deltaY) return false
-    this.rotateFromDrag(deltaX, deltaY, 'shiftKey' in event && event.shiftKey === true)
+    this.rotateFromDrag(deltaX, deltaY, drag.axis === 'z' || ('shiftKey' in event && event.shiftKey === true))
     this.canvas?.requestRenderAll()
     return true
   }

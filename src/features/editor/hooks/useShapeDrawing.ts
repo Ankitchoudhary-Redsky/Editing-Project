@@ -3,8 +3,8 @@ import { type FabricObject, type TPointerEvent } from 'fabric'
 import { BACKGROUND_IMAGE_NAME, shapeNames } from '../model/constants'
 import { buildShapeObject, constrainShapeToImage, updateShapeObject } from '../operations/shapeObjects'
 import { EditableThreeDShape } from '../operations/EditableThreeDShape'
-import { getImageBounds } from '../operations/tableGeometry'
 import { threeDShapeChoices } from '../operations/threeDShapes'
+import { getImageBounds } from '../operations/tableGeometry'
 import type { UseShapeDrawingOptions } from '../model/types'
 
 export function useShapeDrawing({
@@ -14,7 +14,6 @@ export function useShapeDrawing({
   activeTool,
   shapeToolMode,
   setActiveTool,
-  hasDocument,
   shapeKind,
   threeDShapeKind,
   lineStyle,
@@ -28,24 +27,26 @@ export function useShapeDrawing({
   syncObjects,
 }: UseShapeDrawingOptions) {
   const shapeDrawingRef = useRef<{
-    start: { x: number; y: number }
-    preview: FabricObject | null
+    start: { x: number; y: number };
+    preview: FabricObject | null;
     backgroundTarget: FabricObject | null
     pendingBackgroundClick: boolean
     hasDragged: boolean
-  } | null>(null)
+  } | null>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const shapeToolActive = activeTool === 'shapes'
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const shapeToolActive = activeTool === "shapes";
     const drawing = shapeToolActive && shapeToolMode === '2d'
     const drawingThreeD = shapeToolActive && shapeToolMode === '3d'
     const drawingActive = drawing || drawingThreeD
-    canvas.selection = !shapeToolActive || shapeToolMode === '2d'
-    canvas.skipTargetFind = false
-    canvas.defaultCursor = drawing ? 'crosshair' : 'default'
-    canvas.hoverCursor = 'move'
+    ;(canvas as typeof canvas & { isDrawingThreeDShape?: boolean }).isDrawingThreeDShape = drawingThreeD
+    canvas.selection = !shapeToolActive || shapeToolMode === '2d';
+    canvas.skipTargetFind = drawing;
+    if (drawingActive) canvas.discardActiveObject();
+    canvas.defaultCursor = drawingActive ? "crosshair" : "default";
+    // canvas.hoverCursor = 'move'
     const backgroundLayers = canvas.getObjects().filter((object) => object.get('name') === BACKGROUND_IMAGE_NAME)
     backgroundLayers.forEach((object) => {
       const locked = object.get('layerLocked') === true
@@ -63,11 +64,16 @@ export function useShapeDrawing({
       canvas.discardActiveObject()
     }
     canvas.requestRenderAll()
+    canvas.hoverCursor = drawingActive ? "crosshair" : "move";
 
     const handlePointerDown = (event: { e: TPointerEvent }) => {
       const target = canvas.findTarget(event.e)
-      if ((!drawing && !drawingThreeD) || !hasDocument) return
-      if (target && target.get('name') !== BACKGROUND_IMAGE_NAME) {
+      if (!drawing && !drawingThreeD) return
+      if (
+        target &&
+        target !== imageObjectRef.current &&
+        target.get('name') !== BACKGROUND_IMAGE_NAME
+      ) {
         return
       }
       const backgroundTarget = target?.get('name') === BACKGROUND_IMAGE_NAME ? target : null
@@ -79,40 +85,44 @@ export function useShapeDrawing({
       const start = {
         x: Math.max(bounds.left, Math.min(bounds.left + bounds.width, pointer.x)),
         y: Math.max(bounds.top, Math.min(bounds.top + bounds.height, pointer.y)),
-      }
-      shapeDrawingRef.current = {
+      };
+      const drawingState = {
         start,
-        preview: null,
+        preview: null as FabricObject | null,
         backgroundTarget,
         pendingBackgroundClick: Boolean(backgroundTarget),
         hasDragged: false,
       }
-      suppressHistoryRef.current = true
-      const preview = drawing
-        ? buildShapeObject({
-          kind: shapeKind,
-          fill: fillColor,
-          transparentFill,
-          stroke: strokeColor,
-          strokeWidth,
-          opacity: shapeOpacity,
-          name: shapeNames[shapeKind],
-          lineStyle,
-        }, { left: start.x - 3, top: start.y - 3, width: 6, height: 6 })
-        : new EditableThreeDShape({
+      shapeDrawingRef.current = drawingState
+      suppressHistoryRef.current = true;
+      const selectedThreeDShape = threeDShapeChoices.find((shape) => shape.kind === threeDShapeKind)
+      const preview = drawingThreeD
+        ? new EditableThreeDShape({
           left: start.x,
           top: start.y,
-          width: 6,
-          height: 6,
-          name: `3D ${threeDShapeChoices.find((choice) => choice.kind === threeDShapeKind)?.label ?? threeDShapeKind}`,
+          width: 1,
+          height: 1,
           threeDKind: threeDShapeKind,
+          threeDColor: selectedThreeDShape?.color,
+          name: `3D ${selectedThreeDShape?.label ?? threeDShapeKind}`,
         })
-      preview.set({ selectable: false, evented: false })
-      constrainShapeToImage(canvas, imageObjectRef.current, preview)
-      shapeDrawingRef.current.preview = preview
-      canvas.add(preview)
-      canvas.requestRenderAll()
-    }
+        : buildShapeObject(
+          {
+            kind: shapeKind,
+            fill: fillColor,
+            transparentFill,
+            stroke: strokeColor,
+            strokeWidth,
+            opacity: shapeOpacity,
+            name: shapeNames[shapeKind],
+            lineStyle,
+          },
+          { left: start.x, top: start.y, width: 1, height: 1 },
+        );
+      drawingState.preview = preview
+      canvas.add(preview);
+      canvas.requestRenderAll();
+    };
 
     const handlePointerMove = (event: { e: TPointerEvent }) => {
       const drawingState = shapeDrawingRef.current
@@ -162,9 +172,9 @@ export function useShapeDrawing({
     }
 
     const handlePointerUp = () => {
-      const drawingState = shapeDrawingRef.current
-      if ((!drawing && !drawingThreeD) || !drawingState) return
-      shapeDrawingRef.current = null
+      const drawingState = shapeDrawingRef.current;
+      if ((!drawing && !drawingThreeD) || !drawingState) return;
+      shapeDrawingRef.current = null;
       if (drawingState.pendingBackgroundClick && drawingState.backgroundTarget) {
         if (drawingState.preview) canvas.remove(drawingState.preview)
         const background = drawingState.backgroundTarget
@@ -183,24 +193,27 @@ export function useShapeDrawing({
         setActiveTool('layers')
         return
       }
-      const preview = drawingState.preview
-      if (!preview || !drawingState.hasDragged || (preview.getScaledWidth() < 4 && preview.getScaledHeight() < 4)) {
-        if (preview) canvas.remove(preview)
-        suppressHistoryRef.current = false
-        canvas.requestRenderAll()
-        return
+      const preview = drawingState.preview;
+      if (
+        !preview || !drawingState.hasDragged ||
+        (preview.getScaledWidth() < 4 && preview.getScaledHeight() < 4)
+      ) {
+        if (preview) canvas.remove(preview);
+        suppressHistoryRef.current = false;
+        canvas.requestRenderAll();
+        return;
       }
-      preview.set({ selectable: true, evented: true })
-      canvas.setActiveObject(preview)
-      canvas.requestRenderAll()
-      suppressHistoryRef.current = false
-      recordHistory(true)
-      syncObjects()
-    }
+      preview.set({ selectable: true, evented: true });
+      canvas.setActiveObject(preview);
+      canvas.requestRenderAll();
+      suppressHistoryRef.current = false;
+      recordHistory(true);
+      syncObjects();
+    };
 
-    canvas.on('mouse:down', handlePointerDown)
-    canvas.on('mouse:move', handlePointerMove)
-    canvas.on('mouse:up', handlePointerUp)
+    canvas.on("mouse:down", handlePointerDown);
+    canvas.on("mouse:move", handlePointerMove);
+    canvas.on("mouse:up", handlePointerUp);
     return () => {
       canvas.off('mouse:down', handlePointerDown)
       canvas.off('mouse:move', handlePointerMove)
@@ -210,6 +223,7 @@ export function useShapeDrawing({
       suppressHistoryRef.current = false
       canvas.skipTargetFind = false
       canvas.selection = true
+      ;(canvas as typeof canvas & { isDrawingThreeDShape?: boolean }).isDrawingThreeDShape = false
       backgroundLayers.forEach((object) => {
         const locked = object.get('layerLocked') === true
         object.set({
@@ -222,7 +236,8 @@ export function useShapeDrawing({
           lockRotation: locked,
         })
       })
+      syncObjects()
       canvas.requestRenderAll()
     }
-  }, [activeTool, canvasInstance, canvasRef, fillColor, hasDocument, imageObjectRef, lineStyle, recordHistory, setActiveTool, shapeKind, shapeOpacity, shapeToolMode, strokeColor, strokeWidth, suppressHistoryRef, syncObjects, threeDShapeKind, transparentFill])
+  }, [activeTool, canvasInstance, canvasRef, fillColor, imageObjectRef, lineStyle, recordHistory, setActiveTool, shapeKind, shapeOpacity, shapeToolMode, strokeColor, strokeWidth, suppressHistoryRef, syncObjects, threeDShapeKind, transparentFill])
 }

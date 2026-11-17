@@ -1,9 +1,12 @@
 import { Circle, FabricImage, IText, Line, Triangle, type FabricObject } from 'fabric'
-import { BACKGROUND_IMAGE_NAME } from './constants'
+import { BACKGROUND_IMAGE_NAME, DRAWING_LAYER_NAME, DRAWING_LAYER_TOOL_NAMES } from './constants'
 
 export function objectName(object: FabricObject, index: number) {
   const customName = (object as FabricObject & { name?: string }).name
   if (customName === BACKGROUND_IMAGE_NAME) return 'Background'
+  if (customName === DRAWING_LAYER_NAME) return 'Drawing'
+  const drawingTool = Object.entries(DRAWING_LAYER_TOOL_NAMES).find(([, name]) => name === customName)?.[0]
+  if (drawingTool) return `${drawingTool[0].toUpperCase()}${drawingTool.slice(1)}`
   if (customName) return customName
   if (object instanceof FabricImage) return 'Image'
   if (object instanceof IText) return object.text?.split('\n')[0]?.slice(0, 22) || 'Text'
