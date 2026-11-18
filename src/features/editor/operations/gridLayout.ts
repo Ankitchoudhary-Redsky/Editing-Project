@@ -1,4 +1,4 @@
-export type GridLayoutId = 'side-by-side' | 'stacked' | 'four-grid' | 'three-columns' | 'feature-left' | 'feature-top'
+export type GridLayoutId = 'side-by-side' | 'stacked' | 'four-grid' | 'three-columns' | 'feature-left' | 'feature-top' | 'three-rows' | 'four-columns' | 'six-grid' | 'feature-right' | 'feature-bottom' | 'filmstrip' | 'mosaic' | 'nine-grid' | 'feature-center' | 'staggered-five' | 'six-portrait' | 'feature-strip-five'
 
 export type GridCellBounds = { id: string; index: number; left: number; top: number; width: number; height: number }
 
@@ -34,75 +34,101 @@ const layoutCells: Record<GridLayoutId, NormalizedCell[]> = {
     { x: 0, y: 0.58, width: 0.5, height: 0.42 },
     { x: 0.5, y: 0.58, width: 0.5, height: 0.42 },
   ],
+  'three-rows': [
+    { x: 0, y: 0, width: 1, height: 1 / 3 },
+    { x: 0, y: 1 / 3, width: 1, height: 1 / 3 },
+    { x: 0, y: 2 / 3, width: 1, height: 1 / 3 },
+  ],
+  'four-columns': [
+    { x: 0, y: 0, width: 0.25, height: 1 },
+    { x: 0.25, y: 0, width: 0.25, height: 1 },
+    { x: 0.5, y: 0, width: 0.25, height: 1 },
+    { x: 0.75, y: 0, width: 0.25, height: 1 },
+  ],
+  'six-grid': [
+    { x: 0, y: 0, width: 1 / 3, height: 0.5 },
+    { x: 1 / 3, y: 0, width: 1 / 3, height: 0.5 },
+    { x: 2 / 3, y: 0, width: 1 / 3, height: 0.5 },
+    { x: 0, y: 0.5, width: 1 / 3, height: 0.5 },
+    { x: 1 / 3, y: 0.5, width: 1 / 3, height: 0.5 },
+    { x: 2 / 3, y: 0.5, width: 1 / 3, height: 0.5 },
+  ],
+  'feature-right': [
+    { x: 0, y: 0, width: 0.38, height: 0.5 },
+    { x: 0, y: 0.5, width: 0.38, height: 0.5 },
+    { x: 0.38, y: 0, width: 0.62, height: 1 },
+  ],
+  'feature-bottom': [
+    { x: 0, y: 0, width: 0.5, height: 0.42 },
+    { x: 0.5, y: 0, width: 0.5, height: 0.42 },
+    { x: 0, y: 0.42, width: 1, height: 0.58 },
+  ],
+  filmstrip: [
+    { x: 0, y: 0, width: 1, height: 0.64 },
+    { x: 0, y: 0.64, width: 1 / 3, height: 0.36 },
+    { x: 1 / 3, y: 0.64, width: 1 / 3, height: 0.36 },
+    { x: 2 / 3, y: 0.64, width: 1 / 3, height: 0.36 },
+  ],
+  mosaic: [
+    { x: 0, y: 0, width: 0.58, height: 1 },
+    { x: 0.58, y: 0, width: 0.42, height: 1 / 3 },
+    { x: 0.58, y: 1 / 3, width: 0.42, height: 1 / 3 },
+    { x: 0.58, y: 2 / 3, width: 0.42, height: 1 / 3 },
+  ],
+  'nine-grid': [
+    { x: 0, y: 0, width: 1 / 3, height: 1 / 3 },
+    { x: 1 / 3, y: 0, width: 1 / 3, height: 1 / 3 },
+    { x: 2 / 3, y: 0, width: 1 / 3, height: 1 / 3 },
+    { x: 0, y: 1 / 3, width: 1 / 3, height: 1 / 3 },
+    { x: 1 / 3, y: 1 / 3, width: 1 / 3, height: 1 / 3 },
+    { x: 2 / 3, y: 1 / 3, width: 1 / 3, height: 1 / 3 },
+    { x: 0, y: 2 / 3, width: 1 / 3, height: 1 / 3 },
+    { x: 1 / 3, y: 2 / 3, width: 1 / 3, height: 1 / 3 },
+    { x: 2 / 3, y: 2 / 3, width: 1 / 3, height: 1 / 3 },
+  ],
+  'feature-center': [
+    { x: 0, y: 0, width: 0.25, height: 0.5 },
+    { x: 0, y: 0.5, width: 0.25, height: 0.5 },
+    { x: 0.25, y: 0, width: 0.5, height: 1 },
+    { x: 0.75, y: 0, width: 0.25, height: 0.5 },
+    { x: 0.75, y: 0.5, width: 0.25, height: 0.5 },
+  ],
+  'staggered-five': [
+    { x: 0, y: 0, width: 0.5, height: 0.5 },
+    { x: 0.5, y: 0, width: 0.5, height: 0.5 },
+    { x: 0, y: 0.5, width: 1 / 3, height: 0.5 },
+    { x: 1 / 3, y: 0.5, width: 1 / 3, height: 0.5 },
+    { x: 2 / 3, y: 0.5, width: 1 / 3, height: 0.5 },
+  ],
+  'six-portrait': [
+    { x: 0, y: 0, width: 0.5, height: 1 / 3 },
+    { x: 0, y: 1 / 3, width: 0.5, height: 1 / 3 },
+    { x: 0, y: 2 / 3, width: 0.5, height: 1 / 3 },
+    { x: 0.5, y: 0, width: 0.5, height: 1 / 3 },
+    { x: 0.5, y: 1 / 3, width: 0.5, height: 1 / 3 },
+    { x: 0.5, y: 2 / 3, width: 0.5, height: 1 / 3 },
+  ],
+  'feature-strip-five': [
+    { x: 0, y: 0, width: 1, height: 0.64 },
+    { x: 0, y: 0.64, width: 0.25, height: 0.36 },
+    { x: 0.25, y: 0.64, width: 0.25, height: 0.36 },
+    { x: 0.5, y: 0.64, width: 0.25, height: 0.36 },
+    { x: 0.75, y: 0.64, width: 0.25, height: 0.36 },
+  ],
 }
 
 export function getGridCells(layoutId: GridLayoutId, canvasWidth = 1200, canvasHeight = 900, gap = 12): GridCellBounds[] {
   const safeGap = Math.max(0, Math.min(64, gap))
-  const cells = layoutCells[layoutId]
-
-  const xBoundaries = [...new Set(cells.map((cell) => cell.x))]
-    .sort((a, b) => a - b)
-    .map((start, index, allStarts) => ({
-      start,
-      span:
-        index < allStarts.length - 1 ? allStarts[index + 1] - start : 1 - start,
-    }))
-
-  const yBoundaries = [...new Set(cells.map((cell) => cell.y))]
-    .sort((a, b) => a - b)
-    .map((start, index, allStarts) => ({
-      start,
-      span:
-        index < allStarts.length - 1 ? allStarts[index + 1] - start : 1 - start,
-    }))
-
-  const usableWidth = Math.max(
-    0,
-    canvasWidth - safeGap * Math.max(0, xBoundaries.length - 1),
-  )
-  const usableHeight = Math.max(
-    0,
-    canvasHeight - safeGap * Math.max(0, yBoundaries.length - 1),
-  )
-
-  const columnLayouts = new Map<number, { left: number; width: number }>()
-  let horizontalOffset = 0
-  xBoundaries.forEach(({ start, span }, index) => {
-    const width = span * usableWidth
-    columnLayouts.set(start, { left: horizontalOffset, width })
-    horizontalOffset += width + (index < xBoundaries.length - 1 ? safeGap : 0)
-  })
-
-  const rowLayouts = new Map<number, { top: number; height: number }>()
-  let verticalOffset = 0
-  yBoundaries.forEach(({ start, span }, index) => {
-    const height = span * usableHeight
-    rowLayouts.set(start, { top: verticalOffset, height })
-    verticalOffset += height + (index < yBoundaries.length - 1 ? safeGap : 0)
-  })
-
-  return cells.map((cell, index) => {
-    const columnLayout = columnLayouts.get(cell.x)
-    const rowLayout = rowLayouts.get(cell.y)
-
-    if (!columnLayout || !rowLayout) {
-      return {
-        id: `cell-${index + 1}`,
-        index: index + 1,
-        left: cell.x * canvasWidth,
-        top: cell.y * canvasHeight,
-        width: cell.width * canvasWidth,
-        height: cell.height * canvasHeight,
-      }
-    }
-
+  return layoutCells[layoutId].map((cell, index) => {
+    const horizontalInset = safeGap * (1 - cell.width)
+    const verticalInset = safeGap * (1 - cell.height)
     return {
       id: `cell-${index + 1}`,
       index: index + 1,
-      left: columnLayout.left,
-      top: rowLayout.top,
-      width: columnLayout.width,
-      height: rowLayout.height,
+      left: cell.x * canvasWidth + (cell.x > 0 ? safeGap / 2 : 0),
+      top: cell.y * canvasHeight + (cell.y > 0 ? safeGap / 2 : 0),
+      width: cell.width * canvasWidth - horizontalInset,
+      height: cell.height * canvasHeight - verticalInset,
     }
   })
 }

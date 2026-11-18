@@ -87,7 +87,7 @@ export function SaveTemplateDialog() {
         </div>
         <fieldset className="template-save-styles"><legend>Design styles</legend><div>{TEMPLATE_STYLE_OPTIONS.map(({ id, name: label }) => <button key={id} type="button" className={designStyles.includes(label) ? 'selected' : ''} aria-pressed={designStyles.includes(label)} onClick={() => toggle(designStyles, setDesignStyles, label)}>{label}</button>)}</div></fieldset>
         {error && <p className="template-inline-error" role="alert">{error}</p>}
-        <div className="template-save-actions"><button type="button" className="template-text-action" onClick={() => setSaveDialogOpen(false)}>Cancel</button><button type="button" className="template-primary-action" onClick={() => void save()} disabled={saving}><Check size={16} />{saving ? 'Saving…' : 'Save template'}</button></div>
+        <div className="template-save-actions"><button type="button" className="template-text-action" onClick={() => setSaveDialogOpen(false)}>Cancel</button><button type="button" className="save-templatebtn" onClick={() => void save()} disabled={saving}><Check size={16} />{saving ? 'Saving…' : 'Save template'}</button></div>
       </section>
     </div>
   )

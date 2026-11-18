@@ -60,13 +60,13 @@ export function UploadLanding({
 
   return (
     <section className="upload-landing" aria-label="Start editing">
-      <header className="upload-landing-header">
+      {/* <header className="upload-landing-header">
         <span className="upload-brand-mark">
           <ImagePlus size={18} />
         </span>
         <span className="upload-brand-name">estudio</span>
         <span className="upload-local-label">LOCAL IMAGE EDITOR</span>
-      </header>
+      </header> */}
       <div className="upload-landing-main">
         <div
           className={`upload-dropzone${dragging ? " is-dragging" : ""}${busy ? " is-loading" : ""}`}

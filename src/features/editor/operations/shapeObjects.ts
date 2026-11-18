@@ -2,14 +2,18 @@ import { Canvas, Circle, Ellipse, FabricImage, Line, Path, Rect, Triangle, type 
 import { shapeNames } from '../model/constants'
 import type { NewShapeOptions, ShapeBounds, ShapeKind } from '../model/types'
 import { loadLocalImage } from './loadLocalImage'
+import { getImageBounds } from './tableGeometry'
 
-export function constrainShapeToCanvas(canvas: Canvas, object: FabricObject) {
+function constrainShapeToBounds(
+  object: FabricObject,
+  bounds: { left: number; top: number; width: number; height: number },
+) {
   object.setCoords()
   let objectBounds = object.getBoundingRect()
   const scale = Math.min(
     1,
-    canvas.getWidth() / Math.max(1, objectBounds.width),
-    canvas.getHeight() / Math.max(1, objectBounds.height),
+    bounds.width / Math.max(1, objectBounds.width),
+    bounds.height / Math.max(1, objectBounds.height),
   )
   if (scale < 1) {
     object.set({
@@ -20,15 +24,15 @@ export function constrainShapeToCanvas(canvas: Canvas, object: FabricObject) {
     objectBounds = object.getBoundingRect()
   }
 
-  const offsetX = objectBounds.left < 0
-    ? -objectBounds.left
-    : objectBounds.left + objectBounds.width > canvas.getWidth()
-      ? canvas.getWidth() - objectBounds.left - objectBounds.width
+  const offsetX = objectBounds.left < bounds.left
+    ? bounds.left - objectBounds.left
+    : objectBounds.left + objectBounds.width > bounds.left + bounds.width
+      ? bounds.left + bounds.width - objectBounds.left - objectBounds.width
       : 0
-  const offsetY = objectBounds.top < 0
-    ? -objectBounds.top
-    : objectBounds.top + objectBounds.height > canvas.getHeight()
-      ? canvas.getHeight() - objectBounds.top - objectBounds.height
+  const offsetY = objectBounds.top < bounds.top
+    ? bounds.top - objectBounds.top
+    : objectBounds.top + objectBounds.height > bounds.top + bounds.height
+      ? bounds.top + bounds.height - objectBounds.top - objectBounds.height
       : 0
   object.set({
     left: (object.left ?? 0) + offsetX,
@@ -37,49 +41,21 @@ export function constrainShapeToCanvas(canvas: Canvas, object: FabricObject) {
   object.setCoords()
 }
 
+export function constrainShapeToCanvas(canvas: Canvas, object: FabricObject) {
+  constrainShapeToBounds(object, {
+    left: 0,
+    top: 0,
+    width: canvas.getWidth(),
+    height: canvas.getHeight(),
+  })
+}
+
 export function constrainShapeToImage(
   canvas: Canvas,
-  imageObject: FabricObject | null,
+  image: FabricImage | null,
   object: FabricObject,
 ) {
-  if (!imageObject) {
-    constrainShapeToCanvas(canvas, object)
-    return
-  }
-
-  object.setCoords()
-  const objectBounds = object.getBoundingRect()
-  const imageBounds = imageObject.getBoundingRect()
-
-  const minLeft = imageBounds.left
-  const maxRight = imageBounds.left + imageBounds.width
-  const minTop = imageBounds.top
-  const maxBottom = imageBounds.top + imageBounds.height
-
-  const currentLeft = object.left ?? 0
-  const currentTop = object.top ?? 0
-
-  let nextLeft = currentLeft
-  let nextTop = currentTop
-
-  if (objectBounds.left < minLeft) {
-    nextLeft += minLeft - objectBounds.left
-  }
-  if (objectBounds.left + objectBounds.width > maxRight) {
-    nextLeft -= objectBounds.left + objectBounds.width - maxRight
-  }
-  if (objectBounds.top < minTop) {
-    nextTop += minTop - objectBounds.top
-  }
-  if (objectBounds.top + objectBounds.height > maxBottom) {
-    nextTop -= objectBounds.top + objectBounds.height - maxBottom
-  }
-
-  object.set({
-    left: nextLeft,
-    top: nextTop,
-  })
-  object.setCoords()
+  constrainShapeToBounds(object, getImageBounds(canvas, image))
 }
 
 export function isShapeObject(object: FabricObject) {

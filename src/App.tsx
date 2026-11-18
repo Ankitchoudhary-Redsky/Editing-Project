@@ -26,6 +26,7 @@ function App() {
       <TemplateFeatureRoot loadTemplate={loadTemplateIntoEditor}>
         <EditorShell
           historyVersion={historyVersion}
+          restoring={!uiState.draftReady}
           setUploadInputElement={setUploadInputElement}
           setCanvasElement={setCanvasElement}
           setStageElement={setStageElement}

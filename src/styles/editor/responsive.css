@@ -3,13 +3,67 @@
     flex-basis: 245px;
   }
   .brand-lockup {
-    min-width: 160px;
+    min-width: 132px;
   }
   .project-title {
-    padding-left: 8px;
+    flex: 0 1 150px;
+    gap: 8px;
+    padding-left: 0;
+  }
+  .project-title > div:first-child {
+    flex-basis: 150px;
+  }
+  .mode-switch {
+    max-width: 112px;
+  }
+  .mode-switch button {
+    gap: 3px;
+    padding: 0 5px;
+    font-size: 10px;
+  }
+  .top-actions {
+    gap: 3px;
+  }
+  .top-actions .preview-button {
+    width: 34px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+  .save-template-button {
+    width: 34px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+  .download-button {
+    padding: 0 9px;
+    font-size: 10px;
   }
   .dimension-label {
     display: none;
+  }
+}
+@media (max-width: 1200px) {
+  .topbar {
+    /* gap: 8px; */
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+  .top-actions {
+    gap: 3px;
+  }
+  .top-actions .preview-button {
+    width: 34px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+  .download-button {
+    width: 34px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
   }
 }
 @media (max-width: 700px) {
@@ -147,9 +201,84 @@
   .empty-prompt h1 {
     font-size: 19px;
   }
+  .topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: 1fr 1fr;
+    flex-basis: 72px;
+    column-gap: 8px;
+    row-gap: 0;
+    align-content: center;
+    padding: 4px 10px;
+  }
+  .brand-lockup {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    min-width: 0;
+  }
+  .project-title {
+    display: flex;
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+  }
+  .project-name {
+    font-size: 13px;
+  }
+  .save-status {
+    font-size: 9px;
+  }
+  .mode-switch {
+    grid-column: 2;
+    grid-row: 2;
+    width: min(112px, 100%);
+    max-width: none;
+    justify-self: start;
+    padding: 2px;
+  }
+  .top-actions {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+  .top-actions .save-template-button {
+    display: none;
+  }
+  .top-actions .preview-button {
+    width: 30px;
+    height: 30px;
+  }
+  .top-actions .icon-button {
+    width: 30px;
+    height: 30px;
+  }
+  .top-actions .download-button {
+    width: 30px;
+    height: 30px;
+  }
 }
 
 @media (max-width: 390px) {
+  .topbar {
+    column-gap: 6px;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+  .brand-name {
+    display: none;
+  }
+  .mode-switch button span {
+    display: none;
+  }
+  .mode-switch {
+    width: 64px;
+  }
+  .project-title .save-status {
+    display: none;
+  }
   .brand-name {
     font-size: 14px;
   }

@@ -5,7 +5,7 @@ import type {
   EditorTool,
   UseEditorCanvasCoreOptions,
 } from "../model/types";
-import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, DRAWING_LAYER_NAME, serializeCanvas } from "../model/constants";
+import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, isDrawingLayerName, serializeCanvas } from "../model/constants";
 import { useFabricCanvas } from "./useFabricCanvas";
 import { useHistoryRecorder } from "./useHistoryRecorder";
 
@@ -71,29 +71,31 @@ export function useEditorCanvasCore({
 
     const currentObjects = canvas.getObjects();
     const image = currentObjects.find(
-      (item) => item instanceof FabricImage &&
+      (item) =>
+        item instanceof FabricImage &&
+       
         item.get(BASE_IMAGE_PROPERTY) === true,
     ) ?? currentObjects.find(
       (item) => item instanceof FabricImage &&
-        item.get('name') !== BACKGROUND_IMAGE_NAME &&
-        item.get('name') !== DRAWING_LAYER_NAME &&
+        item.get("name") !== BACKGROUND_IMAGE_NAME &&
+        !String(item.get("name") ?? "").startsWith("layout-image-") &&
+        !isDrawingLayerName(item.get('name')) &&
         !item.get('stickerAnimationId') &&
         !item.get('threeDType') &&
         !item.get('emojiId'),
-    )
-    if (image && (
-      image.selectable || image.evented || !image.lockMovementX || !image.lockMovementY ||
-      !image.lockScalingX || !image.lockScalingY || !image.lockRotation
-    )) {
+    );
+    if (image) {
+      const drawingThreeDShape = (canvas as Canvas & { isDrawingThreeDShape?: boolean }).isDrawingThreeDShape === true
+      const locked = drawingThreeDShape || imageResizeLocked || image.get('layerLocked') === true
       const objectLocked = image.get('objectLocked') === true
       image.set({
-        selectable: !imageResizeLocked,
-        evented: !imageResizeLocked,
-        lockMovementX: imageResizeLocked || objectLocked,
-        lockMovementY: imageResizeLocked || objectLocked,
-        lockScalingX: imageResizeLocked || objectLocked,
-        lockScalingY: imageResizeLocked || objectLocked,
-        lockRotation: imageResizeLocked || objectLocked,
+        selectable: !locked,
+        evented: !locked,
+        lockMovementX: locked || objectLocked,
+        lockMovementY: locked || objectLocked,
+        lockScalingX: locked || objectLocked,
+        lockScalingY: locked || objectLocked,
+        lockRotation: locked || objectLocked,
       });
       image.setCoords();
     }

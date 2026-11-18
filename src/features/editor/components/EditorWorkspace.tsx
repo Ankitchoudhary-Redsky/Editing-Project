@@ -2,19 +2,22 @@
 import type { DragEvent, PointerEvent as ReactPointerEvent, ReactNode, Ref } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FabricImage } from 'fabric'
-import { Copy, CopyPlus, Eraser, Fullscreen, Highlighter, Link2, LockKeyhole, MessageSquarePlus, Minimize2, MoreHorizontal, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Plus, Rotate3D, RotateCcw, Trash2, UnlockKeyhole, Upload } from 'lucide-react'
+import { Copy, Eraser, GripVertical, Highlighter, MoveHorizontal, MoveVertical, Paintbrush, Pencil, Plus, Rotate3D, RotateCcw, Trash2, Upload } from 'lucide-react'
 
 import { useEditor } from '../EditorContext'
-import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, DRAWING_LAYER_NAME } from '../model/constants'
 import { CanvasContextMenu } from './CanvasContextMenu'
-import { EditorEmptyState } from './EditorEmptyState'
+import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, isDrawingLayerName } from '../model/constants'
 import { objectName } from '../model/objectName'
 import type { DrawingMode, CanvasSurfaceProps } from '../model/types'
 import type { EditorWorkspaceProps } from '../model/types'
 import { EditableThreeDEmoji } from '../operations/EditableThreeDEmoji'
-import { getThreeDRotation, isThreeDRotatable, updateThreeDRotation } from '../operations/threeDShapes'
+import { EditableThreeDShape } from '../operations/EditableThreeDShape'
+import { addEditableThreeDShape, addThreeDCharacter, addThreeDEmoji as addGeneratedThreeDEmoji, getThreeDRotation, isThreeDRotatable, threeDEmojiChoices, threeDShapeChoices, updateThreeDRotation } from '../operations/threeDShapes'
+import { addThreeDEmoji as addModelThreeDEmoji } from '../operations/threeDEmojis'
+import { threeDEmojiAssets } from '../operations/threeDEmojiAssets'
 import type { ThreeDRotation } from '../operations/threeDShapes'
 import ImageMusicVideoExport from './ImageMusicVideoExport'
+import { UploadLanding } from './UploadLanding'
 
 const PAGE_ALREADY_HAS_IMAGE_NOTICE = 'This page already has an image. Remove it before adding another.'
 
@@ -37,8 +40,8 @@ function CanvasSurface({
   onDrop,
   children,
 }: WorkspaceCanvasSurfaceProps) {
-  const cursorElementRef = useRef<HTMLDivElement | null>(null)
-  const cursorPositionRef = useRef<{ x: number; y: number } | null>(null)
+  const cursorElementRef = useRef<HTMLDivElement | null>(null);
+  const cursorPositionRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const cursor = cursorElementRef.current;
@@ -108,185 +111,6 @@ function CanvasSurface({
         </div>
       )}
     </div>
-  );
-}
-
-function FloatingObjectToolbar({
-  stageRef,
-}: {
-  stageRef: React.RefObject<HTMLDivElement | null>
-}) {
-  const { canvas, fabricCanvas, shapes } = useEditor()
-  const [position, setPosition] = useState<{ left: number; top: number } | null>(null)
-  const [selectedLink, setSelectedLink] = useState("")
-  const selectedLockState = canvas.selected?.get("objectLocked")
-  const isLocked = selectedLockState === undefined
-    ? Boolean(
-        canvas.selected?.lockMovementX &&
-        canvas.selected.lockMovementY &&
-        canvas.selected.lockScalingX &&
-        canvas.selected.lockScalingY,
-      )
-    : Boolean(selectedLockState)
-
-  useEffect(() => {
-    const active = canvas.selected
-    const stage = stageRef.current
-    const fabricElement = fabricCanvas?.getElement()
-    if (!active || !stage || !fabricCanvas || !fabricElement || active.get('name') === 'Crop area') {
-      setPosition(null)
-      return
-    }
-
-    const trigger = document.querySelector('[data-menu-trigger="object-menu"]') as HTMLElement | null
-    if (trigger) {
-      trigger.style.display = 'none'
-    }
-
-    const updatePosition = () => {
-      const activeBounds = active.getBoundingRect()
-      const stageBounds = stage.getBoundingClientRect()
-      const canvasBounds = fabricElement.getBoundingClientRect()
-      const canvasOffsetX = canvasBounds.left - stageBounds.left
-      const canvasOffsetY = canvasBounds.top - stageBounds.top
-      const scaleX = canvasBounds.width / fabricCanvas.getWidth()
-      const scaleY = canvasBounds.height / fabricCanvas.getHeight()
-      const right = canvasOffsetX + (activeBounds.left + activeBounds.width) * scaleX
-      const top = canvasOffsetY + activeBounds.top * scaleY - 10
-      const toolbarWidth = 260
-      const toolbarHeight = 48
-
-      setPosition({
-        left: Math.max(toolbarWidth + 8, Math.min(stageBounds.width - 8, right)),
-        top: Math.max(toolbarHeight + 8, Math.min(stageBounds.height - 8, top)),
-      })
-    }
-
-    updatePosition()
-    fabricCanvas.on('after:render', updatePosition)
-    window.addEventListener('resize', updatePosition)
-    return () => {
-      fabricCanvas.off('after:render', updatePosition)
-      window.removeEventListener('resize', updatePosition)
-    }
-  }, [canvas.selected, fabricCanvas, selectedLink, stageRef])
-
-  useEffect(() => {
-    const syncLink = () => {
-      setSelectedLink((canvas.selected?.get("link") as string | undefined) ?? "")
-    }
-    syncLink()
-    fabricCanvas?.on("object:modified", syncLink)
-    fabricCanvas?.on("selection:created", syncLink)
-    fabricCanvas?.on("selection:updated", syncLink)
-    return () => {
-      fabricCanvas?.off("object:modified", syncLink)
-      fabricCanvas?.off("selection:created", syncLink)
-      fabricCanvas?.off("selection:updated", syncLink)
-    }
-  }, [canvas.selected, fabricCanvas])
-
-  useEffect(() => {
-    const trigger = document.querySelector('[data-menu-trigger="object-menu"]') as HTMLElement | null
-    if (!trigger) return
-    trigger.style.display = position ? 'none' : ''
-  }, [position])
-
-  if (!position) return null
-
-  const toggleLock = () => {
-    const target = fabricCanvas?.getActiveObject() ?? canvas.selected
-    if (!target || !fabricCanvas) return
-
-    const lockState = target.get("objectLocked")
-    const locked = lockState === undefined
-      ? Boolean(target.lockMovementX && target.lockMovementY && target.lockScalingX && target.lockScalingY)
-      : Boolean(lockState)
-    target.set({
-      objectLocked: !locked,
-      lockMovementX: !locked,
-      lockMovementY: !locked,
-      lockScalingX: !locked,
-      lockScalingY: !locked,
-      lockRotation: !locked,
-      selectable: true,
-      evented: true,
-    })
-    target.setCoords()
-    fabricCanvas.requestRenderAll()
-    fabricCanvas.fire("object:modified", { target })
-  }
-
-  const openSelectedLink = () => {
-    try {
-      const url = new URL(selectedLink)
-      if (url.protocol === "http:" || url.protocol === "https:") {
-        window.open(url.href, "_blank", "noopener,noreferrer")
-      }
-    } catch {
-      return
-    }
-  }
-
-  return (
-    <div
-      className="floating-object-toolbar"
-      style={{ left: position.left, top: position.top }}
-      onPointerDown={(event) => event.stopPropagation()}
-      role="toolbar"
-      aria-label="Selected object actions"
-    >
-      {selectedLink && (
-        <button
-          type="button"
-          title="Open linked website"
-          aria-label="Open linked website"
-          onClick={openSelectedLink}
-        >
-          <Link2 size={18} strokeWidth={2.2} />
-        </button>
-      )}
-      <button
-        type="button"
-        title="Add or view comment"
-        aria-label="Add or view comment"
-        data-comment-trigger="object-comments"
-        onClick={() => window.dispatchEvent(new Event("editor:toggle-object-comment"))}
-      >
-        <MessageSquarePlus size={18} strokeWidth={2.2} />
-      </button>
-      <button
-        type="button"
-        className={isLocked ? "floating-lock-button active" : "floating-lock-button"}
-        title={isLocked ? "Unlock selected object" : "Lock selected object"}
-        aria-label={isLocked ? "Unlock selected object" : "Lock selected object"}
-        onClick={toggleLock}
-      >
-        {isLocked ? <LockKeyhole size={18} /> : <UnlockKeyhole size={18} />}
-      </button>
-      {!isLocked && (
-        <>
-          <button title="Duplicate" aria-label="Duplicate selected object" type="button" onClick={() => void shapes.duplicate()}>
-            <CopyPlus size={18} strokeWidth={2.2} />
-          </button>
-          <button type="button" className="floating-delete-button" title="Delete" aria-label="Delete selected object" onClick={shapes.delete}>
-            <Trash2 size={19} strokeWidth={2} />
-          </button>
-          <button
-            type="button"
-            className="floating-context-button"
-            title="More actions"
-            aria-label="Open selected object actions"
-            onClick={() => {
-              const trigger = document.querySelector('[data-menu-trigger="object-menu"]') as HTMLButtonElement | null
-              trigger?.click()
-            }}
-          >
-            <MoreHorizontal size={18} strokeWidth={2.2} />
-          </button>
-        </>
-      )}
-    </div>
   )
 }
 
@@ -299,9 +123,10 @@ type DraggedPageImage = {
 
 export function EditorWorkspace({
   historyVersion,
+  restoring,
   setCanvasElement,
   setStageElement,
-}: EditorWorkspaceProps & { historyVersion: number }) {
+}: EditorWorkspaceProps & { historyVersion: number; restoring: boolean }) {
   const stageRef = useRef<HTMLDivElement | null>(null)
   const canvasHolderRef = useRef<HTMLDivElement | null>(null)
   const {
@@ -325,9 +150,11 @@ export function EditorWorkspace({
       saveActivePage,
       registerActions: registerPageActions,
     },
-  } = useEditor()
+  } = useEditor();
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [showFullScreen, setShowFullScreen] = useState(false);
   const [dropTargetPageId, setDropTargetPageId] = useState<number | null>(null)
-  const [showFullScreen, setShowFullScreen] = useState(false)
   const nextPageIdRef = useRef(2)
   const pageUploadInputsRef = useRef(new Map<number, HTMLInputElement>())
   const thumbnailElementsRef = useRef(new Map<number | null, HTMLElement>())
@@ -349,8 +176,23 @@ export function EditorWorkspace({
     rotation: ThreeDRotation
     pendingRotation: ThreeDRotation
     frameId: number | null
-    object: FabricImage | EditableThreeDEmoji
+    object: FabricImage | EditableThreeDEmoji | EditableThreeDShape
   } | null>(null)
+  const drawingCursorIcons: Partial<Record<DrawingMode, typeof Pencil>> = {
+    pencil: Pencil,
+    eraser: Eraser,
+    highlighter: Highlighter,
+    'magic-remover': Paintbrush,
+  }
+
+  const DrawingCursorIcon = drawingCursorIcons[drawing.activeMode]
+  const showDrawingCursor = tools.active === 'draw-remove' && Boolean(DrawingCursorIcon)
+  const resizeCursor = table.resizeHover === 'column'
+    ? MoveHorizontal
+    : table.resizeHover === 'row'
+      ? MoveVertical
+      : undefined
+  const CursorIcon = resizeCursor ?? DrawingCursorIcon
 
   const scrollToPage = useCallback((pageId: number | null) => {
     const pageElement = thumbnailElementsRef.current.get(pageId)
@@ -418,27 +260,7 @@ export function EditorWorkspace({
     stageRef.current = element
     setStageElement(element)
   }, [setStageElement])
-
-  const drawingCursorIcons: Partial<Record<DrawingMode, typeof Pencil>> = {
-    pencil: Pencil,
-    eraser: Eraser,
-    highlighter: Highlighter,
-    "magic-remover": Paintbrush,
-  };
-
-  const DrawingCursorIcon = drawingCursorIcons[drawing.activeMode];
-  const showDrawingCursor =
-    tools.active === "draw-remove" && Boolean(DrawingCursorIcon);
-  const resizeCursor =
-    table.resizeHover === "column"
-      ? MoveHorizontal
-      : table.resizeHover === "row"
-        ? MoveVertical
-        : undefined;
-
-  const CursorIcon = resizeCursor ?? DrawingCursorIcon;
   const [imagePreviewUrl, setImagePreviewUrl] = useState('')
-
   useEffect(() => {
     if (!canvas.hasImage || !fabricCanvas || tools.active !== "music") return;
 
@@ -450,22 +272,69 @@ export function EditorWorkspace({
     return () => window.cancelAnimationFrame(frame);
   }, [canvas.hasImage, fabricCanvas, historyVersion, tools.active]);
 
-  const selectedThreeDImage = canvas.selected instanceof FabricImage && isThreeDRotatable(canvas.selected)
+  const selectedThreeDImage = canvas.hasImage && canvas.selected instanceof FabricImage && isThreeDRotatable(canvas.selected)
     ? canvas.selected
     : null
   const selectedThreeDModel = canvas.selected instanceof EditableThreeDEmoji ? canvas.selected : null
-  const selectedThreeDObject = selectedThreeDImage ?? selectedThreeDModel
-  const selectedThreeDBounds = selectedThreeDObject?.getBoundingRect()
+  const selectedThreeDShape = canvas.selected instanceof EditableThreeDShape ? canvas.selected : null
+  const selectedThreeDObject = selectedThreeDImage ?? selectedThreeDModel ?? selectedThreeDShape
+  const [selectedThreeDBounds, setSelectedThreeDBounds] = useState<{
+    target: object
+    left: number
+    top: number
+    width: number
+    height: number
+  } | null>(null)
+  const selectedThreeDHandleBounds = selectedThreeDObject
+    ? selectedThreeDBounds?.target === selectedThreeDObject
+      ? selectedThreeDBounds
+      : selectedThreeDObject.getBoundingRect()
+    : null
+
+  useEffect(() => {
+    if (!selectedThreeDObject || !fabricCanvas) return
+
+    const updateBounds = (event?: { target?: unknown }) => {
+      if (event?.target && event.target !== selectedThreeDObject) return
+      const bounds = selectedThreeDObject.getBoundingRect()
+      setSelectedThreeDBounds({
+        target: selectedThreeDObject,
+        left: bounds.left,
+        top: bounds.top,
+        width: bounds.width,
+        height: bounds.height,
+      })
+    }
+
+    updateBounds()
+    fabricCanvas.on('object:moving', updateBounds)
+    fabricCanvas.on('object:scaling', updateBounds)
+    fabricCanvas.on('object:rotating', updateBounds)
+    fabricCanvas.on('object:modified', updateBounds)
+
+    return () => {
+      fabricCanvas.off('object:moving', updateBounds)
+      fabricCanvas.off('object:scaling', updateBounds)
+      fabricCanvas.off('object:rotating', updateBounds)
+      fabricCanvas.off('object:modified', updateBounds)
+    }
+  }, [fabricCanvas, selectedThreeDObject])
 
   const beginThreeDRotation = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!selectedThreeDObject) return
     const rotation = selectedThreeDObject instanceof FabricImage
       ? getThreeDRotation(selectedThreeDObject)
-      : {
+      : selectedThreeDObject instanceof EditableThreeDEmoji
+        ? {
           x: selectedThreeDObject.emojiRotationX,
           y: selectedThreeDObject.emojiRotationY,
           z: selectedThreeDObject.emojiRotationZ,
         }
+        : {
+            x: selectedThreeDObject.threeDRotationX,
+            y: selectedThreeDObject.threeDRotationY,
+            z: selectedThreeDObject.threeDRotationZ,
+          }
     if (!rotation) return
     const surface = event.currentTarget.closest('.canvas-surface')
     if (!surface) return
@@ -560,13 +429,60 @@ export function EditorWorkspace({
     stage.scrollTop = Math.max(0, Math.min(maxScrollTop, stage.scrollTop + scrollDelta))
   }
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
+    if (event.dataTransfer.types.includes('application/x-estudio-3d-element')) {
+      event.preventDefault()
+      event.stopPropagation()
+      event.dataTransfer.dropEffect = 'copy'
+      return
+    }
+    event.preventDefault();
     if (event.dataTransfer.types.includes('application/x-estudio-page-image')) {
       autoScrollStage(event)
       return
     }
-    if (event.dataTransfer.types.includes('Files')) tools.setDraggingFile(true)
-  }
+    if (event.dataTransfer.types.includes('Files')) tools.setDraggingFile(true);
+  };
+
+  useEffect(() => {
+    if (!showFullScreen) return;
+
+    fabricCanvas?.discardActiveObject();
+    fabricCanvas?.requestRenderAll();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowFullScreen(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [fabricCanvas, showFullScreen]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const handleWheel = (event: globalThis.WheelEvent) => {
+      // Only intercept pinch-to-zoom / modified wheel gestures.
+      if (!event.ctrlKey && !event.metaKey) return;
+
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+
+      const zoomFactor = Math.exp(-event.deltaY * 0.01);
+      const nextZoom = Math.min(3, Math.max(0.1, canvas.zoom * zoomFactor));
+
+      canvas.setZoom(nextZoom);
+    };
+
+    viewport.addEventListener("wheel", handleWheel, {
+      passive: false,
+    });
+
+    return () => {
+      viewport.removeEventListener("wheel", handleWheel);
+    };
+  }, [canvas]);
 
   const handlePageImageDragStart = (event: DragEvent<HTMLDivElement>, pageId: number | null) => {
     if (!fabricCanvas || !event.dataTransfer) {
@@ -610,7 +526,7 @@ export function EditorWorkspace({
           typeof object.src === 'string'
         )) &&
         object.name !== BACKGROUND_IMAGE_NAME &&
-        object.name !== DRAWING_LAYER_NAME,
+        !isDrawingLayerName(object.name),
       ))
     } catch {
       return false
@@ -746,6 +662,12 @@ export function EditorWorkspace({
   }
 
   const handleFirstPageDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (event.dataTransfer.types.includes('application/x-estudio-3d-element')) {
+      event.preventDefault()
+      event.stopPropagation()
+      event.dataTransfer.dropEffect = 'copy'
+      return
+    }
     if (!event.dataTransfer.types.includes('application/x-estudio-page-image')) return
     event.preventDefault()
     event.stopPropagation()
@@ -834,8 +756,50 @@ export function EditorWorkspace({
     }
   }
 
-  const handleWorkspaceDrop = (event: DragEvent<HTMLDivElement>) => {
+  const handleWorkspaceDrop = async (event: DragEvent<HTMLDivElement>) => {
     const target = event.target
+    if (event.dataTransfer.types.includes('application/x-estudio-3d-element') && fabricCanvas) {
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        const payload = JSON.parse(event.dataTransfer.getData('application/x-estudio-3d-element')) as {
+          type: 'shape' | 'character' | 'generatedEmoji' | 'modelEmoji'
+          kind?: string
+          color?: string
+          label?: string
+          character?: string
+          emoji?: string
+          emojiId?: string
+        }
+        const point = fabricCanvas.getPointer(event.nativeEvent)
+        const dropPosition = { left: point.x, top: point.y }
+        if (payload.type === 'shape' && payload.kind && payload.label) {
+          const shape = threeDShapeChoices.find((choice) => choice.kind === payload.kind)
+          if (!shape) throw new Error('Unknown 3D shape.')
+          addEditableThreeDShape(fabricCanvas, shape.kind, payload.color ?? shape.color, payload.label, {
+            left: point.x - 110,
+            top: point.y - 95,
+            width: 220,
+            height: 190,
+          })
+        } else if (payload.type === 'character' && payload.character) {
+          await addThreeDCharacter(fabricCanvas, payload.character, '#e879bf', dropPosition)
+        } else if (payload.type === 'generatedEmoji' && payload.emoji) {
+          const emoji = threeDEmojiChoices.find((choice) => choice.emoji === payload.emoji)
+          if (!emoji) throw new Error('Unknown 3D emoji.')
+          await addGeneratedThreeDEmoji(fabricCanvas, emoji, dropPosition)
+        } else if (payload.type === 'modelEmoji' && payload.emojiId) {
+          const emoji = threeDEmojiAssets.find((choice) => choice.id === payload.emojiId)
+          if (!emoji) throw new Error('Unknown 3D emoji.')
+          await addModelThreeDEmoji(fabricCanvas, emoji, dropPosition)
+        }
+        tools.setNotice(`${payload.label ?? payload.character ?? '3D element'} dropped on the canvas.`)
+      } catch (error) {
+        console.error('Could not drop 3D element:', error)
+        tools.setNotice('Could not drop that 3D element.')
+      }
+      return
+    }
     const isPageImage = event.dataTransfer.types.includes('application/x-estudio-page-image')
     const isFile = event.dataTransfer.types.includes('Files')
     if (
@@ -893,8 +857,20 @@ export function EditorWorkspace({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showFullScreen])
 
+  const handleCanvasSurfaceDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (event.dataTransfer.types.includes('application/x-estudio-3d-element')) {
+      void handleWorkspaceDrop(event)
+      return
+    }
+    if (activePageId === null) {
+      void handleFirstPageDrop(event)
+    } else {
+      void handlePageDrop(event, activePageId)
+    }
+  }
+
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    handleWorkspaceDrop(event)
+    void handleWorkspaceDrop(event)
   }
 
   return (
@@ -903,7 +879,10 @@ export function EditorWorkspace({
     >
       <div
         className="stage"
-        ref={setStageRef}
+        ref={(element) => {
+          stageRef.current = element
+          setStageRef(element)
+        }}
         onDragOver={handleDragOver}
         onDragLeave={() => tools.setDraggingFile(false)}
         onDrop={handleDrop}
@@ -918,37 +897,38 @@ export function EditorWorkspace({
             isResizeCursor={Boolean(resizeCursor)}
             surfaceRef={canvasSurfaceRef}
             onDragOver={handleFirstPageDragOver}
-            onDrop={(event) => activePageId === null
-              ? void handleFirstPageDrop(event)
-              : void handlePageDrop(event, activePageId)}
+            onDrop={handleCanvasSurfaceDrop}
           >
-            {fabricCanvas && selectedThreeDObject && selectedThreeDBounds && (
+            {fabricCanvas && selectedThreeDObject && selectedThreeDHandleBounds && (
               <button
                 type="button"
                 className="three-d-rotate-handle"
                 aria-label="Drag to rotate 3D object"
                 title="Drag to rotate"
                 style={{
-                  left: selectedThreeDBounds.left + selectedThreeDBounds.width / 2,
-                  top: selectedThreeDBounds.top + selectedThreeDBounds.height / 2,
+                  left: selectedThreeDHandleBounds.left + selectedThreeDHandleBounds.width / 2,
+                  top: selectedThreeDHandleBounds.top + selectedThreeDHandleBounds.height / 2,
                 }}
                 onPointerDown={beginThreeDRotation}
                 onPointerMove={moveThreeDRotation}
                 onPointerUp={endThreeDRotation}
                 onPointerCancel={endThreeDRotation}
-              >
-                <Rotate3D size={18} strokeWidth={1.8} />
-              </button>
+              ><Rotate3D size={31} strokeWidth={1.8} /></button>
+              )}
+            </CanvasSurface>
+              <CanvasContextMenu holderRef={canvasHolderRef} />
+            {!canvas.hasDocument && (
+                <UploadLanding
+                  restoring={restoring}
+                  onUpload={tools.uploadFile}
+                  onUploadStart={() => undefined}
+                  onUploadFinish={() => undefined}
+                />
             )}
-          </CanvasSurface>
-          {!canvas.hasDocument && <EditorEmptyState onUpload={tools.openFilePicker} />}
-          <CanvasContextMenu holderRef={canvasHolderRef} />
-        </div>
+          </div>
 
-        <FloatingObjectToolbar stageRef={stageRef} />
-
-        {editorMode.active === 'video' && tools.active !== 'music' && (
-          <div className="video-workspace-preview">
+          {editorMode.active === 'video' && tools.active !== 'music' && (
+            <div className="video-workspace-preview">
             {videoClip.url ? (
               <video
                 src={videoClip.url}
@@ -973,25 +953,26 @@ export function EditorWorkspace({
             </div>
           )}
 
-        {editorMode.active === 'video' && videoClip.isTrimming && (
-          <div className="video-trim-loading" role="status" aria-live="polite">
+          {editorMode.active === 'video' && videoClip.isTrimming && (
+            <div className="video-trim-loading" role="status" aria-live="polite">
             <span className="video-trim-spinner" aria-hidden="true" />
             <strong>Preparing your trimmed video</strong>
             <span>Playing audio while the clip is processed. Your download will start when it finishes.</span>
-          </div>
-        )}
-
-        {draggingFile && (
-          <div className="drop-cover">
-            <div>
-              <Upload size={24} />
-              <strong>Drop {editorMode.active === 'video' ? 'video' : 'image'} to open</strong>
             </div>
-          </div>
-        )}
-      </div>
+          )}
 
-      {editorMode.active === 'image' && (
+          {draggingFile && (editorMode.active === 'video' || !canvas.hasImage) && (
+            <div className="drop-cover">
+              <div>
+                <Upload size={24} />
+                <strong>Drop {editorMode.active === 'video' ? 'video' : 'image'} to open</strong>
+              </div>
+            </div>
+          )}
+
+        </div>
+
+      {canvas.hasDocument && editorMode.active === 'image' && (
         <div className="workspace-pages">
           <div className="page-thumbnails" ref={thumbnailStripRef} aria-label="Pages">
             <div
@@ -1005,6 +986,9 @@ export function EditorWorkspace({
               onDragOver={handleFirstPageDragOver}
               onDrop={(event) => void handleFirstPageDrop(event)}
             >
+              <span className="page-thumbnail-grip" aria-hidden="true">
+                <GripVertical size={13} />
+              </span>
               <button
                 type="button"
                 className="page-thumbnail-select"
@@ -1017,9 +1001,10 @@ export function EditorWorkspace({
                     ? <img src={pageOnePreview || canvas.imageThumbnail} alt="Page 1 preview" draggable={false} />
                     : <span className="page-thumbnail-empty">Empty page</span>}
                 </span>
-                <span className="page-thumbnail-label">1</span>
               </button>
-              <div className="page-thumbnail-actions">
+              <div className="page-thumbnail-footer">
+                <span className="page-thumbnail-label">1</span>
+                <div className="page-thumbnail-actions">
                 <button
                   type="button"
                   className="page-thumbnail-action"
@@ -1038,6 +1023,17 @@ export function EditorWorkspace({
                 >
                   <Copy size={14} />
                 </button>
+                <button
+                  type="button"
+                  className="page-thumbnail-action delete-thumbnail-action"
+                  aria-label="Delete image on Page 1"
+                  title="Delete image"
+                  disabled={!pageHasImage(null) || pagesSwitching}
+                  onClick={() => void activatePage(null).then(() => tools.deleteImage())}
+                >
+                  <Trash2 size={14} />
+                </button>
+                </div>
               </div>
             </div>
 
@@ -1060,6 +1056,9 @@ export function EditorWorkspace({
                 }}
                 onDrop={(event) => void handlePageDrop(event, page.id)}
               >
+                <span className="page-thumbnail-grip" aria-hidden="true">
+                  <GripVertical size={13} />
+                </span>
                 <button
                   type="button"
                   className="page-thumbnail-select"
@@ -1072,9 +1071,10 @@ export function EditorWorkspace({
                       ? <img src={page.preview || page.imageUrl} alt={`Page ${index + 2} preview`} draggable={false} />
                       : <span className="page-thumbnail-empty">Empty page</span>}
                   </span>
-                  <span className="page-thumbnail-label">{index + 2}</span>
                 </button>
-                <div className="page-thumbnail-actions">
+                <div className="page-thumbnail-footer">
+                  <span className="page-thumbnail-label">{index + 2}</span>
+                  <div className="page-thumbnail-actions">
                   <button
                     type="button"
                     className="page-thumbnail-action"
@@ -1102,6 +1102,7 @@ export function EditorWorkspace({
                   >
                     <Trash2 size={14} />
                   </button>
+                  </div>
                 </div>
                 <input
                   ref={(element) => {
@@ -1128,99 +1129,19 @@ export function EditorWorkspace({
 
       <div className="workspace-footer">
         <span>
-          <span className="status-dot" />{" "}
-          {editorMode.active === "video"
-            ? videoClip.file
-              ? "Video loaded"
-              : "No video selected"
+          <span className="status-dot" />{' '}
+          {editorMode.active === 'video'
+            ? videoClip.file ? 'Video loaded' : 'No video selected'
             : canvas.selected
-              ? `${objectName(canvas.selected, 0)} selected`
-              : canvas.hasDocument
-                ? "Ready to edit"
-                : "No image selected"}
+            ? `${objectName(canvas.selected, 0)} selected`
+            : canvas.hasDocument
+              ? 'Ready to edit'
+              : 'No image selected'}
         </span>
 
-        <div className="footer-zoom">
-          <button
-            className={`zoom-button image-resize-lock${canvas.imageResizeLocked ? " active" : ""}`}
-            onClick={canvas.toggleImageResizeLock}
-            aria-label={
-              canvas.imageResizeLocked
-                ? "Unlock image movement and resizing"
-                : "Lock image movement and resizing"
-            }
-            title={
-              canvas.imageResizeLocked
-                ? "Unlock image movement and resizing"
-                : "Lock image movement and resizing"
-            }
-            disabled={!canvas.hasImage}
-          >
-            {canvas.imageResizeLocked ? (
-              <LockKeyhole size={15} />
-            ) : (
-              <UnlockKeyhole size={15} />
-            )}
-          </button>
-
-          <button
-            className="zoom-button"
-            onClick={() => canvas.setZoom(Math.max(0.1, canvas.zoom - 0.1))}
-            aria-label="Zoom out"
-            disabled={canvas.zoom <= 0.1}
-          >
-            −
-          </button>
-
-          <input
-            className="zoom-slider"
-            type="range"
-            min="0.1"
-            max="3"
-            step="0.05"
-            value={canvas.zoom}
-            onChange={(event) => canvas.setZoom(Number(event.target.value))}
-            aria-label="Canvas zoom"
-          />
-
-          <button
-            className="zoom-button"
-            onClick={() => canvas.setZoom(Math.min(3, canvas.zoom + 0.1))}
-            aria-label="Zoom in"
-            disabled={canvas.zoom >= 3}
-          >
-            +
-          </button>
-
-          <button
-            className="zoom-percentage"
-            onClick={() => canvas.setZoom(1)}
-            title="Reset zoom to 100%"
-          >
-            {Math.round(canvas.zoom * 100)}%
-          </button>
-        </div>
-
-        <span className="workspace-document-status">
-          Local document · {canvas.dimensions.width} ×{" "}
-          {canvas.dimensions.height}
-        </span>
-        <button
-          className="zoom-button fullscreen-toggle"
-          type="button"
-          onClick={() => setShowFullScreen((current) => !current)}
-          aria-label={
-            showFullScreen
-              ? "Exit canvas focus mode"
-              : "Enter canvas focus mode"
-          }
-          aria-pressed={showFullScreen}
-          title={
-            showFullScreen ? "Exit canvas focus mode (Esc)" : "Expand canvas"
-          }
-        >
-          {showFullScreen ? <Minimize2 size={16} /> : <Fullscreen size={16} />}
-        </button>
+        <span>{editorMode.active === 'video'
+          ? videoClip.file ? `Local video · ${videoClip.duration ? `${videoClip.duration.toFixed(1)} s` : 'reading duration'}` : 'Local video workspace'
+          : `Local document · ${canvas.dimensions.width} × ${canvas.dimensions.height}`}</span>
       </div>
 
       {fabricCanvas && (

@@ -11,12 +11,14 @@ import {
   ChevronRight,
   ClipboardPaste,
   Copy,
+  CopyPlus,
   Download,
   ExternalLink,
   Layers3,
   Link2,
   Lock,
   MessageSquareText,
+  MessageSquarePlus,
   MoreHorizontal,
   MoveDown,
   MoveUp,
@@ -213,6 +215,10 @@ export function CanvasContextMenu({
   const [pasteCount, setPasteCount] = useState(0);
 
   const activeObject = fabricCanvas?.getActiveObject() ?? canvas.selected;
+  const activeObjectLocked = Boolean(activeObject && (
+    activeObject.get("objectLocked") === true ||
+    activeObject.get("layerLocked") === true
+  ));
 
   useEffect(() => {
     if (!activeObject || !fabricCanvas || !holderRef.current) {
@@ -231,16 +237,17 @@ export function CanvasContextMenu({
         y: activeObject.getBoundingRect().top,
       };
       const visualScale = (fabricCanvas.getZoom() ?? 1) * (canvas.fitScale ?? 1);
-      const buttonSize = 28;
+      const toolbarWidth = activeObjectLocked ? 136 : 252;
+      const toolbarHeight = 44;
       const left = clamp(
-        (anchor.x ?? 0) * visualScale + (canvasRect.left - holderRect.left) + 10,
+        (anchor.x ?? 0) * visualScale + (canvasRect.left - holderRect.left) + 10 - toolbarWidth,
         8,
-        Math.max(8, holderRect.width - buttonSize - 8),
+        Math.max(8, holderRect.width - toolbarWidth - 8),
       );
       const top = clamp(
-        (anchor.y ?? 0) * visualScale + (canvasRect.top - holderRect.top) + 10,
+        (anchor.y ?? 0) * visualScale + (canvasRect.top - holderRect.top) - toolbarHeight - 8,
         8,
-        Math.max(8, holderRect.height - buttonSize - 8),
+        Math.max(8, holderRect.height - toolbarHeight - 8),
       );
 
       setTriggerPosition({ left, top });
@@ -259,7 +266,7 @@ export function CanvasContextMenu({
       fabricCanvas.off("object:modified", updateTriggerPosition);
       fabricCanvas.off("selection:updated", updateTriggerPosition);
     };
-  }, [activeObject, fabricCanvas, holderRef]);
+  }, [activeObject, activeObjectLocked, fabricCanvas, holderRef]);
 
   const closeMenu = useCallback(() => {
     setMenuPosition(null);
@@ -361,6 +368,23 @@ export function CanvasContextMenu({
       y: top,
     });
     setSubmenuPlacement(left + width + 208 > holder.clientWidth - 8 ? "left" : "right");
+  };
+
+  const openMenuBesideToolbar = (position: { left: number; top: number }) => {
+    const holder = holderRef.current;
+    if (!holder) return;
+
+    const toolbarWidth = activeObjectLocked ? 136 : 252;
+    const menuWidth = 220;
+    const gap = 12;
+    const rightPosition = position.left + toolbarWidth + gap;
+    const hasRoomOnRight = rightPosition + menuWidth <= holder.clientWidth - 8;
+    const leftPosition = position.left - menuWidth - gap;
+
+    openMenuAt(
+      hasRoomOnRight ? rightPosition : leftPosition,
+      position.top + 44 + 8,
+    );
   };
 
   const handleContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -514,13 +538,11 @@ export function CanvasContextMenu({
     const target = fabricCanvas?.getActiveObject() ?? canvas.selected;
     if (!fabricCanvas || !target) return;
 
-    const lockState = target.get("objectLocked");
-    const locked = lockState === undefined
-      ? Boolean(target.lockMovementX && target.lockMovementY && target.lockScalingX && target.lockScalingY)
-      : Boolean(lockState);
+    const locked = target.get("objectLocked") === true || target.get("layerLocked") === true;
 
     target.set({
       objectLocked: !locked,
+      layerLocked: false,
       lockMovementX: !locked,
       lockMovementY: !locked,
       lockScalingX: !locked,
@@ -611,6 +633,7 @@ export function CanvasContextMenu({
     target.set("link", normalizedUrl);
     commitObjectChange(target);
     setLinkDraft(normalizedUrl);
+    closeMenu();
   };
 
   const removeLink = () => {
@@ -709,45 +732,75 @@ export function CanvasContextMenu({
     },
     { label: "Comment", shortcut: "", icon: MessageSquareText, onClick: openComment },
     {
-      label: activeObject && (
-        activeObject.get("objectLocked") === true ||
-        (activeObject.get("objectLocked") === undefined && Boolean(activeObject.lockMovementX))
-      ) ? "Unlock" : "Lock",
+      label: activeObjectLocked ? "Unlock" : "Lock",
       shortcut: "",
-      icon: activeObject && (
-        activeObject.get("objectLocked") === true ||
-        (activeObject.get("objectLocked") === undefined && Boolean(activeObject.lockMovementX))
-      ) ? Unlock : Lock,
+      icon: activeObjectLocked ? Unlock : Lock,
       onClick: () => triggerAction(handleLockToggle),
     },
     { label: "Link", shortcut: "", icon: Link2, onClick: handleLink },
     { label: "Download selection", shortcut: "", icon: Download, onClick: () => triggerAction(handleDownloadSelection) },
   ];
-
   if (!activeObject) return null;
 
   return (
     <div className="canvas-context-layer" onContextMenu={handleContextMenu}>
       {triggerPosition && (
-        <button
-          type="button"
-          data-menu-trigger="object-menu"
-          className="canvas-context-trigger"
+        <div
+          className={`canvas-object-toolbar${activeObjectLocked ? " is-locked" : ""}`}
           style={{ left: `${triggerPosition.left}px`, top: `${triggerPosition.top}px` }}
-          aria-label="Open element actions"
-          title="Open element actions"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            if (menuPosition) {
-              closeMenu();
-              return;
-            }
-            openMenuAt(triggerPosition.left + 6, triggerPosition.top - 14);
-          }}
+          role="toolbar"
+          aria-label="Selected object actions"
         >
-          <MoreHorizontal size={15} />
-        </button>
+          {activeObjectLocked ? (
+            <>
+              <button type="button" title="Add or edit link" aria-label="Add or edit link" onClick={handleLink}>
+                <Link2 size={16} />
+              </button>
+              <button type="button" title="Add comment" aria-label="Add comment" data-comment-trigger="object-comments" onClick={openComment}>
+                <MessageSquarePlus size={16} />
+              </button>
+              <button type="button" title="Unlock object" aria-label="Unlock object" onClick={() => triggerAction(handleLockToggle)}>
+                <Unlock size={16} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" title="Add or edit link" aria-label="Add or edit link" onClick={handleLink}>
+                <Link2 size={16} />
+              </button>
+              <button type="button" title="Add comment" aria-label="Add comment" data-comment-trigger="object-comments" onClick={openComment}>
+                <MessageSquarePlus size={16} />
+              </button>
+              <button type="button" title="Lock object" aria-label="Lock object" onClick={() => triggerAction(handleLockToggle)}>
+                <Lock size={16} />
+              </button>
+              <button type="button" title="Duplicate object" aria-label="Duplicate object" onClick={() => void triggerAction(handleDuplicate)}>
+                <CopyPlus size={16} />
+              </button>
+              <button type="button" title="Delete object" aria-label="Delete object" onClick={handleDelete}>
+                <Trash2 size={16} />
+              </button>
+              <button
+                type="button"
+                data-menu-trigger="object-menu"
+                className="canvas-context-trigger"
+                aria-label="More object actions"
+                title="More object actions"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (menuPosition) {
+                    closeMenu();
+                    return;
+                  }
+                  openMenuBesideToolbar(triggerPosition);
+                }}
+              >
+                <MoreHorizontal size={16} />
+              </button>
+            </>
+          )}
+        </div>
       )}
 
       {menuPosition && (
@@ -757,7 +810,10 @@ export function CanvasContextMenu({
           style={{ left: `${menuPosition.x}px`, top: `${menuPosition.y}px` }}
           onClick={(event) => event.stopPropagation()}
         >
-          {menuItems.map((item) => {
+          {(activeObjectLocked
+            ? menuItems.filter((item) => item.label === "Unlock")
+            : menuItems
+          ).map((item) => {
             const Icon = item.icon;
             const hasSubmenu = Boolean(item.submenu);
             const isOpen =

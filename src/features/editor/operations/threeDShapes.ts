@@ -586,14 +586,14 @@ async function renderShape(kind: ThreeDShapeKind, color: string, rotation: Three
   return imageUrl
 }
 
-async function addRenderedImage(canvas: Canvas, imageUrl: string, label: string, sizeMultiplier = 1, properties: Record<string, string | number> = {}, maxSize = 900): Promise<FabricImage> {
+async function addRenderedImage(canvas: Canvas, imageUrl: string, label: string, sizeMultiplier = 1, properties: Record<string, string | number> = {}, maxSize = 900, position?: { left: number; top: number }): Promise<FabricImage> {
   const image = await FabricImage.fromURL(imageUrl)
   const size = Math.min(maxSize, Math.max(120, Math.min(canvas.getWidth(), canvas.getHeight()) * 0.42 * sizeMultiplier))
   const imageScale = size / Math.max(image.width, image.height)
 
   image.set({
-    left: canvas.getWidth() / 2,
-    top: canvas.getHeight() / 2,
+    left: position?.left ?? canvas.getWidth() / 2,
+    top: position?.top ?? canvas.getHeight() / 2,
     originX: 'center',
     originY: 'center',
     scaleX: imageScale,
@@ -1147,7 +1147,7 @@ export function renderThreeDEmojiThumbnail(emoji: string): Promise<string> {
   return thumbnail
 }
 
-export async function addThreeDCharacter(canvas: Canvas, character: string, color = '#e879bf') {
+export async function addThreeDCharacter(canvas: Canvas, character: string, color = '#e879bf', position?: { left: number; top: number }) {
   await addRenderedImage(canvas, await renderThreeDCharacter(character, color, initialCharacterRotation), character, 1.5, {
     threeDType: 'character',
     threeDCharacter: character,
@@ -1155,7 +1155,7 @@ export async function addThreeDCharacter(canvas: Canvas, character: string, colo
     threeDRotationX: initialCharacterRotation.x,
     threeDRotationY: initialCharacterRotation.y,
     threeDRotationZ: initialCharacterRotation.z,
-  })
+  }, 900, position)
 }
 
 function resolveThreeDRotationSource(image: FabricImage) {
@@ -1366,7 +1366,7 @@ export async function recolorThreeDCharacter(canvas: Canvas, image: FabricImage,
   await update
 }
 
-export async function addThreeDEmoji(canvas: Canvas, emoji: ThreeDEmoji) {
+export async function addThreeDEmoji(canvas: Canvas, emoji: ThreeDEmoji, position?: { left: number; top: number }) {
   const { imageUrl, runtime } = await renderEmojiPreview(emoji.emoji, initialEmojiRotation)
   const image = await addRenderedImage(canvas, imageUrl, `${emoji.label} emoji`, 1.5, {
     threeDType: 'emoji',
@@ -1374,6 +1374,6 @@ export async function addThreeDEmoji(canvas: Canvas, emoji: ThreeDEmoji) {
     threeDRotationX: initialEmojiRotation.x,
     threeDRotationY: initialEmojiRotation.y,
     threeDRotationZ: initialEmojiRotation.z,
-  }, 900)
+  }, 900, position)
   threeDEmojiRuntimeByImage.set(image, Promise.resolve(runtime))
 }

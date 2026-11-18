@@ -5,7 +5,7 @@ import {
   buildShapeObject,
   constrainShapeToImage, updateShapeObject,
 } from "../operations/shapeObjects";
-import { EditableThreeDShape } from '../operations/EditableThreeDShape'
+import { EditableThreeDShape, prepareThreeDShapes } from '../operations/EditableThreeDShape'
 import { getImageBounds } from "../operations/tableGeometry";
 import { threeDShapeChoices } from '../operations/threeDShapes'
 import type { UseShapeDrawingOptions } from "../model/types";
@@ -15,9 +15,9 @@ export function useShapeDrawing({
   canvasRef,
   imageObjectRef,
   activeTool,
+  hasDocument,
   shapeToolMode,
   setActiveTool,
-  hasDocument,
   shapeKind,
   threeDShapeKind,
   lineStyle,
@@ -40,14 +40,17 @@ export function useShapeDrawing({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !hasDocument) return;
     const shapeToolActive = activeTool === "shapes";
     const drawing = shapeToolActive && shapeToolMode === '2d'
     const drawingThreeD = shapeToolActive && shapeToolMode === '3d'
     const drawingActive = drawing || drawingThreeD
+    if (drawingThreeD) void prepareThreeDShapes().catch(() => undefined)
+    ;(canvas as typeof canvas & { isDrawingThreeDShape?: boolean }).isDrawingThreeDShape = drawingThreeD
     canvas.selection = !shapeToolActive || shapeToolMode === '2d';
-    canvas.skipTargetFind = false;
-    canvas.defaultCursor = drawing ? "crosshair" : "default";
+    canvas.skipTargetFind = drawing;
+    if (drawingActive) canvas.discardActiveObject();
+    canvas.defaultCursor = drawingActive ? "crosshair" : "default";
     // canvas.hoverCursor = 'move'
     const backgroundLayers = canvas.getObjects().filter((object) => object.get('name') === BACKGROUND_IMAGE_NAME)
     backgroundLayers.forEach((object) => {
@@ -66,12 +69,24 @@ export function useShapeDrawing({
       canvas.discardActiveObject()
     }
     canvas.requestRenderAll()
+    canvas.hoverCursor = drawingActive ? "crosshair" : "move";
     canvas.hoverCursor = drawing ? "crosshair" : "move";
 
-    const handlePointerDown = (event: { e: TPointerEvent }) => {
+    const handlePointerDown = async (event: { e: TPointerEvent }) => {
+      if (drawingThreeD) {
+        try {
+          await prepareThreeDShapes()
+        } catch {
+          return
+        }
+      }
       const target = canvas.findTarget(event.e)
-      if ((!drawing && !drawingThreeD) || !hasDocument) return
-      if (target && target !== imageObjectRef.current && target.get('name') !== BACKGROUND_IMAGE_NAME) {
+      if (!drawing && !drawingThreeD) return
+      if (
+        target && target !== imageObjectRef.current &&
+        target !== imageObjectRef.current &&
+        target.get('name') !== BACKGROUND_IMAGE_NAME
+      ) {
         return
       }
       const backgroundTarget = target?.get('name') === BACKGROUND_IMAGE_NAME ? target : null
@@ -83,41 +98,44 @@ export function useShapeDrawing({
       const start = {
         x: Math.max(bounds.left, Math.min(bounds.left + bounds.width, pointer.x)),
         y: Math.max(bounds.top, Math.min(bounds.top + bounds.height, pointer.y)),
-      }
-      shapeDrawingRef.current = {
+      };
+      const drawingState = {
         start,
-        preview: null,
+        preview: null as FabricObject | null,
         backgroundTarget,
         pendingBackgroundClick: Boolean(backgroundTarget),
         hasDragged: false,
       }
-      suppressHistoryRef.current = true
-      const preview = drawing
-        ? buildShapeObject({
-          kind: shapeKind,
-          fill: fillColor,
-          transparentFill,
-          stroke: strokeColor,
-          strokeWidth,
-          opacity: shapeOpacity,
-          name: shapeNames[shapeKind],
-          lineStyle,
-        }, { left: start.x - 3, top: start.y - 3, width: 6, height: 6 })
-        : new EditableThreeDShape({
+      shapeDrawingRef.current = drawingState
+      suppressHistoryRef.current = true;
+      const selectedThreeDShape = threeDShapeChoices.find((shape) => shape.kind === threeDShapeKind)
+      const preview = drawingThreeD
+        ? new EditableThreeDShape({
           left: start.x,
           top: start.y,
-          width: 6,
-          height: 6,
-          name: `3D ${threeDShapeChoices.find((choice) => choice.kind === threeDShapeKind)?.label ?? threeDShapeKind}`,
+          width: 1,
+          height: 1,
           threeDKind: threeDShapeKind,
+          threeDColor: selectedThreeDShape?.color,
+          name: `3D ${selectedThreeDShape?.label ?? threeDShapeKind}`,
         })
-      preview.set({ selectable: false, evented: false })
-      constrainShapeToImage(canvas, imageObjectRef.current, preview)
-      shapeDrawingRef.current.preview = preview
-      canvas.add(preview)
-      canvas.requestRenderAll()
-    }
-
+        : buildShapeObject(
+          {
+            kind: shapeKind,
+            fill: fillColor,
+            transparentFill,
+            stroke: strokeColor,
+            strokeWidth,
+            opacity: shapeOpacity,
+            name: shapeNames[shapeKind],
+            lineStyle,
+          },
+          { left: start.x, top: start.y, width: 1, height: 1 },
+        );
+      drawingState.preview = preview
+      canvas.add(preview);
+      canvas.requestRenderAll();
+    };
     const handlePointerMove = (event: { e: TPointerEvent }) => {
       const drawingState = shapeDrawingRef.current
       if ((!drawing && !drawingThreeD) || !drawingState) return
@@ -226,7 +244,6 @@ export function useShapeDrawing({
     imageObjectRef,
     fillColor,
     hasDocument,
-    imageObjectRef,
     lineStyle,
     recordHistory,
     shapeKind,

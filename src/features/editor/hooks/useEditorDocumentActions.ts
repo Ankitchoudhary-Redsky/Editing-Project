@@ -79,10 +79,22 @@ export function useEditorDocumentActions({
     const canvas = canvasRef.current;
     if (!canvas || !imageObjectRef.current) return;
 
+    const hasLayout = canvas
+      .getObjects()
+      .some((object) => String(object.get("name") ?? "").startsWith("layout-"));
     suppressHistoryRef.current = true;
-    canvas.clear();
-    canvas.setDimensions({ width: 1200, height: 800 });
-    canvas.backgroundColor = "rgba(0,0,0,0)";
+    if (hasLayout) {
+      canvas.remove(imageObjectRef.current);
+      canvas
+        .getObjects()
+        .filter((object) => object.get("name") === "editor-frame-overlay")
+        .forEach((object) => canvas.remove(object));
+      canvas.discardActiveObject();
+    } else {
+      canvas.clear();
+      canvas.setDimensions({ width: 1200, height: 800 });
+      canvas.backgroundColor = "rgba(0,0,0,0)";
+    }
     canvas.requestRenderAll();
 
     cropObjectRef.current = null;
@@ -109,11 +121,13 @@ export function useEditorDocumentActions({
     syncObjects();
     recordHistory(true);
     resizeDisplay();
-    void deleteProjectDraft().catch(() => {
-      setNotice(
-        "Deleted project data could not be cleared from browser storage.",
-      );
-    });
+    if (!hasLayout) {
+      void deleteProjectDraft().catch(() => {
+        setNotice(
+          "Deleted project data could not be cleared from browser storage.",
+        );
+      });
+    }
   };
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {

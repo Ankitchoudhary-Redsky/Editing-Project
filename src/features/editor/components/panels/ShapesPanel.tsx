@@ -12,7 +12,6 @@ import type { ShapeKind } from '../../model/types'
 import {
   addThreeDCharacter,
   addThreeDEmoji,
-  addThreeDShape,
   isThreeDRotatable,
   recolorThreeDCharacter,
   renderThreeDEmojiThumbnail,
@@ -25,6 +24,7 @@ import {
 } from '../../operations/threeDShapes'
 import { threeDEmojiAssets, threeDEmojiCategories, type ThreeDEmojiCategory } from '../../operations/threeDEmojiAssets'
 import { addThreeDEmoji as addModelThreeDEmoji } from '../../operations/threeDEmojis'
+import { prepareThreeDShapes } from '../../operations/EditableThreeDShape'
 
 const lineStyles = [
   { style: 'straight', label: 'Straight', icon: Minus },
@@ -59,7 +59,16 @@ export function ShapesPanel() {
   const [active3DGroup, setActive3DGroup] = useState<(typeof threeDShapeGroups)[number]>(threeDShapeGroups[0])
   const [activeEmojiCategory, setActiveEmojiCategory] = useState<'All' | ThreeDEmojiCategory | (typeof generatedEmojiCategories)[number]>('All')
   const [emojiPreviews, setEmojiPreviews] = useState<Record<string, string>>({})
-  const [loadingEmojiId, setLoadingEmojiId] = useState<string | null>(null)
+
+  const setPreviewDragImage = (
+    event: React.DragEvent<HTMLButtonElement>,
+    selector: string,
+  ) => {
+    const preview = event.currentTarget.querySelector(selector) as HTMLElement | null
+    if (!preview) return
+    const bounds = preview.getBoundingClientRect()
+    event.dataTransfer.setDragImage(preview, bounds.width / 2, bounds.height / 2)
+  }
   const selectedThreeDName = String(canvas.selected?.get('name') ?? '')
   const hasSelectedThreeDObject = selectedThreeDName.startsWith('3D ')
 
@@ -92,61 +101,62 @@ export function ShapesPanel() {
     `${emoji.displayName} ${emoji.category}`.toLowerCase().includes(threeDSearch.trim().toLowerCase()),
   )
 
-  const add3DElement = async (label: string, render: () => Promise<void>) => {
-    if (!canvas.hasImage || !fabricCanvas || addingShape) return
-
-    try {
-      setAddingShape(true)
-      await render()
-      tools.setNotice(`${label} added to the canvas.`)
-    } catch (error) {
-      console.error('Failed to add 3D element:', error)
-      tools.setNotice('Could not render this 3D element. Try another item or browser.')
-    } finally {
-      setAddingShape(false)
-    }
-  }
-
-  const chooseThreeDShape = async (kind: (typeof threeDShapeChoices)[number]['kind'], color: string, label: string) => {
-    if (!canvas.hasImage || !fabricCanvas || addingShape) return
-    try {
-      setAddingShape(true)
-      await addThreeDShape(fabricCanvas, kind, color, label)
-      shapes.setThreeDKind(kind)
-      tools.setNotice(`${label} added to the canvas.`)
-    } catch (error) {
-      console.error('Failed to prepare 3D shape tools:', error)
-      tools.setNotice('Could not initialize Three.js in this browser.')
-    } finally {
-      setAddingShape(false)
-    }
-  }
-
-  const addEmoji = async (emoji: (typeof threeDEmojiAssets)[number]) => {
-    if (!fabricCanvas || addingShape) return
+  const addThreeDCharacterToCanvas = async (character: string) => {
+    if (!fabricCanvas || !canvas.hasDocument || addingShape) return
     setAddingShape(true)
-    setLoadingEmojiId(emoji.id)
+    try {
+      await addThreeDCharacter(fabricCanvas, character)
+      tools.setNotice(`3D ${character} added to the canvas.`)
+    } catch (error) {
+      console.error('Could not add 3D character:', error)
+      tools.setNotice('Could not add that 3D character.')
+    } finally {
+      setAddingShape(false)
+    }
+  }
+
+  const addModelEmojiToCanvas = async (emoji: (typeof threeDEmojiAssets)[number]) => {
+    if (!fabricCanvas || !canvas.hasDocument || addingShape) return
+    setAddingShape(true)
     try {
       await addModelThreeDEmoji(fabricCanvas, emoji)
       tools.setNotice(`${emoji.displayName} 3D emoji added.`)
     } catch (error) {
-      console.error(`Could not load 3D emoji ${emoji.id}:`, error)
-      tools.setNotice(`Could not load the ${emoji.displayName} 3D model.`)
+      console.error('Could not add 3D model emoji:', error)
+      tools.setNotice('Could not add that 3D emoji.')
     } finally {
-      setLoadingEmojiId(null)
       setAddingShape(false)
     }
   }
 
-  const addGeneratedEmoji = async (emoji: (typeof threeDEmojiChoices)[number]) => {
-    if (!fabricCanvas || addingShape) return
+  const addGeneratedEmojiToCanvas = async (emoji: (typeof threeDEmojiChoices)[number]) => {
+    if (!fabricCanvas || !canvas.hasDocument || addingShape) return
     setAddingShape(true)
     try {
       await addThreeDEmoji(fabricCanvas, emoji)
       tools.setNotice(`${emoji.label} 3D emoji added.`)
     } catch (error) {
-      console.error(`Could not render 3D emoji ${emoji.emoji}:`, error)
-      tools.setNotice(`Could not render the ${emoji.label} 3D emoji.`)
+      console.error('Could not add generated 3D emoji:', error)
+      tools.setNotice('Could not add that 3D emoji.')
+    } finally {
+      setAddingShape(false)
+    }
+  }
+
+  const chooseThreeDShape = async (
+    kind: (typeof threeDShapeChoices)[number]['kind'],
+    label: string,
+  ) => {
+    if (!canvas.hasImage || !fabricCanvas || addingShape) return
+    setAddingShape(true)
+    try {
+      await prepareThreeDShapes()
+      shapes.setThreeDKind(kind)
+      tools.setActive('shapes')
+      tools.setNotice(`Drag on the canvas to add a ${label}.`)
+    } catch (error) {
+      console.error('Failed to prepare 3D shape tools:', error)
+      tools.setNotice('Could not initialize Three.js in this browser.')
     } finally {
       setAddingShape(false)
     }
@@ -331,7 +341,14 @@ export function ShapesPanel() {
                     type="button"
                     className={`three-d-shape-choice ${shapes.threeDKind === shape.kind ? 'selected' : ''}`}
                     disabled={addingShape}
-                    onClick={() => void chooseThreeDShape(shape.kind, shape.color, shape.label)}
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'copy'
+                      event.dataTransfer.setData('application/x-estudio-3d-element', JSON.stringify({
+                        type: 'shape', kind: shape.kind, color: shape.color, label: shape.label,
+                      }))
+                    }}
+                    onClick={() => void chooseThreeDShape(shape.kind, shape.label)}
                     title={`Add ${shape.label} to the canvas`}
                   >
                     <span className={`three-d-shape-preview model-${shape.kind}`} style={{ '--shape-color': shape.color } as React.CSSProperties} aria-hidden="true" />
@@ -350,7 +367,15 @@ export function ShapesPanel() {
                     type="button"
                     className="three-d-character-choice"
                     disabled={addingShape}
-                    onClick={() => void add3DElement(character, () => addThreeDCharacter(fabricCanvas!, character))}
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'copy'
+                      event.dataTransfer.setDragImage(event.currentTarget, event.currentTarget.offsetWidth / 2, event.currentTarget.offsetHeight / 2)
+                      event.dataTransfer.setData('application/x-estudio-3d-element', JSON.stringify({
+                        type: 'character', character,
+                      }))
+                    }}
+                    onClick={() => void addThreeDCharacterToCanvas(character)}
                     aria-label={`Add 3D ${character}`}
                   >{character}</button>
                 ))}
@@ -370,7 +395,6 @@ export function ShapesPanel() {
                   >{category}</button>
                 ))}
               </div>
-              {loadingEmojiId && <p className="three-d-loading" role="status">Loading {threeDEmojiAssets.find((emoji) => emoji.id === loadingEmojiId)?.displayName} model…</p>}
               <div className="three-d-emoji-grid">
                 {filteredThreeDEmojiAssets.map((emoji) => (
                   <button
@@ -378,7 +402,15 @@ export function ShapesPanel() {
                     type="button"
                     className="three-d-emoji-choice"
                     disabled={addingShape}
-                    onClick={() => void addEmoji(emoji)}
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'copy'
+                      setPreviewDragImage(event, 'img')
+                      event.dataTransfer.setData('application/x-estudio-3d-element', JSON.stringify({
+                        type: 'modelEmoji', emojiId: emoji.id,
+                      }))
+                    }}
+                    onClick={() => void addModelEmojiToCanvas(emoji)}
                     aria-label={`Add 3D ${emoji.displayName} emoji`}
                     title={`Add ${emoji.displayName}`}
                   >
@@ -394,7 +426,15 @@ export function ShapesPanel() {
                     type="button"
                     className="three-d-emoji-choice"
                     disabled={addingShape}
-                    onClick={() => void addGeneratedEmoji(emoji)}
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'copy'
+                      setPreviewDragImage(event, '.three-d-emoji-preview')
+                      event.dataTransfer.setData('application/x-estudio-3d-element', JSON.stringify({
+                        type: 'generatedEmoji', emoji: emoji.emoji, label: emoji.label,
+                      }))
+                    }}
+                    onClick={() => void addGeneratedEmojiToCanvas(emoji)}
                     aria-label={`Add 3D ${emoji.label} emoji`}
                     title={`Add ${emoji.label}`}
                   >
@@ -416,7 +456,7 @@ export function ShapesPanel() {
                 : filteredThreeDEmojiChoices.length === 0 && filteredThreeDEmojiAssets.length === 0 && <p className="panel-note">No matching 3D emojis.</p>}
         </section>}
       </fieldset>
-      <p className="panel-note draw-hint">{!canvas.hasDocument ? 'Add a layer to use shape tools.' : mode === '2d' ? `Drag to draw a ${shapeNames[shapes.kind].toLowerCase()}; hold Shift to constrain proportions.` : 'Click any 3D item to add it centered. Drag its rotate handle to turn it; hold Shift while dragging for Z rotation.'}</p>
+      <p className="panel-note draw-hint">{!canvas.hasDocument ? 'Add a layer to use shape tools.' : mode === '2d' ? `Drag to draw a ${shapeNames[shapes.kind].toLowerCase()}; hold Shift to constrain proportions.` : `Drag to draw a 3D ${threeDShapeChoices.find((shape) => shape.kind === shapes.threeDKind)?.label.toLowerCase() ?? 'shape'}. Drag the center handle to rotate X/Y; drag the upper-right handle to rotate Z.`}</p>
     </div>
   )
 }

@@ -49,7 +49,21 @@
 .template-search input::placeholder { color: #7f8a84; }
 .template-search button, .template-settings-button, .template-close-gallery, .template-modal-close { display: grid; flex: 0 0 auto; place-items: center; width: 34px; height: 34px; color: var(--template-muted); background: transparent; border: 0; border-radius: 5px; cursor: pointer; }
 .template-gallery-header-actions { display: flex; align-items: center; gap: 9px; }
-.template-save-current, .template-primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 13px; color: #fff; background: var(--template-green); border: 1px solid var(--template-green); border-radius: 5px; font-weight: 650; cursor: pointer; }
+.template-save-current, .template-primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 13px; color: #ffffff; background: var(--template-green); border: 1px solid var(--template-green); border-radius: 5px; font-weight: 650; cursor: pointer; }
+.save-templatebtn{
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: center; 
+  gap: 8px; 
+  min-height: 38px; 
+  padding: 0 13px; 
+  color: #5bb729; 
+  background: var(--template-green); 
+  border: 1px solid var(--template-green); 
+  border-radius: 5px; 
+  font-weight: 650; 
+  cursor: pointer;
+}
 .template-save-current:hover, .template-primary-action:hover { background: var(--template-green-dark); border-color: var(--template-green-dark); }
 .template-primary-action:disabled, .template-save-current:disabled { opacity: 0.55; cursor: not-allowed; }
 .template-close-gallery:hover, .template-settings-button:hover, .template-modal-close:hover, .template-search button:hover { color: var(--template-ink); background: #edf2ee; }

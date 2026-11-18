@@ -84,16 +84,7 @@ export function useEditorFeatureControllers({
     setActiveTool: actions.setActiveTool,
     setTextValue: actions.setTextValue,
     recordHistory: actions.recordHistory,
-  });
-
-  const framesLayout = useFramesLayout({
-    canvasRef: refs.canvasRef,
-    dimensions: state.dimensions,
-    setDimensions: actions.setDimensions,
-    recordHistory: actions.recordHistory,
-    syncObjects: actions.syncObjects,
-    setNotice: actions.setNotice,
-  });
+  })
 
   useShapeDrawing({
     canvas,
@@ -102,7 +93,6 @@ export function useEditorFeatureControllers({
     activeTool: state.activeTool,
     shapeToolMode: state.shapeToolMode,
     setActiveTool: actions.setActiveTool,
-    hasDocument: state.hasDocument,
     shapeKind: state.shapeKind,
     threeDShapeKind: state.threeDShapeKind,
     lineStyle: state.lineStyle,
@@ -111,9 +101,21 @@ export function useEditorFeatureControllers({
     strokeColor: state.strokeColor,
     strokeWidth: state.strokeWidth,
     shapeOpacity: state.shapeOpacity,
+    hasDocument: state.hasDocument,
     suppressHistoryRef: refs.suppressHistoryRef,
     recordHistory: actions.recordHistory,
     syncObjects: actions.syncObjects,
+  });
+
+  const framesLayout = useFramesLayout({
+    canvas,
+    canvasRef: refs.canvasRef,
+    imageObjectRef: refs.imageObjectRef,
+    dimensions: state.dimensions,
+    setDimensions: actions.setDimensions,
+    recordHistory: actions.recordHistory,
+    syncObjects: actions.syncObjects,
+    setNotice: actions.setNotice,
   });
 
   return { background, table, pixelDrawing, objectEditing, framesLayout };

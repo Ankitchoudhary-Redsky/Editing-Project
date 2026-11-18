@@ -25,7 +25,7 @@ export type EditorMode = "image" | "video";
 
 export type EditorTool =
   | "upload"
-  | 'library' | "select"
+  | 'library' | 'templates' | "select"
   | "crop"
   | "resize"
   | "text"
@@ -126,6 +126,7 @@ export type EditorEmptyStateProps = {
 
 export type EditorShellProps = {
   historyVersion: number;
+  restoring: boolean;
   setUploadInputElement: (element: HTMLInputElement | null) => void;
   setCanvasElement: (element: HTMLCanvasElement | null) => void;
   setStageElement: (element: HTMLDivElement | null) => void;

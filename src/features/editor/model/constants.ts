@@ -8,11 +8,12 @@ import {
   Video,
   Scissors,
   Layers3,
+  Library,
   PanelsTopLeft,
   ChartNoAxesColumnIncreasing,
-  Library,
   Moon,
   Sparkles,
+  Type,
 } from "lucide-react";
 import { Canvas } from "fabric";
 import type { DrawingMode, EditorTool, ShapeKind } from "./types";
@@ -22,6 +23,19 @@ export const BASE_IMAGE_PROPERTY = 'isBaseImage'
 export const DEFAULT_PAGE_WIDTH = 1200
 export const DEFAULT_PAGE_HEIGHT = 800
 export const DRAWING_LAYER_NAME = '__pixel_studio_drawing_layer__'
+export const DRAWING_LAYER_TOOL_NAMES = {
+  pencil: `${DRAWING_LAYER_NAME}_pencil`,
+  sketch: `${DRAWING_LAYER_NAME}_sketch`,
+  marker: `${DRAWING_LAYER_NAME}_marker`,
+  highlighter: `${DRAWING_LAYER_NAME}_highlighter`,
+} as const
+
+export function isDrawingLayerName(name: unknown) {
+  return typeof name === 'string' && (
+    name === DRAWING_LAYER_NAME ||
+    Object.values(DRAWING_LAYER_TOOL_NAMES).some((layerName) => layerName === name)
+  )
+}
 
 export const editorToolCategories: {
   id: string;
@@ -37,7 +51,7 @@ export const editorToolCategories: {
     defaultTool: "upload",
     tools: [{ id: "upload", label: "Images" }],
   },
-  { id: 'library', label: 'Library', icon: Library, defaultTool: 'library', tools: [{ id: 'library', label: 'Library' }] },
+  { id: 'library', label: 'Library', icon: Library, defaultTool: 'library', tools: [{ id: 'library', label: 'Library' }, { id: 'templates', label: 'Templates' }] },
   {
     id: "transform",
     label: "Transform",
@@ -66,12 +80,18 @@ export const editorToolCategories: {
     ],
   },
   {
+    id: "text",
+    label: "Text",
+    icon: Type,
+    defaultTool: "text",
+    tools: [{ id: "text", label: "Text" }],
+  },
+  {
     id: "elements",
     label: "Elements",
     icon: Shapes,
-    defaultTool: "text",
+    defaultTool: "shapes",
     tools: [
-      { id: "text", label: "Text" },
       { id: "shapes", label: "Shapes" },
       { id: "stickers", label: "Stickers" },
       { id: "signature", label: "Signature" },
@@ -255,6 +275,10 @@ export function serializeCanvas(canvas: Canvas) {
     "shadowArtworkSize",
     "shadowArtworkBaseScaleX",
     "shadowArtworkBaseScaleY",
+    "link",
+    "objectLocked",
+    "comment",
+    "comments",
   ]) as Record<string, unknown>;
   const replaceImageSources = (value: unknown) => {
     if (Array.isArray(value)) {

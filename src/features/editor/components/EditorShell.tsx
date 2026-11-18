@@ -9,11 +9,13 @@ import type { EditorShellProps } from "../model/types";
 
 export function EditorShell({
   historyVersion,
+  restoring,
   setUploadInputElement,
   setCanvasElement,
   setStageElement,
 }: EditorShellProps) {
-  const { tools, handleDrop } = useEditor();
+  const { tools, canvas, pages, handleDrop } = useEditor();
+  const showEditorTools = canvas.hasDocument || pages.activeId !== null;;
 
   const handleDragOver = (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
@@ -21,8 +23,9 @@ export function EditorShell({
   };
 
   const handleDragLeave = (event: DragEvent<HTMLElement>) => {
-    if (event.currentTarget === event.target) tools.setDraggingFile(false);
+    if (event.currentTarget === event.target) tools.setDraggingFile(false);;
   };
+  ;
 
   return (
     <main
@@ -31,7 +34,7 @@ export function EditorShell({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <EditorHeader />
+      {canvas.hasDocument && <EditorHeader />}
       <input
         ref={setUploadInputElement}
         type="file"
@@ -43,10 +46,11 @@ export function EditorShell({
         }}
       />
       <section className="editor-body">
-        <ToolRail />
-        <ToolPanel />
+        {showEditorTools && <ToolRail />}
+        {showEditorTools && <ToolPanel />}
         <EditorWorkspace
           historyVersion={historyVersion}
+          restoring={restoring}
           setCanvasElement={setCanvasElement}
           setStageElement={setStageElement}
         />

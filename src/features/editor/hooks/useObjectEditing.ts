@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { ActiveSelection, FabricImage, IText, Shadow, type FabricObject } from 'fabric'
 import type { TextDesignOptions, TextProperty, UseObjectEditingOptions } from '../model/types'
-import { shapeNames } from '../model/constants'
+import { BACKGROUND_IMAGE_NAME, isDrawingLayerName, shapeNames } from '../model/constants'
 import { objectName } from '../model/objectName'
 import { addImageInsideShape, constrainShapeToImage, createShapeObject, isShapeObject, syncImageWithShape } from '../operations/shapeObjects'
 import { createTextInsideShape, createTextObject, syncParentShapeForText, syncTextWithShape, updateLinkedTextFontSize } from '../operations/textObjects'
@@ -119,11 +119,14 @@ export function useObjectEditing({
   };
 
   const addImageToShape = async (file: File) => {
-    const canvas = canvasRef.current
-    if (!canvas || !selectedObject || !isShapeObject(selectedObject)) return
-    await addImageInsideShape(canvas, selectedObject, file)
-    recordHistory(true)
-  }
+    const canvas = canvasRef.current;
+    const name = String(selectedObject?.get('name') ?? '')
+    if (!canvas || !selectedObject || !isShapeObject(selectedObject) || /^line|^arrow/i.test(name)) return;
+    await addImageInsideShape(canvas, selectedObject, file);
+    canvas.setActiveObject(selectedObject)
+    recordHistory(true);
+    setActiveTool('shapes')
+  };
 
   const updateText = (property: TextProperty, value: string | number) => {
     const active = canvasRef.current?.getActiveObject();
@@ -176,7 +179,19 @@ export function useObjectEditing({
     const canvas = canvasRef.current
     const active = canvas?.getActiveObject()
     if (!canvas || !active) return
-    if (active === imageObjectRef.current) imageObjectRef.current = null
+    if (active === imageObjectRef.current) {
+      canvas.getObjects()
+        .filter((object) => object.get('name') === 'editor-frame-overlay')
+        .forEach((object) => canvas.remove(object))
+      imageObjectRef.current = null
+    }
+    const shapeId = active.get('shapeId')
+    if (shapeId) {
+      const linkedObjects = canvas.getObjects().filter((object) =>
+        object.get('textParentId') === shapeId || object.get('imageParentId') === shapeId,
+      )
+      canvas.remove(...linkedObjects)
+    }
     canvas.remove(active)
     canvas.discardActiveObject()
     canvas.requestRenderAll()
@@ -208,6 +223,20 @@ export function useObjectEditing({
     recordHistory(true)
   }
 
+  const duplicateSelected = async () => {
+    const canvas = canvasRef.current;
+    const active = canvas?.getActiveObject();
+    if (!canvas || !active) return;
+    const clone = await active.clone(["chartConfigJson", "chartType", "chartConfig"]);
+    clone.set({ left: (active.left ?? 0) + 24, top: (active.top ?? 0) + 24 });
+    clone.set("name", `${objectName(active, 0)} copy`);
+    constrainShapeToImage(canvas, imageObjectRef.current, clone);
+    canvas.add(clone);
+    canvas.setActiveObject(clone);
+    canvas.requestRenderAll();
+    recordHistory(true);
+  };
+
   const copyStyleSelection = () => {
     const canvas = canvasRef.current
     const target = canvas?.getActiveObject()
@@ -224,23 +253,9 @@ export function useObjectEditing({
     recordHistory()
   }
 
-  const duplicateSelected = async () => {
-    const canvas = canvasRef.current;
-    const active = canvas?.getActiveObject();
-    if (!canvas || !active) return;
-    const clone = await active.clone();
-    clone.set({ left: (active.left ?? 0) + 24, top: (active.top ?? 0) + 24 });
-    clone.set("name", `${objectName(active, 0)} copy`);
-    constrainShapeToImage(canvas, imageObjectRef.current, clone);
-    canvas.add(clone);
-    canvas.setActiveObject(clone);
-    canvas.requestRenderAll();
-    recordHistory(true);
-  };
-
   const selectLayer = (object: FabricObject) => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || object.get('layerLocked') === true) return
     canvas.setActiveObject(object)
     canvas.requestRenderAll()
   }
@@ -312,7 +327,13 @@ export function useObjectEditing({
     if (!activeCanvas || !objects.length) return;
     activeCanvas.discardActiveObject();
     objects.forEach((object) => {
-      if (object === imageObjectRef.current) imageObjectRef.current = null;
+      if (object === imageObjectRef.current) {
+        activeCanvas
+          .getObjects()
+          .filter((item) => item.get("name") === "editor-frame-overlay")
+          .forEach((item) => activeCanvas.remove(item));
+        imageObjectRef.current = null;
+      }
       activeCanvas.remove(object);
     });
     activeCanvas.requestRenderAll();
@@ -376,7 +397,7 @@ export function useObjectEditing({
     const canvas = canvasRef.current
     if (!canvas || !target || target === cropObjectRef.current) return
     const name = target.get('name')
-    if (name === '__pixel_studio_drawing_layer__' || name === '__pixel_studio_background_image__') return
+    if (isDrawingLayerName(name) || name === BACKGROUND_IMAGE_NAME) return
     target.set('shadow', shadow)
     if (size !== undefined) target.set('shadowSize', size)
     if (imageSize !== undefined && target instanceof FabricImage) {
@@ -421,11 +442,11 @@ export function useObjectEditing({
     setLayerVisibility,
     setLayerLocked,
     renameLayer,
-    moveLayer,
     selectLayers,
     deleteLayers,
     moveLayers,
     duplicateLayers,
+    moveLayer,
     updateShapeAppearance,
     updateShadow,
   };

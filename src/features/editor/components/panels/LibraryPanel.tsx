@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { FabricImage } from 'fabric'
-import { ImagePlus, LoaderCircle, Trash, Upload } from 'lucide-react'
+import { ImagePlus, LayoutTemplate, LoaderCircle, Trash, Upload } from 'lucide-react'
 
 import { useEditor } from '../../../editor/EditorContext'
+import { useTemplateFeature } from '../../../templates/components/TemplateFeatureContext'
 import { loadLocalImage } from '../../operations/loadLocalImage'
 
 type MediaAsset = {
@@ -29,6 +30,7 @@ function createAssetId() {
 
 export function LibraryPanel() {
   const { canvas, fabricCanvas, tools } = useEditor()
+  const { openGallery } = useTemplateFeature()
   const mediaInputRef = useRef<HTMLInputElement>(null)
   const [assets, setAssets] = useState<MediaAsset[]>(() => {
     if (typeof localStorage === 'undefined') return []
@@ -117,6 +119,17 @@ export function LibraryPanel() {
     } catch {
       tools.setNotice('This media asset could not be added to the canvas.')
     }
+  }
+
+  if (tools.active === 'templates') {
+    return (
+      <div className="panel-content">
+        <p className="panel-note">Browse the full template gallery and choose a design for your canvas.</p>
+        <button type="button" className="primary-button full-button" onClick={openGallery}>
+          <LayoutTemplate size={16} /> Browse templates
+        </button>
+      </div>
+    )
   }
 
   return (

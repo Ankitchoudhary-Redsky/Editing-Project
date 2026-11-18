@@ -22,9 +22,10 @@
 .topbar {
   z-index: 4;
   display: flex;
-  flex: 0 0 64px;
+  flex: 0 0 68px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 14px;
   padding: 0 22px;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
@@ -32,9 +33,9 @@
 
 .mode-switch {
   display: flex;
-  flex: 1;
+  flex: 0 0 auto;
   max-width: 150px;
-  align-items: flex-start;
+  align-items: center;
   gap: 2px;
   padding: 3px;
   border: 1px solid #e0e5e1;
@@ -86,7 +87,8 @@
 
 .brand-lockup {
   gap: 2px;
-  min-width: 190px;
+  flex: 0 0 204px;
+  min-width: 0;
 }
 /* .brand-mark { width: 26px; height: 26px; position: relative; display: grid; place-items: center; border-radius: 8px; background: var(--accent); transform: rotate(-4deg); }
 .brand-mark::before, .brand-mark::after, .brand-mark span { position: absolute; content: ''; width: 13px; height: 3px; border-radius: 3px; background: #fff; transform: rotate(-38deg); }
@@ -110,14 +112,24 @@
 
 .project-title {
   display: flex;
-  flex: 1;
+  flex: 0 0 105px;
   flex-direction: row;
-  align-items: flex-start;
-  gap: 12px;
-  justify-content: space-around;
-  padding-left: 18px;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  padding-left: 0;
+}
+.project-title > div:first-child {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
 }
 .project-name {
+  display: flex;
+  width: 100%;
+  max-width: 130px;
+  min-width: 0;
+  align-items: center;
   gap: 7px;
   padding: 0;
   border: 0;
@@ -126,6 +138,22 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+.project-title .project-title-input {
+  box-sizing: border-box;
+  width: min(260px, 44vw);
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid #a8cabb;
+  border-radius: 4px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .project-title input {
   width: min(260px, 44vw);
@@ -138,6 +166,8 @@
 }
 
 .project-name-text {
+  /* display: block;
+  flex: 1 1 auto; */
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -150,15 +180,6 @@
   height: 14px;
 }
 
-.project-title input {
-  width: min(260px, 44vw);
-  padding: 3px 6px;
-  border: 1px solid #a8cabb;
-  border-radius: 4px;
-  color: var(--ink);
-  background: white;
-  font: inherit;
-}
 .save-status {
   gap: 6px;
   color: #8b938e;
@@ -172,7 +193,31 @@
   background: #71a98b;
 }
 .top-actions {
+  flex: 0 0 auto;
   margin-left: auto;
+}
+.save-template-button {
+  display: flex;
+  height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  color: #269b28;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.save-template-button:hover:not(:disabled) {
+  background: #f0f8ef;
+}
+.save-template-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .icon-button,
 .zoom-button,

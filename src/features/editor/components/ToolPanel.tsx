@@ -1,4 +1,5 @@
 import { useEditor } from "../EditorContext";
+import { useTemplateFeature } from '../../templates/components/TemplateFeatureContext'
 import { editorToolCategories } from "../model/constants";
 import { editorHeadings } from "../model/editorCopy";
 import { AdjustmentsPanel } from "./panels/AdjustmentsPanel";
@@ -25,6 +26,7 @@ import { AnimatePanel } from "./panels/AnimatePanel";
 
 export function ToolPanel() {
   const { canvas, pages, tools } = useEditor();
+  const { openGallery } = useTemplateFeature();
   const isPageSwitching = pages?.switching ?? false
   if (tools.active === "music") return null;
   const activeCategory =
@@ -63,6 +65,7 @@ export function ToolPanel() {
               aria-pressed={tools.active === id}
               onClick={() => {
                 tools.setActive(id);
+                if (id === 'templates') openGallery()
                 if (id === "crop") tools.beginCrop();
               }}
             >
@@ -72,7 +75,7 @@ export function ToolPanel() {
         </nav>
       )}
       {tools.active === "upload" && <UploadPanel />}
-      {tools.active === 'library' && <LibraryPanel />}
+      {(tools.active === 'library' || tools.active === 'templates') && <LibraryPanel />}
       {tools.active === "crop" && <CropPanel />}
       {tools.active === "resize" && <ResizePanel />}
       {tools.active === "text" && <TextPanel />}

@@ -2,13 +2,13 @@ import {
   ArrowRight, BookmarkPlus,
   ChevronDown,
   Download,
-  Eye, LayoutTemplate,
+  Eye,
   Redo2,
   Share2,
   Undo2,
 } from "lucide-react";
 import { useEditor } from "../EditorContext";
-import { useTemplateFeature } from '../../templates/components/TemplateFeatureContext'
+import { useTemplateFeature } from "../../templates/components/TemplateFeatureContext";
 import img1 from "../../../assets/logo.png";
 import { Image as ImageIcon, Video } from "lucide-react";
 
@@ -21,7 +21,7 @@ export function EditorHeader() {
     editorMode,
     export: exportState,
   } = useEditor();
-  const { openGallery, setSaveDialogOpen } = useTemplateFeature()
+  const { setSaveDialogOpen } = useTemplateFeature();
   const finishRenaming = () => {
     if (!project.name.trim()) project.setName("Untitled");
     project.setIsRenaming(false);
@@ -41,8 +41,10 @@ export function EditorHeader() {
         <div>
           {project.isRenaming ? (
             <input
+              className="project-title-input"
               autoFocus
               value={project.name}
+              title={project.name}
               onChange={(event) => project.setName(event.target.value)}
               onBlur={finishRenaming}
               onKeyDown={(event) => {
@@ -54,9 +56,9 @@ export function EditorHeader() {
             <button
               className="project-name"
               onClick={() => project.setIsRenaming(true)}
-              title="Rename project"
+              title={project.name || "Rename project"}
             >
-              <span className="project-name-text">{project.name}</span>
+              <span className="project-name-text" title={project.name}>{project.name}</span>
               <ChevronDown size={14} />
             </button>
           )}
@@ -64,30 +66,33 @@ export function EditorHeader() {
             <span /> All changes saved
           </span>
         </div>
-        <div className="mode-switch" role="group" aria-label="Editor mode">
-          <button
-            type="button"
-            className={editorMode.active === "image" ? "active" : ""}
-            aria-pressed={editorMode.active === "image"}
-            onClick={() => editorMode.setActive("image")}
-          >
-            <ImageIcon size={14} />
-            <span>Image</span>
-          </button>
-          <button
-            type="button"
-            className={editorMode.active === "video" ? "active" : ""}
-            aria-pressed={editorMode.active === "video"}
-            onClick={() => editorMode.setActive("video")}
-          >
-            <Video size={14} />
-            <span>Video</span>
-          </button>
-        </div>
+      </div>
+      <div className="mode-switch" role="group" aria-label="Editor mode">
+        <button
+          type="button"
+          className={editorMode.active === "image" ? "active" : ""}
+          aria-pressed={editorMode.active === "image"}
+          aria-label="Image mode"
+          title="Image mode"
+          onClick={() => editorMode.setActive("image")}
+        >
+          <ImageIcon size={14} />
+          <span>Image</span>
+        </button>
+        <button
+          type="button"
+          className={editorMode.active === "video" ? "active" : ""}
+          aria-pressed={editorMode.active === "video"}
+          aria-label="Video mode"
+          title="Video mode"
+          onClick={() => editorMode.setActive("video")}
+        >
+          <Video size={14} />
+          <span>Video</span>
+        </button>
       </div>
       <div className="top-actions">
-        <button className="preview-button" onClick={openGallery}><LayoutTemplate size={16} /> Templates</button>
-        <button className="preview-button" onClick={() => setSaveDialogOpen(true)} disabled={!canvas.hasDocument}><BookmarkPlus size={16} /> Save template</button>
+        <button className="save-template-button" onClick={() => setSaveDialogOpen(true)} disabled={!canvas.hasDocument} title="Save template" aria-label="Save template"><BookmarkPlus size={16} /><span>Save template</span></button>
         <button
           className="icon-button"
           title="Undo"
@@ -111,6 +116,8 @@ export function EditorHeader() {
           className="preview-button"
           onClick={preview.show}
           disabled={!canvas.hasDocument}
+          title="Preview"
+          aria-label="Preview"
         >
           <Eye size={16} /> Preview
         </button>
@@ -119,6 +126,7 @@ export function EditorHeader() {
           onClick={() => void exportState.share()}
           disabled={!canvas.hasImage || exportState.shareBusy}
           title="Share edited image"
+          aria-label="Share edited image"
         >
           <Share2 size={16} /> {exportState.shareBusy ? "Preparing…" : "Share"}
         </button>

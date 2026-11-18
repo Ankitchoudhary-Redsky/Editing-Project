@@ -33,7 +33,7 @@ export function createEditorContextValue({
     fabricCanvas,
     canvas: {
       dimensions: ui.dimensions,
-      hasDocument: ui.hasDocument,
+      hasDocument: ui.hasDocument || pages.activeId !== null,
       hasImage: ui.hasImage,
       hasDeletedPageOneImage: false,
       imageThumbnail: ui.imageThumbnail,
@@ -129,10 +129,10 @@ export function createEditorContextValue({
       updateAppearance: features.objectEditing.updateShapeAppearance,
       moveLayer: features.objectEditing.moveLayer,
       selectLayer: features.objectEditing.selectLayer,
+      selectLayers: features.objectEditing.selectLayers,
       setLayerVisibility: features.objectEditing.setLayerVisibility,
       setLayerLocked: features.objectEditing.setLayerLocked,
       renameLayer: features.objectEditing.renameLayer,
-      selectLayers: features.objectEditing.selectLayers,
     },
     shadows: {
       update: features.objectEditing.updateShadow,
@@ -216,7 +216,7 @@ export function createEditorContextValue({
       share: toolActions.shareDesign,
     },
     table: features.table,
-
     framesLayout: features.framesLayout,
-  };
+
+  }
 }

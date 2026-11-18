@@ -171,8 +171,8 @@ export function useEditorPagesController({
 
     parsed.scene.objects = []
     delete parsed.scene.backgroundImage
-    delete parsed.scene.background
     delete parsed.scene.backgroundColor
+    parsed.scene.background = '#ffffff'
 
     parsed.editor = {
       filterId: 'original',
@@ -251,6 +251,13 @@ export function useEditorPagesController({
           backgroundRemoved?: boolean
           backgroundColor?: string
         }
+      }
+      if (
+        pageId !== null &&
+        !parsedSnapshot.scene.objects?.length &&
+        !parsedSnapshot.scene.backgroundImage
+      ) {
+        parsedSnapshot.scene.background = '#ffffff'
       }
 
       // Restore the image source before loadFromJSON resolves image tokens.
