@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { EditorSnapshot, UseEditorSnapshotControllerOptions } from '../model/types'
-import { IMAGE_SOURCE_TOKEN, resolveImageSourceToken } from '../model/constants'
+import { DEFAULT_PAGE_HEIGHT, DEFAULT_PAGE_WIDTH, IMAGE_SOURCE_TOKEN, resolveImageSourceToken } from '../model/constants'
+import { fitBaseImageInsideCanvas } from '../operations/loadLocalImage'
 import { restartAnimatedStickers } from '../operations/animatedStickerPlayback'
 import { useCanvasTransforms } from './useCanvasTransforms'
 import { useEditorHistoryActions } from './useEditorHistoryActions'
@@ -56,13 +57,16 @@ export function useEditorSnapshotController({
   const restoreCanvasSnapshot = useCallback(async (snapshot: EditorSnapshot) => {
     const canvas = canvasRef.current
     if (!canvas) return
-    canvas.setDimensions({ width: snapshot.width, height: snapshot.height })
+    const needsLegacyImageFit = snapshot.width !== DEFAULT_PAGE_WIDTH || snapshot.height !== DEFAULT_PAGE_HEIGHT
+    canvas.setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT })
     await canvas.loadFromJSON(restoreScene(snapshot))
     if (canvasRef.current !== canvas) return
+    if (needsLegacyImageFit)
+      fitBaseImageInsideCanvas(canvas, DEFAULT_PAGE_WIDTH, DEFAULT_PAGE_HEIGHT)
     restoreTables(canvas)
     void restartAnimatedStickers(canvas)
     canvas.requestRenderAll()
-    setDimensions({ width: snapshot.width, height: snapshot.height })
+    setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT })
     const restoredBackgroundRemoved = snapshot.editor?.backgroundRemoved ?? false
     const restoredBackgroundColor = snapshot.editor?.backgroundColor ?? '#ffffff'
     restoreBackground(restoredBackgroundRemoved, restoredBackgroundColor)
@@ -92,6 +96,7 @@ export function useEditorSnapshotController({
     setDimensions,
     setFilterIntensity,
     setImageThumbnail,
+    setHasDocument,
     setSelectedFilter,
     syncObjects,
   ])

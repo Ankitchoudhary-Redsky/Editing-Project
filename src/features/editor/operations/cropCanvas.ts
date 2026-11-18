@@ -1,5 +1,5 @@
 import { Canvas, FabricImage, Rect } from 'fabric'
-import { cropRatios } from '../model/constants'
+import { DEFAULT_PAGE_HEIGHT, DEFAULT_PAGE_WIDTH, cropRatios } from '../model/constants'
 import type { Dimensions } from '../model/types'
 
 export function createCropFrame(canvas: Canvas) {
@@ -45,6 +45,9 @@ export function applyCanvasCrop(canvas: Canvas, frame: Rect, backgroundImage: Fa
   const width = Math.min(canvas.getWidth() - left, Math.round(bounds.width))
   const height = Math.min(canvas.getHeight() - top, Math.round(bounds.height))
   if (width < 1 || height < 1) return null
+  const scale = Math.min(DEFAULT_PAGE_WIDTH / width, DEFAULT_PAGE_HEIGHT / height)
+  const offsetX = (DEFAULT_PAGE_WIDTH - width * scale) / 2
+  const offsetY = (DEFAULT_PAGE_HEIGHT - height * scale) / 2
 
   canvas.remove(frame)
   canvas.getObjects().forEach((object) => {
@@ -64,10 +67,16 @@ export function applyCanvasCrop(canvas: Canvas, frame: Rect, backgroundImage: Fa
     } else {
       object.set({ left: (object.left || 0) - left, top: (object.top || 0) - top })
     }
+    object.set({
+      left: (object.left ?? 0) * scale + offsetX,
+      top: (object.top ?? 0) * scale + offsetY,
+      scaleX: (object.scaleX ?? 1) * scale,
+      scaleY: (object.scaleY ?? 1) * scale,
+    })
     object.setCoords()
   })
-  canvas.setDimensions({ width, height })
+  canvas.setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT })
   canvas.discardActiveObject()
   canvas.requestRenderAll()
-  return { width, height }
+  return { width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT }
 }

@@ -405,6 +405,25 @@
   border-style: dashed;
   border-color: #32745d;
 }
+.page-thumbnail-reorder-handle {
+  position: absolute;
+  z-index: 1;
+  top: 7px;
+  right: 7px;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #dfe4e0;
+  border-radius: 3px;
+  color: #5a625d;
+  background: rgba(255, 255, 255, 0.92);
+  cursor: grab;
+}
+.page-thumbnail-reorder-handle:active {
+  cursor: grabbing;
+}
 .page-thumbnail-select {
   display: flex;
   width: 100%;
@@ -463,7 +482,7 @@
   display: flex;
   min-height: 22px;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 2px;
 }
 .page-thumbnail-action {
@@ -903,9 +922,64 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .video-trim-spinner { animation: none; }
   .upload-spinner,
   .upload-progress-track span {
     animation: none;
     transition: none;
   }
+}
+.three-d-rotate-handle {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  width: 48px !important;
+  height: 48px !important;
+  padding: 0;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  background: #356b55;
+  box-shadow: 0 3px 10px rgba(25, 38, 31, .3);
+  cursor: grab;
+  touch-action: none;
+}
+
+.three-d-rotate-handle > svg {
+  width: 28px !important;
+  height: 28px !important;
+  display: block;
+}
+
+.three-d-rotate-handle:active {
+  cursor: grabbing;
+}
+.three-d-rotate-handle {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  width: 48px !important;
+  height: 48px !important;
+  padding: 0;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  background: #356b55;
+  box-shadow: 0 3px 10px rgba(25, 38, 31, .3);
+  cursor: grab;
+  touch-action: none;
+}
+
+.three-d-rotate-handle > svg {
+  width: 28px !important;
+  height: 28px !important;
+  display: block;
+}
+
+.three-d-rotate-handle:active {
+  cursor: grabbing;
 }

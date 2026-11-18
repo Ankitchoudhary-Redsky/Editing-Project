@@ -17,9 +17,8 @@ import type { DragEvent, PointerEvent as ReactPointerEvent, ReactNode, Ref } fro
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { FabricImage } from 'fabric'
 import { UploadLanding } from "./UploadLanding";
-
 import { useEditor } from '../EditorContext'
-import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, isDrawingLayerName } from '../model/constants'
+import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, DEFAULT_PAGE_HEIGHT, DEFAULT_PAGE_WIDTH, isDrawingLayerName } from '../model/constants'
 import { objectName } from '../model/objectName'
 import type { CanvasSurfaceProps, DrawingMode } from '../model/types'
 import { getThreeDRotation, isThreeDRotatable, updateThreeDRotation } from '../operations/threeDShapes'
@@ -44,6 +43,8 @@ type WorkspaceCanvasSurfaceProps = CanvasSurfaceProps & {
 
 function CanvasSurface({
   scale,
+  width,
+  height,
   setCanvasElement,
   showDrawingCursor,
   brushSize,
@@ -53,8 +54,6 @@ function CanvasSurface({
   onDragOver,
   onDrop,
   children,
-  width,
-  height,
 }: WorkspaceCanvasSurfaceProps) {
   const cursorElementRef = useRef<HTMLDivElement | null>(null);
   const cursorPositionRef = useRef<{ x: number; y: number } | null>(null);
@@ -166,14 +165,14 @@ export function EditorWorkspace({
       pageOnePreview,
       select: activatePage,
       getSnapshot: getPageSnapshot,
+      getPersistedState: getPersistedPageState,
       saveActivePage,
       deleteFirstPage:removeFirstPage,
       registerActions: registerPageActions,
       order: pageOrder,
       reorder: reorderPages,
     },
-  } = useEditor();
-
+  } = useEditor()
   const viewportRef = useRef<HTMLDivElement>(null);
   const [showFullScreen, setShowFullScreen] = useState(false);
   const [uploadingInitialImage, setUploadingInitialImage] = useState(false);
@@ -254,11 +253,16 @@ export function EditorWorkspace({
       pendingPageScrollRef.current = null
     }
     const selectPageId = pendingPageSelectRef.current
-    if (selectPageId !== null && addedPages.some((page) => page.id === selectPageId)) {
-      pendingPageSelectRef.current = null
-      void activatePage(selectPageId)
+    if (selectPageId !== null) {
+      const pageExists = addedPages.some((page) => page.id === selectPageId)
+      if (!pageExists) {
+        pendingPageSelectRef.current = null
+      } else if (!pagesSwitching) {
+        pendingPageSelectRef.current = null
+        void activatePage(selectPageId)
+      }
     }
-  }, [addedPages, activatePage, scrollToPage])
+  }, [addedPages, activatePage, pagesSwitching, scrollToPage])
   useEffect(() => {
     if (editorMode.active === 'image' && !pagesSwitching) saveActivePage()
   }, [editorMode.active, historyVersion, pagesSwitching, saveActivePage])
@@ -470,8 +474,11 @@ export function EditorWorkspace({
     }
     const imageUrl = isActivePage
       ? fabricCanvas.toDataURL({ format: 'png', multiplier: 1 })
-      : pageId === null ? pageOnePreview : page?.preview || page?.imageUrl
+      : pageId === null
+        ? getPersistedPageState().pageOneImageSource
+        : page?.imageUrl
     if (!imageUrl) {
+      event.preventDefault()
       return
     }
 
@@ -523,8 +530,8 @@ export function EditorWorkspace({
     pendingPageSelectRef.current = pageId
     setAddedPages((pages) => [...pages, {
       id: pageId,
-      width: canvas.dimensions.width,
-      height: canvas.dimensions.height,
+      width: DEFAULT_PAGE_WIDTH,
+      height: DEFAULT_PAGE_HEIGHT,
     }])
   }
 
@@ -558,8 +565,8 @@ export function EditorWorkspace({
         imageUrl,
         snapshot: copiedSnapshot,
         fileName: `${sourcePage?.fileName ?? 'Page 1'} copy`,
-        width: canvas.dimensions.width,
-        height: canvas.dimensions.height,
+        width: DEFAULT_PAGE_WIDTH,
+        height: DEFAULT_PAGE_HEIGHT,
       }
       return [...pages.slice(0, insertIndex), duplicate, ...pages.slice(insertIndex)]
     })

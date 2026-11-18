@@ -102,8 +102,12 @@ export function UploadPanel() {
                           ? undefined
                           : pages.items.find((item) => item.id === page.pageId)
                         const imageUrl = sourcePage?.imageUrl ?? (
-                          page.pageId === null && fabricCanvas
-                            ? fabricCanvas.toDataURL({ format: 'png', multiplier: 1 })
+                          page.pageId === null
+                            ? pages.getPersistedState().pageOneImageSource ?? (
+                                pages.activeId === null && fabricCanvas
+                                  ? fabricCanvas.toDataURL({ format: 'png', multiplier: 1 })
+                                  : undefined
+                              )
                             : undefined
                         )
                         if (!imageUrl) {

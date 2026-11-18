@@ -87,14 +87,17 @@ function createShapePath(kind: ShapeKind, width: number, height: number, strokeW
     const unitY = directionY / length
     const normalX = -unitY
     const normalY = unitX
-    const headLength = Math.min(length * 0.35, Math.max(6, strokeWidth * 4))
-    const headWidth = Math.max(3, headLength * 0.42)
+    const headLength = Math.min(
+      length * 0.22,
+      Math.max(8, length * 0.12, strokeWidth * 3.5),
+    )
+    const headWidth = Math.max(4, headLength * 0.5)
     const endBase = { x: end.x - unitX * headLength, y: end.y - unitY * headLength }
     const endHead = `M ${endBase.x + normalX * headWidth} ${endBase.y + normalY * headWidth} L ${end.x} ${end.y} L ${endBase.x - normalX * headWidth} ${endBase.y - normalY * headWidth}`
     const startBase = { x: start.x + unitX * headLength, y: start.y + unitY * headLength }
     const startHead = `M ${startBase.x + normalX * headWidth} ${startBase.y + normalY * headWidth} L ${start.x} ${start.y} L ${startBase.x - normalX * headWidth} ${startBase.y - normalY * headWidth}`
     if (kind === 'curvedArrow') {
-      const bend = Math.min(width, height) * 0.45
+      const bend = Math.min(width, height) * 0.3
       const controlX = (start.x + end.x) / 2 + normalX * bend
       const controlY = (start.y + end.y) / 2 + normalY * bend
       return `M ${start.x} ${start.y} Q ${controlX} ${controlY} ${end.x - unitX * headLength * 0.45} ${end.y - unitY * headLength * 0.45} ${endHead}`
@@ -214,6 +217,19 @@ export function updateShapeObject(object: FabricObject, bounds: ShapeBounds, kin
     object.set({ left: bounds.left, top: bounds.top, width, height, scaleX: 1, scaleY: 1, flipX: bounds.directionX === -1, flipY: bounds.directionY === -1 })
   } else if (object instanceof Rect) {
     object.set({ left: bounds.left, top: bounds.top, width, height, rx: kind === 'roundRect' ? Math.min(width, height) * 0.16 : 0, ry: kind === 'roundRect' ? Math.min(width, height) * 0.16 : 0, scaleX: 1, scaleY: 1, flipX: bounds.directionX === -1, flipY: bounds.directionY === -1 })
+  } else if (object instanceof Path && ['arrow', 'doubleArrow', 'curvedArrow'].includes(kind)) {
+    object.set('path', new Path(
+      createShapePath(kind, width, height, object.strokeWidth),
+    ).path)
+    object.setDimensions()
+    object.set({
+      left: bounds.left,
+      top: bounds.top,
+      scaleX: 1,
+      scaleY: 1,
+      flipX: bounds.directionX === -1,
+      flipY: bounds.directionY === -1,
+    })
   } else {
     const base = previewBaseSizes.get(object) ?? { width: Math.max(object.width, 1), height: Math.max(object.height, 1) }
     object.set({ left: bounds.left, top: bounds.top, scaleX: width / base.width, scaleY: height / base.height, flipX: bounds.directionX === -1, flipY: bounds.directionY === -1 })

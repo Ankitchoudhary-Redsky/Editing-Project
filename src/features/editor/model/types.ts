@@ -877,6 +877,7 @@ export type OriginalImageState = {
 
 export type UseEditorCanvasCoreOptions = {
   activeTool: EditorTool;
+  zoom: number;
   setZoom: (zoom: number) => void;
   setHasDocument: (hasDocument: boolean) => void;
   setHasImage: (hasImage: boolean) => void;

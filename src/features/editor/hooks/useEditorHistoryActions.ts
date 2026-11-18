@@ -1,5 +1,7 @@
 import { useCallback, useRef } from 'react'
 import type { EditorSnapshot, UseEditorHistoryActionsOptions } from '../model/types'
+import { DEFAULT_PAGE_HEIGHT, DEFAULT_PAGE_WIDTH } from '../model/constants'
+import { fitBaseImageInsideCanvas } from '../operations/loadLocalImage'
 import { restartAnimatedStickers } from '../operations/animatedStickerPlayback'
 
 export function useEditorHistoryActions({
@@ -40,14 +42,17 @@ export function useEditorHistoryActions({
       suppressHistoryRef.current = true
       try {
         const snapshot = JSON.parse(serializedSnapshot) as EditorSnapshot
-        canvas.setDimensions({ width: snapshot.width, height: snapshot.height })
+        const needsLegacyImageFit = snapshot.width !== DEFAULT_PAGE_WIDTH || snapshot.height !== DEFAULT_PAGE_HEIGHT
+        canvas.setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT })
         await canvas.loadFromJSON(restoreScene(snapshot))
         if (canvasRef.current !== canvas) return
+        if (needsLegacyImageFit)
+          fitBaseImageInsideCanvas(canvas, DEFAULT_PAGE_WIDTH, DEFAULT_PAGE_HEIGHT)
         restoreTables(canvas)
         void restartAnimatedStickers(canvas)
         canvas.requestRenderAll()
 
-        setDimensions({ width: snapshot.width, height: snapshot.height })
+        setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT })
         const restoredBackgroundRemoved = snapshot.editor?.backgroundRemoved ?? false
         const restoredBackgroundColor = snapshot.editor?.backgroundColor ?? '#ffffff'
         backgroundRemovedRef.current = restoredBackgroundRemoved

@@ -13,6 +13,7 @@ export function useEditorCanvasRuntime({
 }) {
   const canvasCore = useEditorCanvasCore({
     activeTool: settings.activeTool,
+    zoom: settings.zoom,
     setZoom: settings.setZoom,
     setHasDocument: ui.setHasDocument,
     setHasImage: ui.setHasImage,

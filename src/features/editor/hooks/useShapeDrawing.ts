@@ -213,11 +213,8 @@ export function useShapeDrawing({
       canvas.getObjects().forEach((object) => {
         if(!isBackgroundImage(object)) return
         const locked = object.get('layerLocked') === true
-        object.set({
-          selectable: !locked,
-          evented: !locked,
-        })
+        object.set({ selectable: !locked, evented: !locked })
       })
     }
-  }, [activeTool, canvasInstance, canvasRef, fillColor, imageObjectRef, lineStyle, recordHistory, setActiveTool, shapeKind, shapeOpacity, shapeToolMode, strokeColor, strokeWidth, suppressHistoryRef, syncObjects, threeDShapeKind, transparentFill])
+  }, [activeTool, canvasInstance, canvasRef, fillColor, hasDocument, imageObjectRef, lineStyle, recordHistory, setActiveTool, shapeKind, shapeOpacity, shapeToolMode, strokeColor, strokeWidth, suppressHistoryRef, syncObjects, threeDShapeKind, transparentFill])
 }

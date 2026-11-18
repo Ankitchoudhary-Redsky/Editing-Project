@@ -12,6 +12,7 @@ import type {
   FilterId,
   PersistedEditorPages,
 } from '../model/types'
+import { DEFAULT_PAGE_HEIGHT, DEFAULT_PAGE_WIDTH } from '../model/constants'
 
 type UseEditorPagesControllerOptions = {
   canvasRef: MutableRefObject<Canvas | null>
@@ -242,7 +243,13 @@ export function useEditorPagesController({
 
   const restorePersistedState = useCallback((saved?: PersistedEditorPages) => {
     const restoredItems = Array.isArray(saved?.items)
-      ? saved.items.filter((page) => page && Number.isInteger(page.id))
+      ? saved.items
+          .filter((page) => page && Number.isInteger(page.id))
+          .map((page) => ({
+            ...page,
+            width: DEFAULT_PAGE_WIDTH,
+            height: DEFAULT_PAGE_HEIGHT,
+          }))
       : []
 
     const validIds = new Set<number | null>([
@@ -376,6 +383,7 @@ export function useEditorPagesController({
     } finally {
       suppressHistoryRef.current = false
       setSwitching(false)
+      requestAnimationFrame(resizeDisplay)
     }
   }, [
     switching,
@@ -412,7 +420,7 @@ export function useEditorPagesController({
 
   const deletePage = useCallback((pageId: number) => {
     actionsRef.current?.delete(pageId)
-    }, [])
+  }, [])
 
   const deleteFirstPage = useCallback(async () => {
     const firstPage = itemsRef.current[0]
@@ -452,10 +460,10 @@ export function useEditorPagesController({
     restorePersistedState,
     replace,
     delete:deletePage,
+    deleteFirstPage,
     select,
     getSnapshot,
     registerActions,
-    deleteFirstPage,
     reorder,
     order: pageOrder,
   }

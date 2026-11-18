@@ -43,10 +43,10 @@ export function ResizePanel() {
             checked={resize.scaleArtwork}
             onChange={(event) => resize.setScaleArtwork(event.target.checked)}
           />{" "}
-          Scale artwork with canvas
+          Scale artwork
         </label>
         <div className="panel-label-row presets-heading">
-          <span>Canvas presets</span>
+          <span>Artwork presets</span>
         </div>
         <div className="preset-grid">
           {resizePresets.map(({ label, width, height }) => (
@@ -64,14 +64,18 @@ export function ResizePanel() {
             </button>
           ))}
         </div>
-        <button className="primary-button full-button" onClick={resize.apply}>
-          Apply dimensions
+        <button
+          className="primary-button full-button"
+          disabled={!resize.scaleArtwork}
+          onClick={resize.apply}
+        >
+          Scale artwork to dimensions
         </button>
       </fieldset>
       <p className="panel-note">
         {canvas.hasDocument
-          ? "Canvas size is separate from artwork scaling. Artwork is cropped by the document edges."
-          : "Add a layer to resize the canvas."}
+          ? "The page stays 1200 × 800. Artwork beyond its edges is clipped."
+          : "Add a layer to scale artwork on the fixed page."}
       </p>
     </div>
   );

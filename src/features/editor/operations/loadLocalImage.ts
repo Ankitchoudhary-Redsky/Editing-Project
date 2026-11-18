@@ -1,4 +1,5 @@
-import { FabricImage } from "fabric";
+import { Canvas, FabricImage } from "fabric";
+import { BASE_IMAGE_PROPERTY } from "../model/constants";
 import type { LoadedLocalImage } from "../model/types";
 
 function readFileAsDataUrl(
@@ -56,4 +57,40 @@ export async function loadLocalImage(
     dimensions: { width, height },
     thumbnail: thumbnailCanvas.toDataURL("image/jpeg", 0.8),
   };
+}
+
+export function fitImageInsideCanvas(
+  image: FabricImage,
+  canvasWidth: number,
+  canvasHeight: number,
+) {
+  const imageWidth = image.width ?? 0;
+  const imageHeight = image.height ?? 0;
+  if (!imageWidth || !imageHeight) return;
+
+  const scale = Math.min(canvasWidth / imageWidth, canvasHeight / imageHeight);
+  image.set({
+    left: (canvasWidth - imageWidth * scale) / 2,
+    top: (canvasHeight - imageHeight * scale) / 2,
+    scaleX: scale,
+    scaleY: scale,
+    originX: 'left',
+    originY: 'top',
+  });
+  image.setCoords();
+}
+
+export function fitBaseImageInsideCanvas(
+  canvas: Canvas,
+  canvasWidth: number,
+  canvasHeight: number,
+) {
+  const images = canvas.getObjects().filter(
+    (object): object is FabricImage => object instanceof FabricImage,
+  );
+  const image = images.find(
+    (object): object is FabricImage =>
+      object instanceof FabricImage && object.get(BASE_IMAGE_PROPERTY) === true,
+  ) ?? (images.length === 1 ? images[0] : undefined);
+  if (image) fitImageInsideCanvas(image, canvasWidth, canvasHeight);
 }

@@ -9,8 +9,45 @@ import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, isDrawingLayerName, seriali
 import { useFabricCanvas } from "./useFabricCanvas";
 import { useHistoryRecorder } from "./useHistoryRecorder";
 
+const SELECTION_CORNER_SIZE = 12;
+const SELECTION_BORDER_SCALE = 2;
+
+function getCanvasDisplayScale(canvas: Canvas) {
+  const element = canvas.upperCanvasEl;
+  const width = element.clientWidth;
+  return width > 0 ? element.getBoundingClientRect().width / width : 1;
+}
+
+function applySelectionControlStyle(canvas: Canvas, object: FabricObject) {
+  const displayScale = Math.max(getCanvasDisplayScale(canvas), 0.001);
+  const selectionStyle = {
+    borderColor: "#2c7660",
+    borderScaleFactor: SELECTION_BORDER_SCALE / displayScale,
+    cornerColor: "#ffffff",
+    cornerStrokeColor: "#2c7660",
+    cornerSize: SELECTION_CORNER_SIZE / displayScale,
+    cornerStyle: "circle",
+    transparentCorners: false,
+  };
+
+  if (
+    object.borderColor !== selectionStyle.borderColor ||
+    object.borderScaleFactor !== selectionStyle.borderScaleFactor ||
+    object.cornerColor !== selectionStyle.cornerColor ||
+    object.cornerStrokeColor !== selectionStyle.cornerStrokeColor ||
+    object.cornerSize !== selectionStyle.cornerSize ||
+    object.cornerStyle !== selectionStyle.cornerStyle ||
+    object.transparentCorners !== selectionStyle.transparentCorners
+  ) {
+    object.set(selectionStyle);
+    return true;
+  }
+  return false;
+}
+
 export function useEditorCanvasCore({
   activeTool,
+  zoom,
   setZoom,
   setHasDocument,
   setHasImage,
@@ -55,15 +92,7 @@ export function useEditorCanvasCore({
     canvas.getObjects()
       .filter((object) => isDrawingLayerName(object.get('name')))
       .forEach((drawingLayer) => drawingLayer.set('perPixelTargetFind', active !== drawingLayer))
-    active?.set({
-      borderColor: '#2c7660',
-      borderScaleFactor: 1.35,
-      cornerColor: '#ffffff',
-      cornerStrokeColor: '#2c7660',
-      cornerSize: 8,
-      cornerStyle: 'circle',
-      transparentCorners: false,
-    })
+    if (active) applySelectionControlStyle(canvas, active);
     setSelectedObject(active);
     setSelectedIsImage(active === imageObjectRef.current);
   }, [setSelectedIsImage, setSelectedObject]);
@@ -221,6 +250,13 @@ export function useEditorCanvasCore({
     onUserInteraction: markUserInteractionBeforeDraftLoad,
     shouldSyncObjects: shouldSyncCanvasObjects,
   });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const active = canvas?.getActiveObject();
+    if (canvas && active && applySelectionControlStyle(canvas, active))
+      canvas.requestRenderAll();
+  }, [fabric.fitScale, zoom]);
 
   useEffect(() => {
     activeToolRef.current = activeTool;

@@ -1,4 +1,5 @@
 import type { Canvas } from 'fabric'
+import { DEFAULT_PAGE_HEIGHT, DEFAULT_PAGE_WIDTH } from '../../editor/model/constants'
 import '../../editor/operations/EditableThreeDShape'
 import '../../editor/operations/EditableThreeDEmoji'
 import type { EditorTemplate } from '../model/template.types'
@@ -32,10 +33,25 @@ export async function loadTemplate(canvas: Canvas, template: EditorTemplate): Pr
 
     try {
       canvas.discardActiveObject()
-      canvas.setDimensions({ width: fabricData.width, height: fabricData.height })
+      canvas.setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT })
       await canvas.loadFromJSON(scene as Parameters<Canvas['loadFromJSON']>[0])
       if (loadGeneration.get(canvas) !== generation) return false
+      const scale = Math.min(
+        DEFAULT_PAGE_WIDTH / fabricData.width,
+        DEFAULT_PAGE_HEIGHT / fabricData.height,
+      )
+      const offsetX = (DEFAULT_PAGE_WIDTH - fabricData.width * scale) / 2
+      const offsetY = (DEFAULT_PAGE_HEIGHT - fabricData.height * scale) / 2
       canvas.getObjects().forEach((object) => object.setCoords())
+      canvas.getObjects().forEach((object) => {
+        object.set({
+          left: (object.left ?? 0) * scale + offsetX,
+          top: (object.top ?? 0) * scale + offsetY,
+          scaleX: (object.scaleX ?? 1) * scale,
+          scaleY: (object.scaleY ?? 1) * scale,
+        })
+        object.setCoords()
+      })
       canvas.requestRenderAll()
       return true
     } catch (error) {

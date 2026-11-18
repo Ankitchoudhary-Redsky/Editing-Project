@@ -8,6 +8,7 @@ import {
 } from "fabric";
 import type { MutableRefObject } from "react";
 import type { GridCellBounds, GridLayoutId } from "../operations/gridLayout";
+import { DEFAULT_PAGE_HEIGHT, DEFAULT_PAGE_WIDTH } from '../model/constants'
 import {
   cropImageToCell,
   getGridCells,
@@ -26,7 +27,6 @@ export function useFramesLayout({
   canvas,
   canvasRef,
   imageObjectRef,
-  dimensions,
   setDimensions,
   recordHistory,
   syncObjects,
@@ -35,7 +35,6 @@ export function useFramesLayout({
   canvas: Canvas | null;
   canvasRef: MutableRefObject<Canvas | null>;
   imageObjectRef: MutableRefObject<FabricImage | null>;
-  dimensions: { width: number; height: number };
   setDimensions: (dimensions: { width: number; height: number }) => void;
   recordHistory: (immediate?: boolean) => void;
   syncObjects: () => void;
@@ -153,7 +152,6 @@ export function useFramesLayout({
       .getObjects()
       .filter((object) => object.get("name") === "editor-frame-overlay")
       .forEach((object) => canvas.remove(object));
-    image.set("padding", 0);
     if (style === "none") {
       image.setCoords();
       canvas.requestRenderAll();
@@ -198,8 +196,6 @@ export function useFramesLayout({
     image.set("padding", width / 2);
     image.setCoords();
     canvas.add(border);
-    canvas.requestRenderAll();
-    recordHistory(true);
   };
 
   const applyLayout = (
@@ -209,8 +205,8 @@ export function useFramesLayout({
   ) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const width = dimensions.width || 1200;
-    const height = dimensions.height || 900;
+    const width = DEFAULT_PAGE_WIDTH;
+    const height = DEFAULT_PAGE_HEIGHT;
     const bounds = getGridCells(layout, width, height, gap);
     const nextCells = bounds.map(({ id, index }) => ({
       id,
@@ -255,8 +251,8 @@ export function useFramesLayout({
   const createCanvasFrame = (style: FrameStyle, color: string) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const width = dimensions.width || 1200;
-    const height = dimensions.height || 900;
+    const width = DEFAULT_PAGE_WIDTH;
+    const height = DEFAULT_PAGE_HEIGHT;
     const bounds = [{ id: "cell-1", index: 1, left: 0, top: 0, width, height }];
     const styleOptions: Record<
       FrameStyle,

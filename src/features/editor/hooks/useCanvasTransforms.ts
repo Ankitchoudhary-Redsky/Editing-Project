@@ -5,6 +5,7 @@ import {
   createCropFrame,
   updateCropRatio,
 } from "../operations/cropCanvas";
+import { DEFAULT_PAGE_HEIGHT, DEFAULT_PAGE_WIDTH } from "../model/constants";
 
 export function useCanvasTransforms({
   canvasRef,
@@ -27,8 +28,8 @@ export function useCanvasTransforms({
   resizeDisplay,
 }: UseCanvasTransformsOptions) {
   const [cropRatio, setCropRatio] = useState("Free");
-  const [resizeWidth, setResizeWidth] = useState(1200);
-  const [resizeHeight, setResizeHeight] = useState(800);
+  const [resizeWidth, setResizeWidth] = useState(DEFAULT_PAGE_WIDTH);
+  const [resizeHeight, setResizeHeight] = useState(DEFAULT_PAGE_HEIGHT);
   const [keepRatio, setKeepRatio] = useState(true);
   const [scaleArtwork, setScaleArtwork] = useState(true);
   const cropTransformChangedRef = useRef(false);
@@ -190,11 +191,11 @@ export function useCanvasTransforms({
         object.setCoords();
       });
     }
-    canvas.setDimensions({ width, height });
+    canvas.setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT });
     canvas.requestRenderAll();
-    setDimensions({ width, height });
-    setResizeWidth(width);
-    setResizeHeight(height);
+    setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT });
+    setResizeWidth(DEFAULT_PAGE_WIDTH);
+    setResizeHeight(DEFAULT_PAGE_HEIGHT);
     recordHistory(true);
     resizeDisplay();
   };

@@ -1,7 +1,8 @@
 import { useRef } from "react";
 import type { UseImageUploadOptions } from "../model/types";
+import { DEFAULT_PAGE_HEIGHT, DEFAULT_PAGE_WIDTH } from "../model/constants";
 import { hasTransparentPixels } from "../operations/removeImageBackground";
-import { loadLocalImage } from "../operations/loadLocalImage";
+import { fitImageInsideCanvas, loadLocalImage } from "../operations/loadLocalImage";
 
 export function useImageUpload({
   canvasRef,
@@ -55,7 +56,7 @@ export function useImageUpload({
     markUserInteractionBeforeDraftLoad();
 
     try {
-      const { image, source, dimensions, thumbnail } = await loadLocalImage(
+      const { image, source, thumbnail } = await loadLocalImage(
         file,
         (progress) => onProgress?.(Math.min(95, Math.round(progress * 0.95))),
       );
@@ -68,7 +69,6 @@ export function useImageUpload({
       setBackgroundColor("#ffffff");
       setIsRemovingBackground(false);
       setBackgroundProgress("");
-      const { width, height } = dimensions;
       const canvas = canvasRef.current;
       if (!canvas) return null;
 
@@ -88,21 +88,14 @@ export function useImageUpload({
         resetTables();
         resetDrawing();
       }
+      canvas.setDimensions({
+        width: DEFAULT_PAGE_WIDTH,
+        height: DEFAULT_PAGE_HEIGHT,
+      });
+      canvas.backgroundColor = "rgba(0,0,0,0)";
       imageObjectRef.current = image;
-      if (!hasLayout) {
-        canvas.setDimensions({ width, height });
-        canvas.backgroundColor = "rgba(0,0,0,0)";
-      }
-      const scale = hasLayout
-        ? Math.min(canvas.getWidth() / width, canvas.getHeight() / height, 1)
-        : 1;
+      fitImageInsideCanvas(image, DEFAULT_PAGE_WIDTH, DEFAULT_PAGE_HEIGHT);
       image.set({
-        left: hasLayout ? (canvas.getWidth() - width * scale) / 2 : 0,
-        top: hasLayout ? (canvas.getHeight() - height * scale) / 2 : 0,
-        scaleX: scale,
-        scaleY: scale,
-        originX: "left",
-        originY: "top",
         isBaseImage: true,
         selectable: true,
         evented: true,
@@ -124,7 +117,7 @@ export function useImageUpload({
       filterIntensityRef.current = 100;
       setSelectedFilter("original");
       setFilterIntensity(100);
-      if (!hasLayout) setDimensions({ width, height });
+      setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT });
       setHasDocument(true);
       setImageThumbnail(thumbnail);
       setBrightness(0);

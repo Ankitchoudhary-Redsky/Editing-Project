@@ -4,10 +4,20 @@ import { Canvas, type FabricObject } from 'fabric'
 import { EditableThreeDShape, disposeSharedThreeDRenderer } from '../operations/EditableThreeDShape'
 import { EditableThreeDEmoji } from '../operations/EditableThreeDEmoji'
 
-
-function renderRotationControl(ctx: CanvasRenderingContext2D, left: number, top: number) {
+function renderRotationControl(
+  ctx: CanvasRenderingContext2D,
+  left: number,
+  top: number,
+  _styleOverride: unknown,
+  fabricObject: FabricObject,
+) {
   ctx.save()
   ctx.translate(left, top)
+  const canvas = fabricObject.canvas;
+  const element = canvas?.upperCanvasEl;
+  const width = element?.clientWidth ?? 0;
+  const displayScale = width > 0 ? element!.getBoundingClientRect().width / width : 1;
+  ctx.scale(1 / Math.max(displayScale, 0.001), 1 / Math.max(displayScale, 0.001));
   ctx.fillStyle = '#ffffff'
   ctx.strokeStyle = '#2c7660'
   ctx.lineWidth = 1.5
