@@ -36,8 +36,10 @@ export function useEditorProjectPersistence({
           disposed ||
           generation !== restorationGenerationRef.current ||
           !draft ||
-          userEditedBeforeDraftLoadRef.current
-        ) return
+          userEditedBeforeDraftLoadRef.current ||
+          new URLSearchParams(window.location.search).has("document")
+        )
+          return
 
         suppressHistoryRef.current = true
         await restoreCanvasSnapshot(draft)

@@ -12,6 +12,7 @@ export function createEditorContextValue({
   snapshot,
   toolActions,
   animation,
+  collaboration,
   ui,
 }: CreateEditorContextValueOptions): EditorContextValue {
   const { fabricCanvas, fitScale, fitToScreen } = canvasCore.fabric;
@@ -30,6 +31,7 @@ export function createEditorContextValue({
     },
     videoClip: settings.videoClip,
     fabricCanvas,
+    collaboration,
     canvas: {
       dimensions: ui.dimensions,
       hasDocument: ui.hasDocument,

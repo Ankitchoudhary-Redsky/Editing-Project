@@ -20,7 +20,7 @@
 }
 
 .topbar {
-  z-index: 4;
+  /* z-index: 4; */
   display: flex;
   flex: 0 0 64px;
   align-items: center;

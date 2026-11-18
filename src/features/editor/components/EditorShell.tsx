@@ -1,4 +1,4 @@
-import type { DragEvent } from "react";
+import { type DragEvent } from "react";
 import { useEditor } from "../EditorContext";
 import { EditorNotice, ExportDialog, PreviewDialog } from "./EditorDialogs";
 import { EditorHeader } from "./EditorHeader";
@@ -31,7 +31,7 @@ export function EditorShell({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <EditorHeader />
+      {canvas.hasDocument && <EditorHeader />}
       <input
         ref={setUploadInputElement}
         type="file"

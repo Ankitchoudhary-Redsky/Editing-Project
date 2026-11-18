@@ -13,8 +13,17 @@ import {
   Moon,
   Sparkles,
 } from "lucide-react";
-import { Canvas } from "fabric";
+import { Canvas, FabricObject } from "fabric";
 import type { DrawingMode, EditorTool, ShapeKind } from "./types";
+
+FabricObject.customProperties = Array.from(
+  new Set([
+    ...FabricObject.customProperties,
+    "name",
+    "chartType",
+    "chartConfigJson",
+  ]),
+);
 
 export const BACKGROUND_IMAGE_NAME = "__pixel_studio_background_image__";
 
@@ -196,6 +205,8 @@ export function resolveImageSourceToken(token: string) {
 export function serializeCanvas(canvas: Canvas) {
   const scene = canvas.toObject([
     "name",
+    "chartType",
+    "chartConfigJson",
     "textAnimation",
     "shapeId",
     "textParentId",

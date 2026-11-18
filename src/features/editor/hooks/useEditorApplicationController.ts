@@ -5,7 +5,7 @@ import { useEditorKeyboardShortcuts } from './useEditorKeyboardShortcuts'
 import { useEditorProjectPersistence } from './useEditorProjectPersistence'
 import { useEditorToolActions } from './useEditorToolActions'
 import { useTextAnimation } from './useTextAnimation'
-
+import { useCanvasCollaboration } from '../collaboration/useCanvasCollaboration'
 
 export function useEditorApplicationController({
   settings,
@@ -32,8 +32,30 @@ export function useEditorApplicationController({
     markUserInteractionBeforeDraftLoad,
     syncObjects,
   } = canvasCore
-  const { recordHistory, initialize: initializeHistory, touch: touchHistory } = canvasCore.history
-  const { fabricCanvas, setCanvasElement, setStageElement, resizeDisplay } = canvasCore.fabric
+  const {
+    recordHistory,
+    initialize: initializeHistory,
+    touch: touchHistory,
+  } = canvasCore.history
+  const { fabricCanvas, setCanvasElement, setStageElement, resizeDisplay } =
+    canvasCore.fabric;
+  const collaboration = useCanvasCollaboration({
+    canvasRef,
+    fabricCanvas,
+    imageObjectRef,
+    imageSourceRef,
+    suppressHistoryRef,
+    historyVersion,
+    userEditedBeforeDraftLoadRef,
+    setDimensions: ui.setDimensions,
+    setImageThumbnail: ui.setImageThumbnail,
+    setHasDocument: ui.setHasDocument,
+    setHasImage: ui.setHasImage,
+    setProjectName: settings.setProjectName,
+    syncObjects,
+    initializeHistory,
+    setNotice: ui.setNotice,
+  });
   const animation = useTextAnimation({
     canvas: fabricCanvas,
     selectedObject: ui.selectedObject,
@@ -97,6 +119,8 @@ export function useEditorApplicationController({
       markUserInteractionBeforeDraftLoad,
       setNotice: ui.setNotice,
       setDraggingFile: ui.setDraggingFile,
+      beforeReplaceCanvas: collaboration.prepareForImageUpload,
+      onUploadedImage: collaboration.createFromUpload,
     },
     resetTables: table.reset,
     resetDrawing: pixelDrawing.reset,
@@ -168,6 +192,7 @@ export function useEditorApplicationController({
     snapshot: snapshotController,
     toolActions,
     animation,
+    collaboration,
     ui: {
       dimensions: ui.dimensions,
       hasDocument: ui.hasDocument,

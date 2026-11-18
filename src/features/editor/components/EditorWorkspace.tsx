@@ -118,6 +118,7 @@ export function EditorWorkspace({
     draggingFile,
     table,
     handleDrop,
+    collaboration,
   } = useEditor();
 
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -229,14 +230,69 @@ export function EditorWorkspace({
           {(!canvas.hasDocument || uploadingInitialImage) &&
             editorMode.active === "image" && (
               <UploadLanding
-                restoring={false}
+                restoring={collaboration.loading}
                 onUploadStart={() => setUploadingInitialImage(true)}
                 onUploadFinish={() => setUploadingInitialImage(false)}
+                libraryItems={collaboration.libraryItems}
+                libraryLoading={collaboration.libraryLoading}
+                libraryError={collaboration.libraryError}
+                onRefreshLibrary={collaboration.refreshLibrary}
+                onOpenDocument={(documentId) => {
+                  void collaboration
+                    .openDocument(documentId)
+                    .catch(() => undefined);
+                }}
+                openingDocumentId={collaboration.openingDocumentId}
                 onUpload={(file, onProgress) =>
                   tools.uploadFile(file, onProgress)
                 }
               />
             )}
+          {collaboration.workspaceOpen && canvas.hasDocument && (
+            <div
+              className="modal-backdrop workspace-dialog-backdrop"
+              role="presentation"
+              onClick={collaboration.closeWorkspace}
+            >
+              <div
+                className="workspace-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Browse saved images"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <UploadLanding
+                  restoring={collaboration.loading}
+                  onUpload={async () => null}
+                  onUploadStart={() => undefined}
+                  onUploadFinish={() => undefined}
+                  libraryItems={collaboration.libraryItems}
+                  libraryLoading={collaboration.libraryLoading}
+                  libraryError={collaboration.libraryError}
+                  onRefreshLibrary={collaboration.refreshLibrary}
+                  onOpenDocument={(documentId) => {
+                    void collaboration
+                      .openDocument(documentId)
+                      .then(() => collaboration.closeWorkspace())
+                      .catch(() => undefined);
+                  }}
+                  openingDocumentId={collaboration.openingDocumentId}
+                  initialView="workspace"
+                  workspaceOnly
+                  onClose={collaboration.closeWorkspace}
+                />
+              </div>
+            </div>
+          )}
+          {collaboration.loading && canvas.hasDocument && (
+            <div
+              className="collaboration-loading"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="upload-spinner" /> Loading shared document…
+            </div>
+          )}
         </div>
 
         {editorMode.active === "video" && tools.active !== "music" && (
@@ -287,103 +343,108 @@ export function EditorWorkspace({
           </div>
         )}
       </div>
+      {canvas.hasDocument && (
+        <div className="workspace-footer">
+          <span>
+            <span className="status-dot" />{" "}
+            {editorMode.active === "video"
+              ? videoClip.file
+                ? "Video loaded"
+                : "No video selected"
+              : canvas.selected
+                ? `${objectName(canvas.selected, 0)} selected`
+                : canvas.hasDocument
+                  ? "Ready to edit"
+                  : "No image selected"}
+          </span>
 
-      <div className="workspace-footer">
-        <span>
-          <span className="status-dot" />{" "}
-          {editorMode.active === "video"
-            ? videoClip.file
-              ? "Video loaded"
-              : "No video selected"
-            : canvas.selected
-              ? `${objectName(canvas.selected, 0)} selected`
-              : canvas.hasDocument
-                ? "Ready to edit"
-                : "No image selected"}
-        </span>
+          <div className="footer-zoom">
+            <button
+              className={`zoom-button image-resize-lock${canvas.imageResizeLocked ? " active" : ""}`}
+              onClick={canvas.toggleImageResizeLock}
+              aria-label={
+                canvas.imageResizeLocked
+                  ? "Unlock image movement and resizing"
+                  : "Lock image movement and resizing"
+              }
+              title={
+                canvas.imageResizeLocked
+                  ? "Unlock image movement and resizing"
+                  : "Lock image movement and resizing"
+              }
+              disabled={!canvas.hasImage}
+            >
+              {canvas.imageResizeLocked ? (
+                <LockKeyhole size={15} />
+              ) : (
+                <UnlockKeyhole size={15} />
+              )}
+            </button>
 
-        <div className="footer-zoom">
+            <button
+              className="zoom-button"
+              onClick={() => canvas.setZoom(Math.max(0.1, canvas.zoom - 0.1))}
+              aria-label="Zoom out"
+              disabled={canvas.zoom <= 0.1}
+            >
+              −
+            </button>
+
+            <input
+              className="zoom-slider"
+              type="range"
+              min="0.1"
+              max="3"
+              step="0.05"
+              value={canvas.zoom}
+              onChange={(event) => canvas.setZoom(Number(event.target.value))}
+              aria-label="Canvas zoom"
+            />
+
+            <button
+              className="zoom-button"
+              onClick={() => canvas.setZoom(Math.min(3, canvas.zoom + 0.1))}
+              aria-label="Zoom in"
+              disabled={canvas.zoom >= 3}
+            >
+              +
+            </button>
+
+            <button
+              className="zoom-percentage"
+              onClick={() => canvas.setZoom(1)}
+              title="Reset zoom to 100%"
+            >
+              {Math.round(canvas.zoom * 100)}%
+            </button>
+          </div>
+
+          <span className="workspace-document-status">
+            {collaboration.documentId ? "Shared document" : "Local document"} ·{" "}
+            {canvas.dimensions.width} × {canvas.dimensions.height}
+          </span>
           <button
-            className={`zoom-button image-resize-lock${canvas.imageResizeLocked ? " active" : ""}`}
-            onClick={canvas.toggleImageResizeLock}
+            className="zoom-button fullscreen-toggle"
+            type="button"
+            onClick={() => setShowFullScreen((current) => !current)}
             aria-label={
-              canvas.imageResizeLocked
-                ? "Unlock image movement and resizing"
-                : "Lock image movement and resizing"
+              showFullScreen
+                ? "Exit canvas focus mode"
+                : "Enter canvas focus mode"
             }
+            aria-pressed={showFullScreen}
             title={
-              canvas.imageResizeLocked
-                ? "Unlock image movement and resizing"
-                : "Lock image movement and resizing"
+              showFullScreen ? "Exit canvas focus mode (Esc)" : "Expand canvas"
             }
-            disabled={!canvas.hasImage}
           >
-            {canvas.imageResizeLocked ? (
-              <LockKeyhole size={15} />
+            {showFullScreen ? (
+              <Minimize2 size={16} />
             ) : (
-              <UnlockKeyhole size={15} />
+              <Fullscreen size={16} />
             )}
           </button>
-
-          <button
-            className="zoom-button"
-            onClick={() => canvas.setZoom(Math.max(0.1, canvas.zoom - 0.1))}
-            aria-label="Zoom out"
-            disabled={canvas.zoom <= 0.1}
-          >
-            −
-          </button>
-
-          <input
-            className="zoom-slider"
-            type="range"
-            min="0.1"
-            max="3"
-            step="0.05"
-            value={canvas.zoom}
-            onChange={(event) => canvas.setZoom(Number(event.target.value))}
-            aria-label="Canvas zoom"
-          />
-
-          <button
-            className="zoom-button"
-            onClick={() => canvas.setZoom(Math.min(3, canvas.zoom + 0.1))}
-            aria-label="Zoom in"
-            disabled={canvas.zoom >= 3}
-          >
-            +
-          </button>
-
-          <button
-            className="zoom-percentage"
-            onClick={() => canvas.setZoom(1)}
-            title="Reset zoom to 100%"
-          >
-            {Math.round(canvas.zoom * 100)}%
-          </button>
         </div>
-
-        <span className="workspace-document-status">
-          Local document · {canvas.dimensions.width} ×{" "}
-          {canvas.dimensions.height}
-        </span>
-        <button
-          className="zoom-button fullscreen-toggle"
-          type="button"
-          onClick={() => setShowFullScreen((current) => !current)}
-          aria-label={
-            showFullScreen
-              ? "Exit canvas focus mode"
-              : "Enter canvas focus mode"
-          }
-          aria-pressed={showFullScreen}
-          title={
-            showFullScreen ? "Exit canvas focus mode (Esc)" : "Expand canvas"
-          }
-        >
-          {showFullScreen ? <Minimize2 size={16} /> : <Fullscreen size={16} />}
-        </button>
-      </div>
+      )}
 
       {fabricCanvas && (
         <ImageMusicVideoExport

@@ -33,6 +33,8 @@ export function useImageUpload({
   setNotice,
   setDraggingFile,
   markUserInteractionBeforeDraftLoad,
+  beforeReplaceCanvas,
+  onUploadedImage,
 }: UseImageUploadOptions) {
   const uploadRequestRef = useRef(0);
 
@@ -72,6 +74,8 @@ export function useImageUpload({
       const canvas = canvasRef.current;
       if (!canvas) return null;
 
+      await beforeReplaceCanvas?.();
+      if (requestId !== uploadRequestRef.current) return null;
       imageSourceRef.current = source;
       suppressHistoryRef.current = true;
       canvas.clear();
@@ -109,6 +113,7 @@ export function useImageUpload({
       suppressHistoryRef.current = false;
       initializeHistory(canvas);
       syncObjects();
+      await onUploadedImage?.(file);
       onProgress?.(100);
     } catch (error) {
       if (requestId === uploadRequestRef.current) {
