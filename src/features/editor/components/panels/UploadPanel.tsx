@@ -1,6 +1,5 @@
 import type { DragEvent } from 'react'
 import { ImagePlus, Music2, RotateCcw, Trash } from 'lucide-react'
-import { useState } from "react";
 import { useEditor } from '../../../editor/EditorContext'
 import { editorCopy } from '../../model/editorCopy'
 
@@ -14,28 +13,6 @@ type UploadedPage = {
   height: number
 }
 
-function CurrentImageThumbnail({ source }: { source: string }) {
-  const [failed, setFailed] = useState(false);
-
-  if (!source || failed) {
-    return (
-      <span
-        className="uploaded-item-thumbnail-empty"
-        aria-label="Image preview unavailable"
-      >
-        <ImagePlus size={19} />
-      </span>
-    );
-  }
-
-  return (
-    <img
-      src={source}
-      alt="Current image thumbnail"
-      onError={() => setFailed(true)}
-    />
-  );
-}
 
 export function UploadPanel() {
   const { canvas, fabricCanvas, tools, pages } = useEditor()
