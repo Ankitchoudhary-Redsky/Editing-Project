@@ -19,6 +19,7 @@ import type { useEditorUiState } from "../hooks/useEditorUiState";
 import type { useEditorDesignSettingsState } from "../hooks/useEditorDesignSettingsState";
 import type { useEditorProjectSettingsState } from "../hooks/useEditorProjectSettingsState";
 import type { useTextAnimation } from "../hooks/useTextAnimation";
+import type { useCanvasCollaboration } from "../collaboration/useCanvasCollaboration";
 import type { GridLayoutId } from "../operations/gridLayout";
 
 export type EditorMode = "image" | "video";
@@ -116,6 +117,7 @@ export type CreateEditorContextValueOptions = {
   snapshot: ReturnType<typeof useEditorSnapshotController>
   toolActions: ReturnType<typeof useEditorToolActions>
   animation: ReturnType<typeof useTextAnimation>
+  collaboration: ReturnType<typeof useCanvasCollaboration>
   ui: EditorContextUiState
   pages: EditorPagesController
 }
@@ -353,6 +355,7 @@ export interface EditorContextValue {
   };
 
   fabricCanvas: EditorCanvas | null;
+  collaboration: ReturnType<typeof useCanvasCollaboration>;
   canvas: {
     dimensions: Dimensions;
     hasDocument: boolean;
@@ -1157,6 +1160,8 @@ export type UseImageUploadOptions = {
   setNotice: (notice: string) => void;
   setDraggingFile: (dragging: boolean) => void;
   markUserInteractionBeforeDraftLoad: () => void;
+  beforeReplaceCanvas?: () => Promise<void>;
+  onUploadedImage?: (file: File) => Promise<void>;
 };
 
 export type UseMagicImageRemovalOptions = {

@@ -12,6 +12,7 @@ export function createEditorContextValue({
   snapshot,
   toolActions,
   animation,
+  collaboration,
   ui,
   pages,
 }: CreateEditorContextValueOptions): EditorContextValue {
@@ -31,6 +32,7 @@ export function createEditorContextValue({
     },
     videoClip: settings.videoClip,
     fabricCanvas,
+    collaboration,
     canvas: {
       dimensions: ui.dimensions,
       hasDocument: ui.hasDocument || pages.activeId !== null,

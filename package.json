@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "collab-server": "node --env-file-if-exists=.env backend/server.js",
+    "test:collab": "node --test backend/socket/*.test.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "generate:3d-emojis": "node scripts/generate-3d-emoji-models.mjs",
@@ -15,6 +17,7 @@
     "@ffmpeg/util": "^0.12.2",
     "@imgly/background-removal": "^1.7.0",
     "@lobehub/fluent-emoji-3d": "^1.1.0",
+    "@supabase/supabase-js": "^2.119.0",
     "fabric": "^6.9.1",
     "gif.js": "^0.2.0",
     "gifuct-js": "^2.1.2",
@@ -22,6 +25,8 @@
     "onnxruntime-web": "^1.21.0",
     "react": "19.2",
     "react-dom": "19.2",
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4",
     "three": "^0.186.1",
     "xlsx": "^0.18.5"
   },

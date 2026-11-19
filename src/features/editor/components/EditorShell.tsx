@@ -1,4 +1,4 @@
-import type { DragEvent } from "react";
+import { type DragEvent } from "react";
 import { useEditor } from "../EditorContext";
 import { EditorNotice, ExportDialog, PreviewDialog } from "./EditorDialogs";
 import { EditorHeader } from "./EditorHeader";

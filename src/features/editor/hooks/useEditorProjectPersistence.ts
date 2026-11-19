@@ -39,8 +39,10 @@ export function useEditorProjectPersistence({
           disposed ||
           generation !== restorationGenerationRef.current ||
           !draft ||
-          userEditedBeforeDraftLoadRef.current
-        ) return
+          userEditedBeforeDraftLoadRef.current ||
+          new URLSearchParams(window.location.search).has("document")
+        )
+          return
 
         suppressHistoryRef.current = true
         if (draft.imageSources) restoreImageSourceTokens(draft.imageSources)

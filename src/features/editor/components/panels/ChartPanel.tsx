@@ -22,6 +22,7 @@ import {
   type ChartType,
 } from "../../model/charts";
 import { renderChartSvg } from "../../operations/renderChartSvg";
+import { ChartModal } from "../ChartEditorModal";
 
 const svgUrl = (svg: string) =>
   `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
@@ -485,6 +486,7 @@ export function ChartPanel() {
   const [tab, setTab] = useState<"data" | "customize">("data");
   const [search, setSearch] = useState("");
   const [showLibrary, setShowLibrary] = useState(false);
+  const [showValuePicker, setShowValuePicker] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dataHistory, setDataHistory] = useState<string[]>(() => [
     JSON.stringify(config.rows),
@@ -494,6 +496,7 @@ export function ChartPanel() {
   const fileInput = useRef<HTMLInputElement>(null);
   const renderSequence = useRef(0);
   const currentConfig = useRef(config);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   useEffect(() => {
     currentConfig.current = config;
@@ -551,6 +554,10 @@ export function ChartPanel() {
     activeCanvas.add(replacement);
     activeCanvas.moveObjectTo(replacement, position);
     activeCanvas.setActiveObject(replacement);
+    activeCanvas.fire("selection:updated", {
+      selected: [replacement],
+      deselected: [old],
+    });
     activeCanvas.requestRenderAll();
     activeCanvas.fire("object:modified", { target: replacement });
   };
@@ -581,8 +588,8 @@ export function ChartPanel() {
       valueColumns: valueColumns.length
         ? valueColumns
         : Array.from({ length: Math.max(0, width - 1) }, (_, index) =>
-          index >= config.labelColumn ? index + 1 : index,
-        ),
+            index >= config.labelColumn ? index + 1 : index,
+          ),
     });
   };
 
@@ -766,11 +773,11 @@ export function ChartPanel() {
   const pieType = ["pie", "donut", "semi-donut"].includes(config.type);
   const colorItems = pieType
     ? getChartSeries(config).labels.map((name, index) => ({
-      name,
-      color:
-        config.colors[index % config.colors.length] ??
-        chartPalette[index % chartPalette.length],
-    }))
+        name,
+        color:
+          config.colors[index % config.colors.length] ??
+          chartPalette[index % chartPalette.length],
+      }))
     : series;
   const filteredCategories = chartCategories
     .map((category) => ({
@@ -783,6 +790,14 @@ export function ChartPanel() {
 
   return (
     <div className="chart-panel-shell">
+      {isFullScreen && (
+        <ChartModal
+          config={config}
+          onClose={() => setIsFullScreen(false)}
+          onChange={changeConfig}
+          onExport={exportChart}
+        />
+      )}
       <nav className="chart-tabs" aria-label="Chart editor tabs">
         <button
           type="button"
@@ -896,6 +911,19 @@ export function ChartPanel() {
             <>
               <div className="chart-section-title">
                 <span>Live chart data</span>
+                <button
+                  style={{
+                    marginLeft: "auto",
+                    border: "1px solid #ccc",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    backgroundColor: "#f9f9f9",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => setIsFullScreen(!isFullScreen)}
+                >
+                  Full Screen
+                </button>
               </div>
               <div
                 className="chart-data-table-wrap"
@@ -1079,28 +1107,73 @@ export function ChartPanel() {
                 </label>
                 <label className="field-label">
                   Values
-                  <select
-                    multiple
-                    value={config.valueColumns.map(String)}
-                    onChange={(event) =>
-                      changeConfig({
-                        valueColumns: Array.from(
-                          event.currentTarget.selectedOptions,
-                          (option) => Number(option.value),
-                        ),
-                      })
-                    }
+                  <button
+                    type="button"
+                    className="chart-value-picker-trigger"
+                    onClick={() => setShowValuePicker(true)}
+                    aria-haspopup="dialog"
                   >
-                    {config.rows[0]?.map(
-                      (header, index) =>
-                        index !== config.labelColumn && (
-                          <option key={index} value={index}>
-                            {header || `Column ${index + 1}`}
-                          </option>
-                        ),
-                    )}
-                  </select>
+                    {config.valueColumns.length
+                      ? config.valueColumns
+                          .map(
+                            (column) =>
+                              config.rows[0]?.[column] ||
+                              `Column ${column + 1}`,
+                          )
+                          .join(", ")
+                      : "Select value columns"}
+                  </button>
                 </label>
+                {showValuePicker && (
+                  <div
+                    className="chart-value-picker-backdrop"
+                    onMouseDown={(event) => {
+                      if (event.target === event.currentTarget)
+                        setShowValuePicker(false);
+                    }}
+                  >
+                    <section
+                      className="chart-value-picker"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="chart-value-picker-title"
+                    >
+                      <h3 id="chart-value-picker-title">
+                        Choose value columns
+                      </h3>
+                      <div className="chart-value-picker-options">
+                        {config.rows[0]?.map(
+                          (header, index) =>
+                            index !== config.labelColumn && (
+                              <label key={index} className="check-row">
+                                <input
+                                  type="checkbox"
+                                  checked={config.valueColumns.includes(index)}
+                                  onChange={(event) =>
+                                    changeConfig({
+                                      valueColumns: event.target.checked
+                                        ? [...config.valueColumns, index]
+                                        : config.valueColumns.filter(
+                                            (column) => column !== index,
+                                          ),
+                                    })
+                                  }
+                                />
+                                {header || `Column ${index + 1}`}
+                              </label>
+                            ),
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => setShowValuePicker(false)}
+                      >
+                        Done
+                      </button>
+                    </section>
+                  </div>
+                )}
                 <label className="field-label">
                   Aggregate data
                   <select
@@ -1447,8 +1520,8 @@ export function ChartPanel() {
                       colors: chartPalette.map(
                         (_, index) =>
                           chartPalette[
-                          (chartPalette.indexOf(color) + index) %
-                          chartPalette.length
+                            (chartPalette.indexOf(color) + index) %
+                              chartPalette.length
                           ],
                       ),
                     })

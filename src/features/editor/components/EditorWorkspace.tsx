@@ -157,6 +157,7 @@ export function EditorWorkspace({
     draggingFile,
     table,
     handleDrop,
+    collaboration,
     pages: {
       items: addedPages,
       setItems: setAddedPages,
@@ -909,14 +910,69 @@ export function EditorWorkspace({
             {(!canvas.hasDocument || uploadingInitialImage) &&
             editorMode.active === "image" && (
               <UploadLanding
-                restoring={false}
+                restoring={collaboration.loading}
                 onUploadStart={() => setUploadingInitialImage(true)}
                 onUploadFinish={() => setUploadingInitialImage(false)}
+                libraryItems={collaboration.libraryItems}
+                libraryLoading={collaboration.libraryLoading}
+                libraryError={collaboration.libraryError}
+                onRefreshLibrary={collaboration.refreshLibrary}
+                onOpenDocument={(documentId) => {
+                  void collaboration
+                    .openDocument(documentId)
+                    .catch(() => undefined);
+                }}
+                openingDocumentId={collaboration.openingDocumentId}
                 onUpload={(file, onProgress) =>
                   tools.uploadFile(file, onProgress)
                 }
               />
             )}
+          {collaboration.workspaceOpen && canvas.hasDocument && (
+            <div
+              className="modal-backdrop workspace-dialog-backdrop"
+              role="presentation"
+              onClick={collaboration.closeWorkspace}
+            >
+              <div
+                className="workspace-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Browse saved images"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <UploadLanding
+                  restoring={collaboration.loading}
+                  onUpload={async () => null}
+                  onUploadStart={() => undefined}
+                  onUploadFinish={() => undefined}
+                  libraryItems={collaboration.libraryItems}
+                  libraryLoading={collaboration.libraryLoading}
+                  libraryError={collaboration.libraryError}
+                  onRefreshLibrary={collaboration.refreshLibrary}
+                  onOpenDocument={(documentId) => {
+                    void collaboration
+                      .openDocument(documentId)
+                      .then(() => collaboration.closeWorkspace())
+                      .catch(() => undefined);
+                  }}
+                  openingDocumentId={collaboration.openingDocumentId}
+                  initialView="workspace"
+                  workspaceOnly
+                  onClose={collaboration.closeWorkspace}
+                />
+              </div>
+            </div>
+          )}
+          {collaboration.loading && canvas.hasDocument && (
+            <div
+              className="collaboration-loading"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="upload-spinner" /> Loading shared document…
+            </div>
+          )}
 
             {canvas.hasImage && editorMode.active === 'image' && (
             <div
@@ -1007,8 +1063,7 @@ export function EditorWorkspace({
 
         </div>
       </div>
-
-      {canvas.hasDocument && editorMode.active === 'image' && (
+        {canvas.hasDocument && editorMode.active === 'image' && (
         <div className="workspace-pages">
           <div className="page-thumbnails" ref={thumbnailStripRef} aria-label="Pages">
             {orderedPageIds.map((pageId, index) => {
@@ -1129,18 +1184,18 @@ export function EditorWorkspace({
       )}
         { canvas.hasDocument && (
         <div className="workspace-footer">
-          <span>
-            <span className="status-dot" />{" "}
-            {editorMode.active === "video"
-              ? videoClip.file
-                ? "Video loaded"
-                : "No video selected"
-              : canvas.selected
-                ? `${objectName(canvas.selected, 0)} selected`
-                : canvas.hasDocument
-                  ? "Ready to edit"
-                  : "No image selected"}
-          </span>
+            <span>
+              <span className="status-dot" />{" "}
+              {editorMode.active === "video"
+                ? videoClip.file
+                  ? "Video loaded"
+                  : "No video selected"
+                : canvas.selected
+                  ? `${objectName(canvas.selected, 0)} selected`
+                  : canvas.hasDocument
+                    ? "Ready to edit"
+                    : "No image selected"}
+            </span>
 
           <div className="footer-zoom">
             <button
@@ -1203,28 +1258,28 @@ export function EditorWorkspace({
             </button>
           </div>
 
-          <span className="workspace-document-status">
-            Local document · {canvas.dimensions.width} ×{" "}
-            {canvas.dimensions.height}
-          </span>
-          <button
-            className="zoom-button fullscreen-toggle"
-            type="button"
-            onClick={() => setShowFullScreen((current) => !current)}
-            aria-label={
-              showFullScreen
-                ? "Exit canvas focus mode"
-                : "Enter canvas focus mode"
-            }
-            aria-pressed={showFullScreen}
-            title={
-              showFullScreen ? "Exit canvas focus mode (Esc)" : "Expand canvas"
-            }
-          >
-            {showFullScreen ? <Minimize2 size={16} /> : <Fullscreen size={16} />}
-          </button>
-        </div>
-      )}
+        <span className="workspace-document-status">
+          Local document · {canvas.dimensions.width} ×{" "}
+          {canvas.dimensions.height}
+        </span>
+        <button
+          className="zoom-button fullscreen-toggle"
+          type="button"
+          onClick={() => setShowFullScreen((current) => !current)}
+          aria-label={
+            showFullScreen
+              ? "Exit canvas focus mode"
+              : "Enter canvas focus mode"
+          }
+          aria-pressed={showFullScreen}
+          title={
+            showFullScreen ? "Exit canvas focus mode (Esc)" : "Expand canvas"
+          }
+        >
+          {showFullScreen ? <Minimize2 size={16} /> : <Fullscreen size={16} />}
+        </button>
+      </div>
+    )}
 
       {fabricCanvas && (
         <ImageMusicVideoExport

@@ -3,14 +3,18 @@ import {
   ChevronDown,
   Download,
   Eye,
+  FolderOpen,
   Redo2,
   Share2,
   Undo2,
+  Users,
+  CloudUpload,
 } from "lucide-react";
 import { useEditor } from "../EditorContext";
 import { useTemplateFeature } from '../../templates/components/TemplateFeatureContext'
 import img1 from "../../../assets/logo.png";
 import { Image as ImageIcon, Video } from "lucide-react";
+import "../../../styles/editor/collaboration.css";
 
 export function EditorHeader() {
   const {
@@ -19,8 +23,31 @@ export function EditorHeader() {
     project,
     preview,
     editorMode,
+    collaboration,
+    tools,
     export: exportState,
   } = useEditor();
+  const copyShareLink = async () => {
+    const link = new URL(window.location.href);
+    link.searchParams.set("document", collaboration.documentId);
+    try {
+      await navigator.clipboard.writeText(link.toString());
+      tools.setNotice("Shared document link copied.");
+    } catch {
+      tools.setNotice("The share link could not be copied by this browser.");
+    }
+  };
+  const saveLabel = collaboration.loading
+    ? "Loading document"
+    : collaboration.saveStatus === "saving"
+      ? "Saving"
+      : collaboration.saveStatus === "unsaved"
+        ? "Unsaved changes"
+        : collaboration.saveStatus === "error"
+          ? "Save pending"
+          : collaboration.documentId
+            ? "Saved to cloud"
+            : "Local only";
   const { setSaveDialogOpen } = useTemplateFeature()
   const finishRenaming = () => {
     if (!project.name.trim()) project.setName("Untitled");
@@ -62,9 +89,28 @@ export function EditorHeader() {
               <ChevronDown size={14} />
             </button>
           )}
-          <span className="save-status">
-            <span /> All changes saved
+          <span
+            className={`save-status collaboration-save-status ${collaboration.saveStatus}`}
+            aria-live="polite"
+          >
+            <span /> {saveLabel}
           </span>
+          {(collaboration.documentId || collaboration.storageOnlyActive) && (
+            <span
+              className={`collaboration-connection ${collaboration.connectionStatus}${collaboration.storageOnlyActive ? " storage-only" : ""}`}
+            >
+              <span />
+              {collaboration.storageOnlyActive
+                ? collaboration.connectionStatus === "connected"
+                  ? "Live only · not saved"
+                  : "Local only · not saved"
+                : collaboration.connectionStatus === "connected"
+                  ? "Live"
+                  : collaboration.connectionStatus === "connecting"
+                    ? "Connecting"
+                    : "Offline"}
+            </span>
+          )}
         </div>
       </div>
       <div className="mode-switch" role="group" aria-label="Editor mode">
@@ -92,6 +138,47 @@ export function EditorHeader() {
         </button>
       </div>
       <div className="top-actions">
+        {collaboration.enabled && (
+          <button
+            className="icon-button"
+            type="button"
+            title="Browse saved images"
+            aria-label="Browse saved images"
+            onClick={collaboration.openWorkspace}
+            disabled={collaboration.loading}
+          >
+            <FolderOpen size={17} />
+          </button>
+        )}
+        {collaboration.documentId ? (
+          <button
+            className="icon-button"
+            type="button"
+            title="Copy shared document link"
+            aria-label="Copy shared document link"
+            onClick={() => void copyShareLink()}
+          >
+            <Share2 size={17} />
+          </button>
+        ) : canvas.hasImage && collaboration.enabled ? (
+          <button
+            className="icon-button"
+            type="button"
+            title="Create shared document"
+            aria-label="Create shared document"
+            onClick={() => void collaboration.createSharedCopy()}
+          >
+            <CloudUpload size={17} />
+          </button>
+        ) : null}
+        {(collaboration.documentId || collaboration.storageOnlyActive) && (
+          <span
+            className="collaboration-presence"
+            title={`${collaboration.activeUsers} guest clients connected`}
+          >
+            <Users size={15} /> {collaboration.activeUsers}
+          </span>
+        )}
         <button className="save-templatebtn" onClick={() => setSaveDialogOpen(true)} disabled={!canvas.hasDocument} title="Save template" aria-label="Save template"><BookmarkPlus size={16} /> Save template</button>
         <button
           className="icon-button"
