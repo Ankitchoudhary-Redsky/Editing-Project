@@ -12,10 +12,14 @@ import {
   UnlockKeyhole,
   Upload,
   Copy, CopyPlus, Rotate3D, RotateCcw,
+  Ellipsis, AlignLeft, AlignCenter, AlignRight, Download, Link2,
+  ExternalLink, MessageSquare, Layers3, ChevronRight, Clipboard, ClipboardPaste,
+  Paintbrush as PaintbrushIcon,
 } from "lucide-react";
+import { createPortal } from 'react-dom'
 import type { DragEvent, PointerEvent as ReactPointerEvent, ReactNode, Ref } from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { FabricImage } from 'fabric'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { FabricImage, type FabricObject } from 'fabric'
 import { UploadLanding } from "./UploadLanding";
 import { useEditor } from '../EditorContext'
 import { BACKGROUND_IMAGE_NAME, BASE_IMAGE_PROPERTY, DEFAULT_PAGE_HEIGHT, DEFAULT_PAGE_WIDTH, isDrawingLayerName } from '../model/constants'
@@ -39,6 +43,35 @@ type WorkspaceCanvasSurfaceProps = CanvasSurfaceProps & {
   children?: ReactNode
   width: number
   height: number
+}
+
+type ObjectComment = {
+  id: string
+  text: string
+  author: string
+  createdAt: string
+  updatedAt?: string
+}
+
+function readObjectComments(object: FabricObject): ObjectComment[] {
+  const savedComments = object.get('comments')
+  if (Array.isArray(savedComments)) {
+    return savedComments.filter((comment): comment is ObjectComment =>
+      Boolean(comment) &&
+      typeof comment === 'object' &&
+      typeof comment.id === 'string' &&
+      typeof comment.text === 'string' &&
+      typeof comment.createdAt === 'string',
+    ).map((comment) => ({
+      ...comment,
+      author: typeof comment.author === 'string' ? comment.author : 'You',
+    }))
+  }
+
+  const legacyComment = String(object.get('comment') ?? '').trim()
+  return legacyComment
+    ? [{ id: 'legacy-comment', text: legacyComment, author: 'You', createdAt: new Date(0).toISOString() }]
+    : []
 }
 
 function CanvasSurface({
@@ -156,6 +189,7 @@ export function EditorWorkspace({
     drawing,
     draggingFile,
     table,
+    shapes,
     handleDrop,
     collaboration,
     pages: {
@@ -178,7 +212,28 @@ export function EditorWorkspace({
   const [showFullScreen, setShowFullScreen] = useState(false);
   const [uploadingInitialImage, setUploadingInitialImage] = useState(false);
   const [dropTargetPageId, setDropTargetPageId] = useState<number | 'first' | null>(null)
-  const [canvasSurfaceSize, setCanvasSurfaceSize] = useState({ width: 0, height: 0 })
+  const [objectMenuOpen, setObjectMenuOpen] = useState(false)
+  const [objectAlignMenuOpen, setObjectAlignMenuOpen] = useState(false)
+  const [objectLayerMenuOpen, setObjectLayerMenuOpen] = useState(false)
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false)
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false)
+  const [commentDraft, setCommentDraft] = useState('')
+  const [comments, setComments] = useState<ObjectComment[]>([])
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [linkDraft, setLinkDraft] = useState('https://')
+  const [copiedObjectAvailable, setCopiedObjectAvailable] = useState(false)
+  const [copiedStyleAvailable, setCopiedStyleAvailable] = useState(false)
+  const copiedObjectRef = useRef<FabricObject | null>(null)
+  const pasteCountRef = useRef(0)
+  const copiedStyleRef = useRef<Record<string, unknown> | null>(null)
+  const floatingToolbarRef = useRef<HTMLDivElement | null>(null)
+  const objectMenuRef = useRef<HTMLDivElement | null>(null)
+  const [objectMenuPosition, setObjectMenuPosition] = useState<{
+    left: number
+    top: number
+    maxHeight: number
+    submenuOpensLeft: boolean
+  } | null>(null)
   const nextPageIdRef = useRef(2)
   const pageUploadInputsRef = useRef(new Map<number, HTMLInputElement>())
   const thumbnailElementsRef = useRef(new Map<number | null, HTMLElement>())
@@ -289,19 +344,6 @@ export function EditorWorkspace({
     stageScrollRef.current = element
     setStageElement(element)
   }, [setStageElement])
-  useEffect(() => {
-    const surface = canvasSurfaceRef.current
-    if (!surface) return
-
-    const updateCanvasSurfaceSize = () => {
-      const bounds = surface.getBoundingClientRect()
-      setCanvasSurfaceSize({ width: bounds.width, height: bounds.height })
-    }
-    const observer = new ResizeObserver(updateCanvasSurfaceSize)
-    updateCanvasSurfaceSize()
-    observer.observe(surface)
-    return () => observer.disconnect()
-  }, [canvas.dimensions.height, canvas.dimensions.width, canvas.fitScale, canvas.zoom])
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   useEffect(() => {
     if (!canvas.hasImage || !fabricCanvas || tools.active !== "music") return;
@@ -318,6 +360,315 @@ export function EditorWorkspace({
     ? canvas.selected
     : null
   const selectedThreeDBounds = selectedThreeDObject?.getBoundingRect()
+  const selectedBounds = canvas.selected?.getBoundingRect()
+  const selectedCenterX = selectedBounds ? selectedBounds.left + selectedBounds.width / 2 : 0
+  const selectedIsBaseImage = canvas.selected?.get(BASE_IMAGE_PROPERTY) === true
+  const toolbarAtBottom = !selectedIsBaseImage && Boolean(selectedBounds && selectedBounds.top < 72)
+  const toolbarScale = Math.max(0.001, canvas.fitScale * canvas.zoom)
+  const selectedIsLocked = canvas.selected?.get('layerLocked') === true
+  const toolbarHorizontalAnchor = selectedIsLocked || selectedIsBaseImage ? '-100%' : '-50%'
+  const toolbarVerticalAnchor = toolbarAtBottom ? '0' : '-100%'
+  useEffect(() => {
+    setObjectMenuOpen(false)
+    setObjectAlignMenuOpen(false)
+    setObjectLayerMenuOpen(false)
+    setCommentDialogOpen(false)
+    setLinkDialogOpen(false)
+  }, [canvas.selected])
+
+  useEffect(() => {
+    if (!objectMenuOpen) return
+    const closeMenu = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setObjectMenuOpen(false)
+        setObjectAlignMenuOpen(false)
+        setObjectLayerMenuOpen(false)
+      }
+    }
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target as HTMLElement
+      if (!target.closest('.floating-object-toolbar, .object-context-menu')) {
+        setObjectMenuOpen(false)
+        setObjectAlignMenuOpen(false)
+        setObjectLayerMenuOpen(false)
+      }
+    }
+    window.addEventListener('keydown', closeMenu)
+    window.addEventListener('pointerdown', closeOutside)
+    return () => {
+      window.removeEventListener('keydown', closeMenu)
+      window.removeEventListener('pointerdown', closeOutside)
+    }
+  }, [objectMenuOpen])
+
+  useLayoutEffect(() => {
+    if (!objectMenuOpen) return
+    const updatePosition = () => {
+      const toolbarBounds = floatingToolbarRef.current?.getBoundingClientRect()
+      const menu = objectMenuRef.current
+      if (!toolbarBounds || !menu) return
+
+      const margin = 8
+      const menuWidth = menu.getBoundingClientRect().width || 220
+      const menuHeight = menu.scrollHeight
+      const availableBelow = window.innerHeight - toolbarBounds.bottom - margin
+      const availableAbove = toolbarBounds.top - margin
+      const opensAbove = availableBelow < menuHeight && availableAbove > availableBelow
+      const availableHeight = Math.max(120, Math.min(menuHeight, opensAbove ? availableAbove : availableBelow))
+      const top = opensAbove
+        ? Math.max(margin, toolbarBounds.top - availableHeight - margin)
+        : Math.min(window.innerHeight - availableHeight - margin, toolbarBounds.bottom + margin)
+      const availableRight = window.innerWidth - toolbarBounds.right - margin
+      const availableLeft = toolbarBounds.left - margin
+      const opensLeft = availableRight < menuWidth && availableLeft > availableRight
+      const left = opensLeft
+        ? Math.max(margin, toolbarBounds.left - menuWidth - margin)
+        : Math.min(window.innerWidth - menuWidth - margin, toolbarBounds.right + margin)
+
+      setObjectMenuPosition({
+        left,
+        top,
+        maxHeight: availableHeight,
+        submenuOpensLeft: opensLeft
+          ? left - 190 - margin < 0
+          : left + menuWidth + 190 + margin > window.innerWidth,
+      })
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [objectMenuOpen, copiedStyleAvailable, objectLayerMenuOpen, objectAlignMenuOpen])
+
+  const alignSelected = (position: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
+    const selected = canvas.selected
+    if (!selected || !fabricCanvas) return
+    const bounds = selected.getBoundingRect()
+    let deltaX = 0
+    let deltaY = 0
+    if (position === 'left') deltaX = -bounds.left
+    if (position === 'center') deltaX = canvas.dimensions.width / 2 - (bounds.left + bounds.width / 2)
+    if (position === 'right') deltaX = canvas.dimensions.width - (bounds.left + bounds.width)
+    if (position === 'top') deltaY = -bounds.top
+    if (position === 'middle') deltaY = canvas.dimensions.height / 2 - (bounds.top + bounds.height / 2)
+    if (position === 'bottom') deltaY = canvas.dimensions.height - (bounds.top + bounds.height)
+    selected.set({ left: (selected.left ?? 0) + deltaX, top: (selected.top ?? 0) + deltaY })
+    selected.setCoords()
+    fabricCanvas.requestRenderAll()
+  }
+
+  const copySelectedObject = useCallback(async () => {
+    const selected = canvas.selected
+    if (!selected) return
+    const copiedObject = await selected.clone(['chartConfigJson', 'chartType', 'chartConfig', 'comment', 'comments', 'link'])
+    copiedObject.set({
+      comment: selected.get('comment') ?? '',
+      comments: readObjectComments(selected).map((comment) => ({ ...comment })),
+      link: selected.get('link') ?? '',
+    })
+    copiedObjectRef.current = copiedObject
+    pasteCountRef.current = 0
+    setCopiedObjectAvailable(true)
+    tools.setNotice('Selection copied.')
+  }, [canvas.selected, tools])
+
+  const pasteCopiedObject = useCallback(async () => {
+    if (!copiedObjectRef.current || !fabricCanvas) return
+    const copiedObject = copiedObjectRef.current
+    const clone = await copiedObject.clone(['chartConfigJson', 'chartType', 'chartConfig', 'comment', 'comments', 'link'])
+    clone.set({
+      comment: copiedObject.get('comment') ?? '',
+      comments: readObjectComments(copiedObject).map((comment) => ({ ...comment })),
+      link: copiedObject.get('link') ?? '',
+    })
+    const pasteNumber = ++pasteCountRef.current
+    const pasteOffset = 24 * pasteNumber
+    clone.set({
+      left: (clone.left ?? 0) + pasteOffset,
+      top: (clone.top ?? 0) + pasteOffset,
+      name: `${objectName(clone, 0)} copy${pasteNumber > 1 ? ` ${pasteNumber}` : ''}`,
+    })
+    fabricCanvas.add(clone)
+    fabricCanvas.setActiveObject(clone)
+    fabricCanvas.requestRenderAll()
+  }, [fabricCanvas])
+
+  useEffect(() => {
+    const handleObjectShortcuts = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.matches('input, textarea, [contenteditable="true"]')) return
+      const command = event.metaKey || event.ctrlKey
+      const key = event.key.toLowerCase()
+      if (command && key === 'v' && copiedObjectRef.current) {
+        event.preventDefault()
+        void pasteCopiedObject()
+        return
+      }
+      if (!canvas.selected) return
+      if (command && key === 'c') {
+        event.preventDefault()
+        void copySelectedObject()
+      } else if (command && key === 'd') {
+        event.preventDefault()
+        void shapes.duplicate()
+      } else if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault()
+        shapes.delete()
+      }
+    }
+    window.addEventListener('keydown', handleObjectShortcuts)
+    return () => window.removeEventListener('keydown', handleObjectShortcuts)
+  }, [canvas.selected, copySelectedObject, pasteCopiedObject, shapes])
+
+  const copySelectedStyle = () => {
+    if (!canvas.selected) return
+    copiedStyleRef.current = canvas.selected.toObject([
+      'fill', 'stroke', 'strokeWidth', 'strokeDashArray', 'strokeDashOffset', 'strokeLineCap',
+      'strokeLineJoin', 'strokeMiterLimit', 'strokeUniform', 'opacity', 'fillRule', 'paintFirst',
+      'shadow', 'backgroundColor', 'textAlign', 'fontFamily', 'fontSize', 'fontWeight',
+      'fontStyle', 'underline', 'overline', 'linethrough', 'charSpacing', 'lineHeight',
+      'textBackgroundColor',
+    ])
+    setCopiedStyleAvailable(true)
+    tools.setNotice('Object style copied.')
+  }
+
+  const pasteSelectedStyle = () => {
+    const selected = canvas.selected
+    if (!selected || !copiedStyleRef.current || !fabricCanvas) return
+    selected.set(copiedStyleRef.current)
+    selected.setCoords()
+    fabricCanvas?.requestRenderAll()
+    fabricCanvas.fire('object:modified', { target: selected })
+    tools.setNotice('Object style pasted.')
+  }
+
+  const downloadSelectedObject = () => {
+    const selected = canvas.selected
+    if (!fabricCanvas || !selected || !selectedBounds) return
+    const dataUrl = fabricCanvas.toDataURL({
+      format: 'png',
+      multiplier: 2,
+      left: selectedBounds.left,
+      top: selectedBounds.top,
+      width: selectedBounds.width,
+      height: selectedBounds.height,
+    })
+    const link = document.createElement('a')
+    link.href = dataUrl
+    link.download = `${objectName(selected, 0).replace(/[^a-z0-9-_]+/gi, '-').toLowerCase()}.png`
+    link.click()
+  }
+
+  const openCommentDialog = () => {
+    if (!canvas.selected) return
+    setComments(readObjectComments(canvas.selected))
+    setCommentDraft('')
+    setEditingCommentId(null)
+    setObjectMenuOpen(false)
+    setCommentDialogOpen(true)
+  }
+
+  const saveSelectedComment = () => {
+    const selected = canvas.selected
+    const text = commentDraft.trim()
+    if (!selected || !text) return
+
+    const timestamp = new Date().toISOString()
+    const nextComments = editingCommentId
+      ? comments.map((comment) => comment.id === editingCommentId
+        ? { ...comment, text, updatedAt: timestamp }
+        : comment)
+      : [...comments, { id: crypto.randomUUID(), text, author: 'You', createdAt: timestamp }]
+
+    selected.set({ comments: nextComments, comment: nextComments.at(-1)?.text ?? '' })
+    fabricCanvas?.requestRenderAll()
+    fabricCanvas?.fire('object:modified', { target: selected })
+    setComments(nextComments)
+    setCommentDraft('')
+    setEditingCommentId(null)
+    tools.setNotice(editingCommentId ? 'Comment updated.' : 'Comment added.')
+  }
+
+  const editComment = (comment: ObjectComment) => {
+    setEditingCommentId(comment.id)
+    setCommentDraft(comment.text)
+  }
+
+  const deleteComment = (commentId: string) => {
+    const selected = canvas.selected
+    if (!selected) return
+    const nextComments = comments.filter((comment) => comment.id !== commentId)
+    selected.set({ comments: nextComments, comment: nextComments.at(-1)?.text ?? '' })
+    fabricCanvas?.requestRenderAll()
+    fabricCanvas?.fire('object:modified', { target: selected })
+    setComments(nextComments)
+    if (editingCommentId === commentId) {
+      setEditingCommentId(null)
+      setCommentDraft('')
+    }
+    tools.setNotice('Comment deleted.')
+  }
+
+  const openLinkDialog = () => {
+    if (!canvas.selected) return
+    setLinkDraft(String(canvas.selected.get('link') ?? 'https://'))
+    setObjectMenuOpen(false)
+    setLinkDialogOpen(true)
+  }
+
+  const visitLink = (value: string) => {
+    try {
+      const url = new URL(value)
+      if (!['http:', 'https:', 'mailto:'].includes(url.protocol)) return
+      window.open(url.href, '_blank', 'noopener,noreferrer')
+    } catch {
+      tools.setNotice('Enter a valid website address.')
+    }
+  }
+
+  const openSelectedLink = () => {
+    const value = String(canvas.selected?.get('link') ?? '').trim()
+    if (value) visitLink(value)
+  }
+
+  const removeSelectedLink = () => {
+    const selected = canvas.selected
+    if (!selected) return
+    selected.set('link', '')
+    fabricCanvas?.requestRenderAll()
+    fabricCanvas?.fire('object:modified', { target: selected })
+    setLinkDraft('https://')
+    setLinkDialogOpen(false)
+    tools.setNotice('Link removed.')
+  }
+
+  const saveSelectedLink = () => {
+    if (!canvas.selected) return
+    const value = linkDraft.trim()
+    if (!value || value === 'https://') {
+      canvas.selected.set('link', '')
+      tools.setNotice('Link removed.')
+    } else {
+      try {
+        const url = new URL(value)
+        if (!['http:', 'https:', 'mailto:'].includes(url.protocol)) throw new Error('Unsupported protocol')
+        canvas.selected.set('link', url.href)
+        void navigator.clipboard?.writeText(url.href).catch(() => undefined)
+        fabricCanvas?.fire('object:modified', { target: canvas.selected })
+        tools.setNotice('Link saved.')
+      } catch {
+        tools.setNotice('Enter a valid website address.')
+        return
+      }
+    }
+    setLinkDialogOpen(false)
+    fabricCanvas?.requestRenderAll()
+  }
 
   const beginThreeDRotation = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!selectedThreeDObject) return
@@ -906,7 +1257,130 @@ export function EditorWorkspace({
                 onPointerCancel={endThreeDRotation}
               ><Rotate3D size={28} strokeWidth={2.8} /></button>
               )}
+              {fabricCanvas && canvas.selected && selectedBounds && (
+                <div
+                  className={`floating-object-toolbar${toolbarAtBottom ? ' toolbar-below' : ''}`}
+                  ref={floatingToolbarRef}
+                  style={{
+                    left: selectedIsBaseImage
+                      ? selectedBounds.left + selectedBounds.width - 35 / toolbarScale
+                      : selectedIsLocked
+                      ? selectedBounds.left + selectedBounds.width - 35 / toolbarScale
+                      : selectedCenterX + 22 / toolbarScale,
+                    top: selectedIsBaseImage
+                      ? selectedBounds.top - 8 / toolbarScale
+                      : toolbarAtBottom
+                        ? selectedBounds.top + selectedBounds.height + 28
+                        : selectedBounds.top - 28,
+                    transform: `translate(${toolbarHorizontalAnchor}, ${toolbarVerticalAnchor}) scale(${1 / toolbarScale})`,
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  {canvas.selected.get('layerLocked') === true ? (
+                    <>
+                      {String(canvas.selected.get('link') ?? '').trim() && <button type="button" onClick={openSelectedLink} aria-label="Open link" title="Open link"><Link2 size={18} /></button>}
+                      <button type="button" onClick={openCommentDialog} aria-label="Comment" title="Comment"><MessageSquare size={18} /></button>
+                      <button type="button" className="active" onClick={() => shapes.setLayerLocked(canvas.selected!, false)} aria-label="Unlock" title="Unlock"><UnlockKeyhole size={18} /></button>
+                    </>
+                  ) : (
+                    <>
+                      {String(canvas.selected.get('link') ?? '').trim() && <button type="button" onClick={openSelectedLink} aria-label="Open link" title="Open link"><Link2 size={18} /></button>}
+                      <button type="button" onClick={openCommentDialog} aria-label="Comment" title="Comment"><MessageSquare size={18} /></button>
+                      <button type="button" onClick={() => shapes.setLayerLocked(canvas.selected!, true)} aria-label="Lock" title="Lock"><LockKeyhole size={18} /></button>
+                      <button type="button" onClick={() => void shapes.duplicate()} aria-label="Duplicate" title="Duplicate"><CopyPlus size={18} /></button>
+                      <button type="button" className="floating-delete-button" onClick={shapes.delete} aria-label="Delete" title="Delete"><Trash2 size={18} /></button>
+                      <button type="button" className={objectMenuOpen ? 'active' : ''} onClick={() => setObjectMenuOpen((open) => !open)} aria-label="More options" title="More options" aria-expanded={objectMenuOpen}><Ellipsis size={20} /></button>
+                    </>
+                  )}
+                  {objectMenuOpen && canvas.selected.get('layerLocked') !== true && createPortal(
+                    <div
+                      ref={objectMenuRef}
+                      className={`object-context-menu${objectMenuPosition?.submenuOpensLeft ? ' menu-opens-left' : ''}`}
+                      style={{
+                        left: objectMenuPosition?.left ?? 8,
+                        top: objectMenuPosition?.top ?? 8,
+                        maxHeight: objectMenuPosition?.maxHeight ?? 'calc(100dvh - 16px)',
+                      }}
+                      role="menu"
+                    >
+                      <button role="menuitem" type="button" onClick={() => void copySelectedObject()}><span><Clipboard size={17} /> Copy</span><kbd>Ctrl+C</kbd></button>
+                      <button role="menuitem" type="button" onClick={copySelectedStyle}><span><PaintbrushIcon size={17} /> Copy style</span></button>
+                      {copiedStyleAvailable && <button role="menuitem" type="button" onClick={pasteSelectedStyle}><span><PaintbrushIcon size={17} /> Paste style</span></button>}
+                      <button role="menuitem" type="button" onClick={() => void pasteCopiedObject()} disabled={!copiedObjectAvailable}><span><ClipboardPaste size={17} /> Paste</span><kbd>Ctrl+V</kbd></button>
+                      <button role="menuitem" type="button" onClick={() => void shapes.duplicate()}><span><CopyPlus size={17} /> Duplicate</span><kbd>Ctrl+D</kbd></button>
+                      <button role="menuitem" type="button" onClick={shapes.delete}><span><Trash2 size={17} /> Delete</span><kbd>Del</kbd></button>
+                      <div className="object-context-divider" />
+                      <button role="menuitem" type="button" className="object-context-submenu-trigger" aria-haspopup="menu" aria-expanded={objectLayerMenuOpen} aria-controls="object-layer-submenu" onClick={() => { setObjectAlignMenuOpen(false); setObjectLayerMenuOpen((open) => !open) }}><span><Layers3 size={17} /> Layer</span><ChevronRight size={16} /></button>
+                      {objectLayerMenuOpen && (
+                        <div id="object-layer-submenu" className="object-context-submenu object-layer-submenu" role="menu">
+                          <button type="button" onClick={() => shapes.moveLayer(canvas.selected!, 'forward')}>Bring forward</button>
+                          <button type="button" onClick={() => shapes.moveLayer(canvas.selected!, 'backward')}>Send backward</button>
+                        </div>
+                      )}
+                      <button role="menuitem" type="button" className="object-context-submenu-trigger" aria-haspopup="menu" aria-expanded={objectAlignMenuOpen} aria-controls="object-align-submenu" onClick={() => { setObjectLayerMenuOpen(false); setObjectAlignMenuOpen((open) => !open) }}><span><AlignCenter size={17} /> Align to page</span><ChevronRight size={16} /></button>
+                      {objectAlignMenuOpen && (
+                        <div id="object-align-submenu" className="object-context-submenu object-align-submenu" role="menu">
+                          <button type="button" onClick={() => alignSelected('left')}><AlignLeft size={16} /> Align left</button>
+                          <button type="button" onClick={() => alignSelected('center')}><AlignCenter size={16} /> Align center</button>
+                          <button type="button" onClick={() => alignSelected('right')}><AlignRight size={16} /> Align right</button>
+                          <button type="button" onClick={() => alignSelected('top')}><span className="align-symbol align-top">T</span> Align top</button>
+                          <button type="button" onClick={() => alignSelected('middle')}><span className="align-symbol">M</span> Align middle</button>
+                          <button type="button" onClick={() => alignSelected('bottom')}><span className="align-symbol align-bottom">B</span> Align bottom</button>
+                        </div>
+                      )}
+                      <button role="menuitem" type="button" onClick={openCommentDialog}><span><MessageSquare size={17} /> Comment</span></button>
+                      <button role="menuitem" type="button" onClick={() => shapes.setLayerLocked(canvas.selected!, !(canvas.selected!.get('layerLocked') === true))}><span>{canvas.selected.get('layerLocked') === true ? <UnlockKeyhole size={17} /> : <LockKeyhole size={17} />} {canvas.selected.get('layerLocked') === true ? 'Unlock' : 'Lock'}</span></button>
+                      <button role="menuitem" type="button" onClick={openLinkDialog}><span><Link2 size={17} /> Link</span></button>
+                      <button role="menuitem" type="button" onClick={downloadSelectedObject}><span><Download size={17} /> Download selection</span></button>
+                    </div>,
+                    document.body,
+                  )}
+                </div>
+              )}
             </CanvasSurface>
+            {commentDialogOpen && canvas.selected && (
+              <div className="object-action-backdrop" onPointerDown={() => setCommentDialogOpen(false)}>
+                <div className="object-action-dialog" role="dialog" aria-modal="true" aria-label="Comment" onPointerDown={(event) => event.stopPropagation()}>
+                  <div className="object-action-dialog-header"><strong>Comments <span className="object-comment-count">{comments.length}</span></strong><button type="button" onClick={() => setCommentDialogOpen(false)} aria-label="Close comment dialog">×</button></div>
+                  <div className="object-comment-list">
+                    {comments.length === 0
+                      ? <div className="object-comment-empty">No comments yet.</div>
+                      : comments.map((comment) => (
+                        <article className="object-comment-entry" key={comment.id}>
+                          <div className="object-comment-meta"><strong>{comment.author}</strong><time dateTime={comment.updatedAt ?? comment.createdAt}>{new Date(comment.updatedAt ?? comment.createdAt).toLocaleString()}{comment.updatedAt ? ' · edited' : ''}</time></div>
+                          <p>{comment.text}</p>
+                          <div className="object-comment-controls">
+                            <button type="button" onClick={() => editComment(comment)} aria-label="Edit comment" title="Edit comment"><Pencil size={15} /></button>
+                            <button type="button" onClick={() => deleteComment(comment.id)} aria-label="Delete comment" title="Delete comment"><Trash2 size={15} /></button>
+                          </div>
+                        </article>
+                      ))}
+                  </div>
+                  <div className="object-comment-composer">
+                    <label htmlFor="object-comment">{editingCommentId ? 'Edit comment' : 'Add a comment'}</label>
+                    <textarea id="object-comment" autoFocus value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} placeholder="Write a comment..." />
+                    <div className="object-comment-composer-actions">
+                      {editingCommentId && <button type="button" className="object-comment-cancel" onClick={() => { setEditingCommentId(null); setCommentDraft('') }}>Cancel</button>}
+                      <button type="button" className="object-action-save" disabled={!commentDraft.trim()} onClick={saveSelectedComment}>{editingCommentId ? 'Update comment' : 'Add comment'}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {linkDialogOpen && canvas.selected && (
+              <div className="object-action-backdrop" onPointerDown={() => setLinkDialogOpen(false)}>
+                <div className="object-action-dialog object-link-dialog" role="dialog" aria-modal="true" aria-label="Add link" onPointerDown={(event) => event.stopPropagation()}>
+                  <div className="object-action-dialog-header"><strong>Website URL</strong><button type="button" onClick={() => setLinkDialogOpen(false)} aria-label="Close link dialog">×</button></div>
+                  <input aria-label="Website URL" autoFocus value={linkDraft} onChange={(event) => setLinkDraft(event.target.value)} placeholder="https://example.com" />
+                  <p>Enter a web address to link this element.</p>
+                  <div className="object-link-actions">
+                    {String(canvas.selected.get('link') ?? '').trim() && <button type="button" className="object-link-secondary" onClick={removeSelectedLink}>Remove link</button>}
+                    {linkDraft.trim() && linkDraft.trim() !== 'https://' && <button type="button" className="object-link-secondary" onClick={() => visitLink(linkDraft.trim())}><ExternalLink size={14} /> Open</button>}
+                    <button type="button" className="object-action-save" onClick={saveSelectedLink} disabled={!linkDraft.trim()}>Save link</button>
+                  </div>
+                </div>
+              </div>
+            )}
             {(!canvas.hasDocument || uploadingInitialImage) &&
             editorMode.active === "image" && (
               <UploadLanding
@@ -974,27 +1448,6 @@ export function EditorWorkspace({
             </div>
           )}
 
-            {canvas.hasImage && editorMode.active === 'image' && (
-            <div
-              className="page-image-tools first-page-image-tools"
-              aria-label="Current page image actions"
-              style={{
-                top: `calc(50% - ${canvasSurfaceSize.height / 2}px - 40px)`,
-                left: `calc(50% + ${canvasSurfaceSize.width / 2 - 108}px)`,
-              }}
-            >
-              <button type="button" className="page-icon-button" onClick={tools.openFilePicker} aria-label="Replace image" title="Replace image">
-                <RotateCcw size={15} aria-hidden="true" />
-              </button>
-              <button type="button" className="page-icon-button" onClick={() => duplicatePage(activePageId)} aria-label="Duplicate page" title="Duplicate page">
-                <Copy size={15} aria-hidden="true" />
-              </button>
-              <button type="button" className="page-icon-button delete-page-icon" onClick={tools.deleteImage} aria-label="Delete image" title="Delete image">
-                <Trash2 size={15} aria-hidden="true" />
-              </button>
-            </div>
-            )}
-            
             {/* {!canvas.hasDocument && (
             <div className="empty-prompt">
               <div className="empty-art">

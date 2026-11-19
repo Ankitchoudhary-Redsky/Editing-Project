@@ -264,15 +264,15 @@ export function useObjectEditing({
     if (!canvas) return
     object.set({
       layerLocked: locked,
-      selectable: !locked ,
-      evented: !locked ,
+      selectable: true,
+      evented: true,
+      hasControls: !locked,
       lockMovementX: locked ,
       lockMovementY: locked,
       lockScalingX: locked ,
       lockScalingY: locked ,
       lockRotation: locked ,
     })
-    if (locked && canvas.getActiveObject() === object) canvas.discardActiveObject()
     canvas.requestRenderAll()
     recordHistory(true)
   }

@@ -169,10 +169,7 @@ export function useEditorCanvasCore({
     const previousObjects = syncedObjectsRef.current
     const activeObject = canvas.getActiveObject()
     if (
-      activeObject && (
-        activeObject.get('layerLocked') === true ||
-        (activeObject === image && imageResizeLocked)
-      )
+      activeObject && activeObject === image && imageResizeLocked
     )
       canvas.discardActiveObject();
     if (

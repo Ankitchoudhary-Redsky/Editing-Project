@@ -33,6 +33,7 @@ export const DEFAULT_PAGE_WIDTH = 1200
 export const DEFAULT_PAGE_HEIGHT = 800
 export const DRAWING_LAYER_NAME = '__pixel_studio_drawing_layer__'
 export const LAYER_DISPLAY_NAME_PROPERTY = 'layerDisplayName'
+FabricObject.customProperties = Array.from(new Set([...FabricObject.customProperties, 'comment', 'comments']))
 export const DRAWING_LAYER_TOOL_NAMES = {
   pencil: `${DRAWING_LAYER_NAME}_pencil`,
   sketch: `${DRAWING_LAYER_NAME}_sketch`,
@@ -202,6 +203,8 @@ export function serializeCanvas(canvas: Canvas) {
     'threeDRotationZ',
     LAYER_DISPLAY_NAME_PROPERTY,
     'layerLocked',
+    'comment',
+    'comments',
     "shadowSize",
     "shadowArtworkSize",
     "shadowArtworkBaseScaleX",

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "collab-server": "node --env-file-if-exists=.env backend/server.js",
+    "collab-server": "node backend/server.js",
     "test:collab": "node --test backend/socket/*.test.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
