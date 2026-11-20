@@ -361,12 +361,10 @@ export function EditorWorkspace({
     : null
   const selectedThreeDBounds = selectedThreeDObject?.getBoundingRect()
   const selectedBounds = canvas.selected?.getBoundingRect()
-  const selectedCenterX = selectedBounds ? selectedBounds.left + selectedBounds.width / 2 : 0
   const selectedIsBaseImage = canvas.selected?.get(BASE_IMAGE_PROPERTY) === true
-  const toolbarAtBottom = !selectedIsBaseImage && Boolean(selectedBounds && selectedBounds.top < 72)
   const toolbarScale = Math.max(0.001, canvas.fitScale * canvas.zoom)
-  const selectedIsLocked = canvas.selected?.get('layerLocked') === true
-  const toolbarHorizontalAnchor = selectedIsLocked || selectedIsBaseImage ? '-100%' : '-50%'
+  const toolbarGap = 16 / toolbarScale
+  const toolbarAtBottom = !selectedIsBaseImage && Boolean(selectedBounds && selectedBounds.top < 64 / toolbarScale)
   const toolbarVerticalAnchor = toolbarAtBottom ? '0' : '-100%'
   useEffect(() => {
     setObjectMenuOpen(false)
@@ -1264,15 +1262,13 @@ export function EditorWorkspace({
                   style={{
                     left: selectedIsBaseImage
                       ? selectedBounds.left + selectedBounds.width - 35 / toolbarScale
-                      : selectedIsLocked
-                      ? selectedBounds.left + selectedBounds.width - 35 / toolbarScale
-                      : selectedCenterX + 22 / toolbarScale,
+                      : selectedBounds.left + selectedBounds.width - 8 / toolbarScale,
                     top: selectedIsBaseImage
                       ? selectedBounds.top - 8 / toolbarScale
                       : toolbarAtBottom
-                        ? selectedBounds.top + selectedBounds.height + 28
-                        : selectedBounds.top - 28,
-                    transform: `translate(${toolbarHorizontalAnchor}, ${toolbarVerticalAnchor}) scale(${1 / toolbarScale})`,
+                        ? selectedBounds.top + toolbarGap
+                        : selectedBounds.top - toolbarGap,
+                    transform: `translate(-100%, ${toolbarVerticalAnchor}) scale(${1 / toolbarScale})`,
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
