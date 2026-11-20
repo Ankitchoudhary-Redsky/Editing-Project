@@ -69,6 +69,7 @@ export function createTableGroup(tableId: number, objects: FabricObject[]) {
   const group = new Group(objects, {
     selectable: false,
     evented: false,
+    objectCaching: false,
   })
   group.set('name', tableGroupName(tableId))
   return group
@@ -179,4 +180,7 @@ export function syncTableGeometry(
       }
     }
   }
+
+  const group = getTableGroup(canvas, table.id)
+  group?.setCoords()
 }

@@ -640,6 +640,9 @@ export interface EditorContextValue {
     finishEditing: () => void;
     deleteTable: () => void;
     moveLayer: (id: number, direction: "forward" | "backward") => void;
+    setVisibility: (id: number, visible: boolean) => void;
+    setLocked: (id: number, locked: boolean) => void;
+    renameLayer: (id: number, name: string) => void;
     addRow: () => void;
     addColumn: () => void;
     removeRow: () => void;

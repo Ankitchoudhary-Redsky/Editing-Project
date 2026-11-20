@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import type { FabricObject } from "fabric";
 import type { EditorTool, UseCanvasTransformsOptions } from "../model/types";
 import {
   applyCanvasCrop,
@@ -33,10 +34,16 @@ export function useCanvasTransforms({
   const [keepRatio, setKeepRatio] = useState(true);
   const [scaleArtwork, setScaleArtwork] = useState(true);
   const cropTransformChangedRef = useRef(false);
+  const cropSelectedObjectRef = useRef<FabricObject | null>(null);
 
   const beginCrop = () => {
     const canvas = canvasRef.current;
     if (!canvas || !hasDocument || cropObjectRef.current) return;
+    const activeObject = canvas.getActiveObject();
+    cropSelectedObjectRef.current =
+      activeObject && activeObject !== cropObjectRef.current
+        ? activeObject
+        : null;
     cropOriginalSnapshotRef.current ??= serializeSnapshot();
     const cropFrame = createCropFrame(canvas);
     cropTransformChangedRef.current = false;
@@ -58,15 +65,21 @@ export function useCanvasTransforms({
     updateCropRatio(canvas, cropFrame, ratioName);
   };
 
-  const flipImage = (axis: "horizontal" | "vertical") => {
-    const image = imageObjectRef.current;
+  const flipSelectedObject = (axis: "horizontal" | "vertical") => {
     const canvas = canvasRef.current;
-    if (!image || !canvas) return;
+    if (!canvas) return;
+    const activeObject = canvas.getActiveObject();
+    const target =
+      activeObject && activeObject !== cropObjectRef.current
+        ? activeObject
+        : cropSelectedObjectRef.current ?? imageObjectRef.current;
+    if (!target) return;
     const property = axis === "horizontal" ? "flipX" : "flipY";
-    image.set(property, !image[property]);
-    image.setCoords();
+    target.set(property, !target[property]);
+    target.setCoords();
     canvas.requestRenderAll();
-    cropTransformChangedRef.current = true;
+    if (cropObjectRef.current) cropTransformChangedRef.current = true;
+    else recordHistory(true);
   };
 
   const setImageRotation = (angle: number) => {
@@ -98,6 +111,7 @@ export function useCanvasTransforms({
       return;
     }
     cropObjectRef.current = null;
+    cropSelectedObjectRef.current = null;
     setCropActive(false);
     setDimensions(cropDimensions);
     setActiveTool("crop");
@@ -113,6 +127,7 @@ export function useCanvasTransforms({
       const canvas = canvasRef.current;
       const cropFrame = cropObjectRef.current;
       if (!canvas || !cropFrame) {
+        cropSelectedObjectRef.current = null;
         cropOriginalSnapshotRef.current = null;
         setActiveTool(nextTool);
         return;
@@ -120,6 +135,7 @@ export function useCanvasTransforms({
       suppressHistoryRef.current = true;
       canvas.remove(cropFrame);
       cropObjectRef.current = null;
+      cropSelectedObjectRef.current = null;
       setCropActive(false);
       canvas.discardActiveObject();
       canvas.requestRenderAll();
@@ -161,6 +177,7 @@ export function useCanvasTransforms({
     try {
       await restoreSnapshot(snapshot);
       cropObjectRef.current = null;
+      cropSelectedObjectRef.current = null;
       cropTransformChangedRef.current = false;
       setCropActive(false);
       setCropRatio("Free");
@@ -238,8 +255,8 @@ export function useCanvasTransforms({
       rotation: cropRotation,
       setRatio: setCropRatio,
       changeRatio: changeCropRatio,
-      flipHorizontal: () => flipImage("horizontal"),
-      flipVertical: () => flipImage("vertical"),
+      flipHorizontal: () => flipSelectedObject("horizontal"),
+      flipVertical: () => flipSelectedObject("vertical"),
       setRotation: setImageRotation,
       apply: applyCrop,
       reset: resetCrop,

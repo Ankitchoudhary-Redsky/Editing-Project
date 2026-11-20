@@ -70,6 +70,9 @@ export function useTableStructureActions({
   const selectTable = (id: number) => {
     const table = tablesRef.current.find((candidate) => candidate.id === id)
     if (!table) return
+    const canvas = canvasRef.current
+    const group = canvas ? getTableGroup(canvas, id) : undefined
+    if (!canvas || !group || group.visible === false || group.get('layerLocked') === true) return
 
     activeTableRef.current = table
     setActiveTableId(table.id)
@@ -77,7 +80,6 @@ export function useTableStructureActions({
     setTableColumns(table.columns)
     setTableSelectedRow(0)
     setTableSelectedColumn(0)
-    const canvas = canvasRef.current
     const text = canvas ? findTableObject(canvas, tableTextName(table.id, 0, 0)) : undefined
     setTableSelectedText(text instanceof Textbox ? text.text : '')
     const cell = canvas ? findTableObject(canvas, tableCellName(table.id, 0, 0)) : undefined
@@ -256,7 +258,10 @@ export function useTableStructureActions({
   }
 
   const beginEditing = () => {
-    if (!activeTableRef.current) return
+    const table = activeTableRef.current
+    const canvas = canvasRef.current
+    const group = table && canvas ? getTableGroup(canvas, table.id) : undefined
+    if (!table || !group || group.visible === false || group.get('layerLocked') === true) return
     setActiveTool('draw-remove')
     setTableEditing(true)
     canvasRef.current?.requestRenderAll()
@@ -269,6 +274,39 @@ export function useTableStructureActions({
     setActiveDrawingMode('pencil')
   }
 
+  const setTableVisibility = (id: number, visible: boolean) => {
+    const canvas = canvasRef.current
+    const group = canvas ? getTableGroup(canvas, id) : undefined
+    if (!canvas || !group) return
+    group.set('visible', visible)
+    if (!visible && activeTableRef.current?.id === id) finishEditing()
+    canvas.requestRenderAll()
+    updateTableList(tablesRef.current)
+    recordHistory(true)
+  }
+
+  const setTableLocked = (id: number, locked: boolean) => {
+    const canvas = canvasRef.current
+    const group = canvas ? getTableGroup(canvas, id) : undefined
+    if (!canvas || !group) return
+    group.set('layerLocked', locked)
+    if (locked && activeTableRef.current?.id === id) finishEditing()
+    canvas.requestRenderAll()
+    updateTableList(tablesRef.current)
+    recordHistory(true)
+  }
+
+  const renameTableLayer = (id: number, name: string) => {
+    const canvas = canvasRef.current
+    const group = canvas ? getTableGroup(canvas, id) : undefined
+    const normalizedName = name.trim()
+    if (!canvas || !group || !normalizedName) return
+    group.set('layerDisplayName', normalizedName)
+    canvas.requestRenderAll()
+    updateTableList(tablesRef.current)
+    recordHistory(true)
+  }
+
   return {
     selectTable,
     create,
@@ -278,6 +316,9 @@ export function useTableStructureActions({
     removeColumn,
     deleteTable,
     moveTableLayer,
+    setTableVisibility,
+    setTableLocked,
+    renameTableLayer,
     beginEditing,
     finishEditing,
   }

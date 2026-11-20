@@ -111,7 +111,10 @@ export function useTableEditor({
       ?? restoredTables.at(-1)
     activeTableRef.current = table ?? null
     setActiveTableId(table?.id ?? null)
-    if (tableWasMissing) setTableEditing(Boolean(table))
+    if (tableWasMissing) {
+      const group = table ? getTableGroup(targetCanvas, table.id) : undefined
+      setTableEditing(Boolean(table && group?.visible !== false && group?.get('layerLocked') !== true))
+    }
     if (!table) return
 
     setTableRows(table.rows)
@@ -253,6 +256,9 @@ export function useTableEditor({
     finishEditing: structure.finishEditing,
     deleteTable: structure.deleteTable,
     moveLayer: structure.moveTableLayer,
+    setVisibility: structure.setTableVisibility,
+    setLocked: structure.setTableLocked,
+    renameLayer: structure.renameTableLayer,
     addRow: structure.addRow,
     addColumn: structure.addColumn,
     removeRow: structure.removeRow,

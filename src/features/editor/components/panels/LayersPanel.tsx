@@ -193,7 +193,9 @@ export function LayersPanel() {
             : object instanceof IText
               ? Type
               : Shapes
-        const layerName = isTable ? `Table ${tableId}` : objectName(object, index)
+        const layerName = isTable
+          ? String(object.get('layerDisplayName') || `Table ${tableId}`)
+          : objectName(object, index)
         const thumbnail = isTable ? '' : getLayerThumbnail(object)
         const isSelected = isTable
           ? table.activeId === tableId && table.editing
@@ -204,7 +206,8 @@ export function LayersPanel() {
             return
           }
           if (renamingObject !== object) return
-          shapes.renameLayer(object, renameValue)
+          if (isTable) table.renameLayer(tableId, renameValue)
+          else shapes.renameLayer(object, renameValue)
           setRenamingObject(null)
         }
 
@@ -266,7 +269,9 @@ export function LayersPanel() {
               <button
                 type="button"
                 className="layer-select"
-                disabled={!isTable && (isLocked || (object.selectable === false && !isDrawingLayer))}
+                disabled={isTable
+                  ? isLocked || object.visible === false
+                  : isLocked || (object.selectable === false && !isDrawingLayer)}
                 onClick={() => {
                   if (isTable) {
                     if (activeChecked.length) {
@@ -294,8 +299,9 @@ export function LayersPanel() {
               className="layer-mini"
               title={object.visible === false ? 'Show layer' : 'Hide layer'}
               aria-label={`${object.visible === false ? 'Show' : 'Hide'} ${layerName}`}
-              disabled={isTable}
-              onClick={() => shapes.setLayerVisibility(object, object.visible === false)}
+              onClick={() => isTable
+                ? table.setVisibility(tableId, object.visible === false)
+                : shapes.setLayerVisibility(object, object.visible === false)}
             >
               {object.visible === false ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
@@ -304,8 +310,9 @@ export function LayersPanel() {
               className="layer-mini"
               title={isLocked ? 'Unlock layer' : 'Lock layer'}
               aria-label={`${isLocked ? 'Unlock' : 'Lock'} ${layerName}`}
-              disabled={isTable}
-              onClick={() => shapes.setLayerLocked(object, !isLocked)}
+              onClick={() => isTable
+                ? table.setLocked(tableId, !isLocked)
+                : shapes.setLayerLocked(object, !isLocked)}
             >
               {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
             </button>
@@ -314,7 +321,6 @@ export function LayersPanel() {
               className="layer-mini"
               title="Rename layer"
               aria-label={`Rename ${layerName}`}
-              disabled={isTable}
               onClick={() => {
                 setRenameValue(layerName)
                 setRenamingObject(object)

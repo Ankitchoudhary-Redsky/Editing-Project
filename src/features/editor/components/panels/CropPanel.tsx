@@ -9,10 +9,10 @@ export function CropPanel() {
       <p className="panel-note">{canvas.hasDocument ? 'Drag the crop frame and its handles to choose the visible area.' : 'Add a layer to crop the canvas.'}</p>
       <label className="field-label">Aspect ratio<select value={crop.ratio} onChange={(event) => crop.changeRatio(event.target.value)}>{Object.keys(cropRatios).map((ratio) => <option key={ratio}>{ratio}</option>)}</select></label>
       <div className="control-section">
-        <span className="field-label">Flip image</span>
+        <span className="field-label">Flip selected layer</span>
         <div className="button-row crop-flip-controls">
-          <button className="secondary-button" onClick={crop.flipHorizontal} disabled={!canvas.hasImage}><FlipHorizontal2 size={15} /> Horizontal</button>
-          <button className="secondary-button" onClick={crop.flipVertical} disabled={!canvas.hasImage}><FlipVertical2 size={15} /> Vertical</button>
+          <button className="secondary-button" onClick={crop.flipHorizontal} disabled={!canvas.hasDocument}><FlipHorizontal2 size={15} /> Horizontal</button>
+          <button className="secondary-button" onClick={crop.flipVertical} disabled={!canvas.hasDocument}><FlipVertical2 size={15} /> Vertical</button>
         </div>
       </div>
       <label className="range-field"><span>Rotate <b>{crop.rotation}°</b></span><input type="range" min="-180" max="180" step="1" value={crop.rotation} disabled={!canvas.hasImage} onChange={(event) => crop.setRotation(Number(event.target.value))} /></label>
