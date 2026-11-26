@@ -15,6 +15,8 @@ import {
 } from 'lucide-react'
 import { useEditor } from '../../EditorContext'
 import type { TextAnimation } from '../../model/types'
+import { SeeMoreButton } from './SeeMoreButton'
+import { useState } from 'react'
 
 const effects: Array<{ id: TextAnimation; label: string; icon: typeof Sparkles }> = [
   { id: 'pop', label: 'Pop', icon: CircleDot },
@@ -40,16 +42,22 @@ const addOnEffects: Array<{ id: TextAnimation; label: string; icon: typeof Spark
 
 export function AnimatePanel() {
   const { canvas, animation } = useEditor()
-  const canAnimate = Boolean(canvas.selected && !canvas.selectedIsImage)
+  const [showAllEffects, setShowAllEffects] = useState(false)
+  const canAnimate = Boolean(canvas.selected)
+  const visibleEffects = showAllEffects ? effects : effects.slice(0, 6)
+  const selectedEffect = effects.find((effect) => effect.id === animation.selected)
+  if (!showAllEffects && selectedEffect && !visibleEffects.includes(selectedEffect)) {
+    visibleEffects[visibleEffects.length - 1] = selectedEffect
+  }
 
   return (
     <div className="panel-content animate-panel">
       <p className="panel-note">
-        {canAnimate ? 'Choose an effect for the selected object.' : 'Select text or a shape on the canvas to animate it.'}
+        {canAnimate ? 'Choose an effect for the selected object.' : 'Select an Object on the canvas to animate it.'}
       </p>
       <section className="animation-section" aria-label="Animation presets">
         <div className="animation-effect-grid">
-          {effects.map(({ id, label, icon: Icon }) => (
+          {visibleEffects.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -63,6 +71,12 @@ export function AnimatePanel() {
             </button>
           ))}
         </div>
+        {effects.length > 6 && (
+          <SeeMoreButton
+            expanded={showAllEffects}
+            onClick={() => setShowAllEffects((expanded) => !expanded)}
+          />
+        )}
       </section>
       <section className="animation-section" aria-label="Add-on effects">
         <strong className="animation-section-title">Add-on effects</strong>

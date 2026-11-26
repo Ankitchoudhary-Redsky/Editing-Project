@@ -23,6 +23,7 @@ import {
 } from "../../model/charts";
 import { renderChartSvg } from "../../operations/renderChartSvg";
 import { ChartModal } from "../ChartEditorModal";
+import { SeeMoreButton } from "./SeeMoreButton";
 
 const svgUrl = (svg: string) =>
   `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
@@ -485,6 +486,7 @@ export function ChartPanel() {
   );
   const [tab, setTab] = useState<"data" | "customize">("data");
   const [search, setSearch] = useState("");
+  const [expandedChartCategories, setExpandedChartCategories] = useState<string[]>([]);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showValuePicker, setShowValuePicker] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -881,11 +883,20 @@ export function ChartPanel() {
                   placeholder="Search chart types"
                 />
               </label>
-              {filteredCategories.map((category) => (
+            
+              {filteredCategories.map((category) => {
+                const expanded = expandedChartCategories.includes(category.name);
+                const visibleTypes: ChartType[] = expanded || search.trim()
+                  ? [...category.types]
+                  : category.types.slice(0, 3);
+                if(!expanded && !search.trim() && category.types.some((type)=> type === config.type) && !visibleTypes.some((type)=> type === config.type)) {
+                  visibleTypes[visibleTypes.length -1] = config.type;
+                }
+                return (
                 <section className="chart-category" key={category.name}>
                   <h4>{category.name}</h4>
                   <div className="chart-type-grid">
-                    {category.types.map((type) => (
+                    {visibleTypes.map((type) => (
                       <button
                         key={type}
                         type="button"
@@ -903,8 +914,17 @@ export function ChartPanel() {
                       </button>
                     ))}
                   </div>
+                  {category.types.length > 3 && !search.trim() && (
+                    <SeeMoreButton
+                      expanded={expanded}
+                      onClick={() => setExpandedChartCategories((current) => expanded
+                        ? current.filter((name) => name !== category.name)
+                        : [...current, category.name],
+                      )}
+                    />
+                  )}
                 </section>
-              ))}
+              )})}
             </div>
           )}
           {selectedChart && (

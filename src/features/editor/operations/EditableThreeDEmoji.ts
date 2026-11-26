@@ -97,10 +97,6 @@ export class EditableThreeDEmoji extends Rect {
       rotate3d: createThreeDRotationControl(
         (object): object is EditableThreeDEmoji => object instanceof EditableThreeDEmoji,
       ),
-      rotate3dZ: createThreeDRotationControl(
-        (object): object is EditableThreeDEmoji => object instanceof EditableThreeDEmoji,
-        'z',
-      ),
     }
   }
 

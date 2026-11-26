@@ -5,6 +5,7 @@ export function objectName(object: FabricObject, index: number) {
   const displayName = object.get(LAYER_DISPLAY_NAME_PROPERTY)
   if (typeof displayName === 'string' && displayName.trim()) return displayName.trim()
   const customName = (object as FabricObject & { name?: string }).name
+  if (customName === 'editor-frame-overlay') return 'Frame'
   if (customName === BACKGROUND_IMAGE_NAME) return 'Background'
   if (customName === DRAWING_LAYER_NAME) return 'Drawing'
   const drawingTool = Object.entries(DRAWING_LAYER_TOOL_NAMES).find(([, name]) => name === customName)?.[0]

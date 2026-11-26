@@ -1,4 +1,4 @@
-import { type DragEvent } from "react";
+import { useState, type DragEvent } from "react";
 import { useEditor } from "../EditorContext";
 import { EditorNotice, ExportDialog, PreviewDialog } from "./EditorDialogs";
 import { EditorHeader } from "./EditorHeader";
@@ -14,6 +14,7 @@ export function EditorShell({
   setStageElement,
 }: EditorShellProps) {
   const { tools, canvas, pages, handleDrop } = useEditor();
+  const [featureSearch, setFeatureSearch] = useState("");
   const showEditorTools = canvas.hasDocument || pages.activeId !== null;
 
   const handleDragOver = (event: DragEvent<HTMLElement>) => {
@@ -33,7 +34,12 @@ export function EditorShell({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {canvas.hasDocument && <EditorHeader />}
+       {canvas.hasDocument && (
+        <EditorHeader
+          featureSearch={featureSearch}
+          setFeatureSearch={setFeatureSearch}
+        />
+      )}
       <input
         ref={setUploadInputElement}
         type="file"

@@ -29,7 +29,7 @@ function createAssetId() {
 }
 
 export function LibraryPanel() {
-  const { canvas, fabricCanvas, tools } = useEditor()
+  const { fabricCanvas, tools } = useEditor()
   const { openGallery } = useTemplateFeature()
   const mediaInputRef = useRef<HTMLInputElement>(null)
   const [assets, setAssets] = useState<MediaAsset[]>(() => {
@@ -81,16 +81,12 @@ export function LibraryPanel() {
   }
 
   const addAssetToCanvas = async (asset: MediaAsset) => {
+    if (!fabricCanvas) {
+      tools.setNotice('Canvas is not ready. Please try again.')
+      return
+    }
     setActiveAssetId(asset.id)
     try {
-      if (!canvas.hasImage) {
-        const response = await fetch(asset.source)
-        const blob = await response.blob()
-        const file = new File([blob], asset.name, { type: blob.type || 'image/png' })
-        await tools.uploadFile(file)
-        return
-      }
-      if (!fabricCanvas) return
       const image = await FabricImage.fromURL(asset.source)
       const maxWidth = fabricCanvas.getWidth() * 0.52
       const maxHeight = fabricCanvas.getHeight() * 0.52
@@ -111,12 +107,14 @@ export function LibraryPanel() {
         lockMovementY: false,
         lockScalingX: false,
         lockScalingY: false,
-        lockRotation: true,
+        lockRotation: false,
       })
       fabricCanvas.add(image)
       fabricCanvas.setActiveObject(image)
       fabricCanvas.requestRenderAll()
-    } catch {
+      tools.setNotice(`${asset.name} added to canvas.`)
+    } catch (error) {
+      console.error('Could not add library image:', error)
       tools.setNotice('This media asset could not be added to the canvas.')
     }
   }

@@ -48,11 +48,41 @@ export function applyCanvasCrop(canvas: Canvas, frame: Rect, backgroundImage: Fa
   const scale = Math.min(DEFAULT_PAGE_WIDTH / width, DEFAULT_PAGE_HEIGHT / height)
   const offsetX = (DEFAULT_PAGE_WIDTH - width * scale) / 2
   const offsetY = (DEFAULT_PAGE_HEIGHT - height * scale) / 2
+  const cropRight = left + width
+  const cropBottom = top + height
+  const previousClipBounds = canvas.clipPath?.getBoundingRect()
+  const visibleLeft = Math.max(left, previousClipBounds?.left ?? 0)
+  const visibleTop = Math.max(top, previousClipBounds?.top ?? 0)
+  const visibleRight = Math.min(cropRight, (previousClipBounds?.left ?? 0) + (previousClipBounds?.width ?? canvas.getWidth()))
+  const visibleBottom = Math.min(cropBottom, (previousClipBounds?.top ?? 0) + (previousClipBounds?.height ?? canvas.getHeight()))
+
 
   canvas.remove(frame)
-  canvas.getObjects().forEach((object) => {
+  ;[...canvas.getObjects()].forEach((object) => {
+    const objectBounds = object.getBoundingRect()
+    const isOutsideCrop = objectBounds.left + objectBounds.width <= visibleLeft ||
+      objectBounds.top + objectBounds.height <= visibleTop ||
+      objectBounds.left >= visibleRight ||
+      objectBounds.top >= visibleBottom
+    if (isOutsideCrop) {
+      canvas.remove(object)
+      return
+    }
     if (object instanceof FabricImage && object === backgroundImage && !object.angle && !object.flipX && !object.flipY) {
       const scaleX = object.scaleX || 1
+  canvas.set('clipPath', new Rect({
+    left: (visibleLeft - left) * scale + offsetX,
+    top: (visibleTop - top) * scale + offsetY,
+    width: Math.max(1, (visibleRight - visibleLeft) * scale),
+    height: Math.max(1, (visibleBottom - visibleTop) * scale),
+    originX: 'left',
+    originY: 'top',
+    fill: '#000000',
+    absolutePositioned: true,
+    selectable: false,
+    evented: false,
+    name: 'editor-crop-boundary',
+  }))
       const scaleY = object.scaleY || 1
       object.set({
         cropX: (object.cropX || 0) + (left - (object.left || 0)) / scaleX,
@@ -75,6 +105,27 @@ export function applyCanvasCrop(canvas: Canvas, frame: Rect, backgroundImage: Fa
     })
     object.setCoords()
   })
+  if (backgroundImage) {
+    const frameOverlay = canvas.getObjects().find(
+      (object) => object.get('name') === 'editor-frame-overlay',
+    )
+    if (frameOverlay) {
+      const center = backgroundImage.getCenterPoint()
+      frameOverlay.set({
+        width: backgroundImage.width,
+        height: backgroundImage.height,
+        scaleX: backgroundImage.scaleX,
+        scaleY: backgroundImage.scaleY,
+        angle: backgroundImage.angle,
+        flipX: backgroundImage.flipX,
+        flipY: backgroundImage.flipY,
+        originX: 'center',
+        originY: 'center',
+      })
+      frameOverlay.setPositionByOrigin(center, 'center', 'center')
+      frameOverlay.setCoords()
+    }
+  }
   canvas.setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT })
   canvas.discardActiveObject()
   canvas.requestRenderAll()

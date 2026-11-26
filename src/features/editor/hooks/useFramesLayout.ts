@@ -27,6 +27,7 @@ export function useFramesLayout({
   canvas,
   canvasRef,
   imageObjectRef,
+  selectedObject,
   setDimensions,
   recordHistory,
   syncObjects,
@@ -35,6 +36,7 @@ export function useFramesLayout({
   canvas: Canvas | null;
   canvasRef: MutableRefObject<Canvas | null>;
   imageObjectRef: MutableRefObject<FabricImage | null>;
+  selectedObject: FabricObject | null;
   setDimensions: (dimensions: { width: number; height: number }) => void;
   recordHistory: (immediate?: boolean) => void;
   syncObjects: () => void;
@@ -43,6 +45,49 @@ export function useFramesLayout({
   const [cells, setCells] = useState<LayoutCell[]>([]);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const cellBoundsRef = useRef<GridCellBounds[]>([]);
+  let frameIdCounter = 0;
+  function createFrameId() {
+    frameIdCounter += 1;
+    return `pixel-frame-${Date.now()}-${frameIdCounter}`;
+  }
+  useEffect(() => {
+    if (!canvas) return;
+    const syncFrame = (event: { target?: FabricObject }) => {
+      const image = event.target;
+      if (!(image instanceof FabricImage)) return;
+      const frameId = image.get("editorFrameId");
+      if (!frameId) return;
+      const frame = canvas.getObjects().find(
+        (object) => object.get("editorFrameOwnerId") === frameId,
+      );
+      if (!frame) return;
+      const center = image.getCenterPoint();
+      frame.set({
+        width: image.width,
+        height: image.height,
+        scaleX: image.scaleX,
+        scaleY: image.scaleY,
+        angle: image.angle,
+        flipX: image.flipX,
+        flipY: image.flipY,
+        originX: "center",
+        originY: "center",
+      });
+      frame.setPositionByOrigin(center, "center", "center");
+      frame.setCoords();
+      canvas.requestRenderAll();
+    };
+    canvas.on("object:moving", syncFrame);
+    canvas.on("object:scaling", syncFrame);
+    canvas.on("object:rotating", syncFrame);
+    canvas.on("object:modified", syncFrame);
+    return () => {
+      canvas.off("object:moving", syncFrame);
+      canvas.off("object:scaling", syncFrame);
+      canvas.off("object:rotating", syncFrame);
+      canvas.off("object:modified", syncFrame);
+    };
+  }, [canvas]);
 
   useEffect(() => {
     if (!canvas) return;
@@ -145,57 +190,70 @@ export function useFramesLayout({
 
   const applyFrame = (style: FrameStyle, color: string) => {
     const canvas = canvasRef.current;
-    const image = imageObjectRef.current;
+    const image = selectedObject instanceof FabricImage && !String(selectedObject.get("name") ?? "").startsWith("layout-") && selectedObject.get("name") !== "editor-frame-overlay" && !selectedObject.get("stickerAnimationId") && !selectedObject.get("threeDType") && !selectedObject.get("emojiId") ? selectedObject : null;
     if (!canvas || !image) return;
-
-    canvas
-      .getObjects()
-      .filter((object) => object.get("name") === "editor-frame-overlay")
-      .forEach((object) => canvas.remove(object));
-    if (style === "none") {
-      image.setCoords();
-      canvas.requestRenderAll();
-      recordHistory(true);
-      return;
+    let frameId = image.get("editorFrameId");
+    if (!frameId) {
+      frameId = createFrameId();
+      image.set("editorFrameId", frameId);
     }
-    const width = Math.max(
-      4,
-      Math.min(image.getScaledWidth(), image.getScaledHeight()) *
-        (style === "bold" ? 0.045 : style === "matte" ? 0.075 : 0.018),
-    );
-    const center = image.getCenterPoint();
-    const border = new Rect({
-      left: center.x,
-      top: center.y,
-      width: image.width,
-      height: image.height,
-      scaleX: image.scaleX,
-      scaleY: image.scaleY,
-      angle: image.angle,
-      flipX: image.flipX,
-      flipY: image.flipY,
-      originX: "center",
-      originY: "center",
-      fill: "transparent",
-      stroke: color,
-      strokeWidth: width,
-      strokeUniform: true,
-      shadow:
-        style === "soft-shadow"
-          ? new Shadow({
-              color: "rgba(0,0,0,0.28)",
-              blur: 18,
-              offsetX: 0,
-              offsetY: 7,
-            })
-          : undefined,
-      selectable: false,
-      evented: false,
-    });
-    border.set("name", "editor-frame-overlay");
-    image.set("padding", width / 2);
+    canvas.getObjects().filter((object) => object.get("editorFrameOwnerId") === frameId).forEach((object) => canvas.remove(object));
+    const oldFrameName = image.get("editorFrameName");
+    if (oldFrameName) {
+      canvas
+        .getObjects()
+        .filter((object) => object.get("name") === oldFrameName)
+        .forEach((object) => canvas.remove(object));
+      image.set("editorFrameName", undefined);
+    }
+    if (style !== "none") {
+      const width = Math.max(
+        4,
+        Math.min(image.getScaledWidth(), image.getScaledHeight()) *
+          (style === "bold" ? 0.045 : style === "matte" ? 0.075 : 0.018),
+      );
+      const center = image.getCenterPoint();
+      const border = new Rect({
+        left: center.x,
+        top: center.y,
+        width: image.width,
+        height: image.height,
+        scaleX: image.scaleX,
+        scaleY: image.scaleY,
+        angle: image.angle,
+        flipX: image.flipX,
+        flipY: image.flipY,
+        originX: "center",
+        originY: "center",
+        fill: "transparent",
+        stroke: color,
+        strokeWidth: width,
+        strokeUniform: true,
+        shadow:
+          style === "soft-shadow"
+            ? new Shadow({
+                color: "rgba(0,0,0,0.28)",
+                blur: 18,
+                offsetX: 0,
+                offsetY: 7,
+              })
+            : undefined,
+        selectable: true,
+        evented: true,
+        perPixelTargetFind: true,
+        hasControls: false,
+        hasBorders: false,
+      });
+      border.set("name", "editor-frame-overlay");
+      border.set("editorFrameOwnerId", frameId);
+      canvas.add(border);
+      border.setCoords();
+    }
+    canvas.setActiveObject(image);
     image.setCoords();
-    canvas.add(border);
+    canvas.requestRenderAll();
+    syncObjects();
+    recordHistory(true);
   };
 
   const applyLayout = (
@@ -222,6 +280,7 @@ export function useFramesLayout({
         return name.startsWith("layout-") && !name.startsWith("layout-image-");
       })
       .forEach((object) => canvas.remove(object));
+    canvas.set('clipPath', undefined);
     canvas.setDimensions({ width, height });
     canvas.backgroundColor = background;
     bounds.forEach((cell) => {
@@ -285,6 +344,7 @@ export function useFramesLayout({
     });
     placeholder.set("name", "layout-cell-1");
     canvas.clear();
+    canvas.set('clipPath', undefined);
     canvas.setDimensions({ width, height });
     canvas.backgroundColor = color;
     canvas.add(placeholder);

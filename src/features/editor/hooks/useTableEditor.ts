@@ -6,6 +6,7 @@ import {
   findTableObject,
   getCanvasObjects,
   getImageBounds,
+  getTableGroup,
   groupUngroupedTables,
   syncTableGeometry,
   tableCellName,

@@ -56,10 +56,7 @@ export function LayersPanel() {
   const [renameValue, setRenameValue] = useState('')
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const cancelRenameRef = useRef(false)
-  const contentObjects = canvas.objects.filter((object) => {
-    const name = object.get('name')
-    return name !== 'editor-frame-overlay'
-  })
+  const contentObjects = canvas.objects
   const layerObjects = contentObjects.filter(
     (object) =>
       getTableId(object) === null &&

@@ -91,6 +91,7 @@ export function useEditorFeatureControllers({
     canvas,
     canvasRef: refs.canvasRef,
     imageObjectRef: refs.imageObjectRef,
+    selectedObject: state.selectedObject,
     setDimensions: actions.setDimensions,
     recordHistory: actions.recordHistory,
     syncObjects: actions.syncObjects,

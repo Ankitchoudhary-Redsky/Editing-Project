@@ -204,6 +204,7 @@ export function useObjectEditing({
     const canvas = canvasRef.current;
     const active = canvas?.getActiveObject();
     if (!canvas || !active) return;
+    if (active.get("layerLocked") === true) return;
     if (active === imageObjectRef.current) {{
       canvas
         .getObjects()
@@ -281,7 +282,7 @@ export function useObjectEditing({
     const canvas = canvasRef.current
     const normalizedName = name.trim()
     if (!canvas || !normalizedName) return
-    if (isDrawingLayerName(object.get('name'))) {
+    if (isDrawingLayerName(object.get('name')) || object.get('name') === 'editor-frame-overlay') {
       object.set(LAYER_DISPLAY_NAME_PROPERTY, normalizedName)
     } else {
       object.set('name', normalizedName)
@@ -340,6 +341,8 @@ export function useObjectEditing({
   const deleteLayers = (objects: FabricObject[]) => {
     const activeCanvas = canvasRef.current;
     if (!activeCanvas || !objects.length) return;
+    const deletableObjects = objects.filter((object) => object.get("layerLocked") !== true);
+    if (!deletableObjects.length) return;
     activeCanvas.discardActiveObject();
     objects.forEach((object) => {
       if (object === imageObjectRef.current) {

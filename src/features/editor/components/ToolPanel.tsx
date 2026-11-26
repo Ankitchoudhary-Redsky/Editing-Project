@@ -1,3 +1,5 @@
+import { X } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useEditor } from "../EditorContext";
 import { useTemplateFeature } from '../../templates/components/TemplateFeatureContext'
 import { editorToolCategories } from "../model/constants";
@@ -26,6 +28,10 @@ import { AnimatePanel } from "./panels/AnimatePanel";
 
 export function ToolPanel() {
   const { canvas, pages, tools } = useEditor();
+  const previousTool = useRef<typeof tools.active>("upload");
+  useEffect(() => {
+    if (tools.active !== "layers") previousTool.current = tools.active;
+  }, [tools.active]);
   const { openGallery } = useTemplateFeature()
   const isPageSwitching = pages?.switching ?? false
   if (tools.active === "music") return null;
@@ -49,7 +55,17 @@ export function ToolPanel() {
         <div>
           <h3 className="panel-kicker">{panelHeading}</h3>
         </div>
-      
+        {tools.active === "layers" && (
+          <button
+            type="button"
+            className="icon-button panel-close"
+            onClick={() => tools.setActive(previousTool.current)}
+            title="Close Layers panel"
+            aria-label="Close Layers panel"
+          >
+            <X size={17} />
+          </button>
+        )}
       </div>
       {activeCategory.tools.length > 1 && (
         <nav

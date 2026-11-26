@@ -92,6 +92,7 @@ export function useEditorDocumentActions({
       canvas.discardActiveObject();
     } else {
       canvas.clear();
+      canvas.set('clipPath', undefined);
       canvas.setDimensions({ width: 1200, height: 800 });
       canvas.backgroundColor = "rgba(0,0,0,0)";
     }

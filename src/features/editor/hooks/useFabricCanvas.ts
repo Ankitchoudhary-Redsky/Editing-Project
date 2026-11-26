@@ -1,8 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import { Canvas, type FabricObject } from 'fabric'
-import { EditableThreeDShape, disposeSharedThreeDRenderer } from '../operations/EditableThreeDShape'
+import { RotateCw } from 'lucide-react'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { EditableThreeDShape,disposeSharedThreeDRenderer } from '../operations/EditableThreeDShape'
 import { EditableThreeDEmoji } from '../operations/EditableThreeDEmoji'
+
+const rotationIcon = new Image()
+rotationIcon.src =
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    renderToStaticMarkup(
+      createElement(RotateCw, {
+        size: 15,
+        color: '#2c7660',
+        strokeWidth: 2.2,
+      }),
+    ),
+  )
 
 function renderRotationControl(
   ctx: CanvasRenderingContext2D,
@@ -18,28 +34,32 @@ function renderRotationControl(
   const width = element?.clientWidth ?? 0;
   const displayScale = width > 0 ? element!.getBoundingClientRect().width / width : 1;
   ctx.scale(1 / Math.max(displayScale, 0.001), 1 / Math.max(displayScale, 0.001));
-  ctx.fillStyle = '#ffffff'
-  ctx.strokeStyle = '#2c7660'
-  ctx.lineWidth = 1.5
+  // ctx.fillStyle = '#ffffff'
+  // ctx.strokeStyle = '#2c7660'
+  // ctx.lineWidth = 1.5
   ctx.beginPath()
   ctx.arc(0, 0, 11, 0, Math.PI * 2)
+  ctx.fillStyle = '#ffffff'
   ctx.fill()
   ctx.stroke()
   ctx.strokeStyle = '#2c7660'
-  ctx.lineWidth = 1.8
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-  ctx.beginPath()
-  ctx.arc(0, 0, 5, -Math.PI * 0.78, Math.PI * 0.55)
+  ctx.lineWidth = 1.5
+  // ctx.lineCap = 'round'
+  // ctx.lineJoin = 'round'
+  // ctx.beginPath()
+  // ctx.arc(0, 0, 5, -Math.PI * 0.78, Math.PI * 0.55)
   ctx.stroke()
-  const arrowX = Math.cos(Math.PI * 0.55) * 5
-  const arrowY = Math.sin(Math.PI * 0.55) * 5
-  ctx.beginPath()
-  ctx.moveTo(arrowX, arrowY)
-  ctx.lineTo(arrowX - 3.2, arrowY - 0.4)
-  ctx.moveTo(arrowX, arrowY)
-  ctx.lineTo(arrowX - 0.4, arrowY - 3.2)
-  ctx.stroke()
+  // const arrowX = Math.cos(Math.PI * 0.55) * 5
+  // const arrowY = Math.sin(Math.PI * 0.55) * 5
+  // ctx.beginPath()
+  // ctx.moveTo(arrowX, arrowY)
+  // ctx.lineTo(arrowX - 3.2, arrowY - 0.4)
+  // ctx.moveTo(arrowX, arrowY)
+  // ctx.lineTo(arrowX - 0.4, arrowY - 3.2)
+  // ctx.stroke()
+  if (rotationIcon.complete && rotationIcon.naturalWidth > 0) {
+    ctx.drawImage(rotationIcon, -7.5, -7.5, 15, 15)
+  }
   ctx.restore()
 }
  
@@ -86,7 +106,7 @@ export function useFabricCanvas({
 
   const setCanvasElement = useCallback((element: HTMLCanvasElement | null) => {
     canvasElementRef.current = element
-  }, [])
+  }, [],)
 
   const setStageElement = useCallback((element: HTMLDivElement | null) => {
     stageElementRef.current = element
@@ -123,22 +143,31 @@ export function useFabricCanvas({
       const changed = () => {
         const callbacks = callbacksRef.current
         callbacks.onUserEdit?.()
-        if (callbacks.shouldSyncObjects?.() !== false) callbacks.syncObjects()
+        if (callbacks.shouldSyncObjects?.() !== false){
+        callbacks.syncObjects()
+      }
         callbacks.recordHistory()
       }
       const objectAdded = (event: { target?: FabricObject }) => {
         const rotationControl = event.target?.controls?.mtr
-        if (rotationControl) rotationControl.render = renderRotationControl
+        if (rotationControl) {
+          rotationControl.render = renderRotationControl
+          rotationControl.cursorStyle = `url("${rotationIcon.src}") 7.5 7.5, pointer`
+        }
         changed()
       }
-      const selectionChanged = () => callbacksRef.current.syncSelection()
-  const userInteracted = () => callbacksRef.current.onUserInteraction?.()
+      const selectionChanged = () => {
+      callbacksRef.current.syncSelection()
+      }
+  const userInteracted = () => {
+    callbacksRef.current.onUserInteraction?.()
+  }
       const releaseThreeDObject = (event: { target?: FabricObject }) => {
-        if (event.target instanceof EditableThreeDShape) event.target.releaseThreeDResources()
-        if (event.target instanceof EditableThreeDEmoji) event.target.releaseThreeDResources()
+        if (event.target instanceof EditableThreeDShape){ event.target.releaseThreeDResources()}
+        if (event.target instanceof EditableThreeDEmoji){ event.target.releaseThreeDResources()}
       }
 
-  canvas.on('mouse:down', userInteracted)
+      canvas.on('mouse:down', userInteracted)
       canvas.on('object:removed', releaseThreeDObject)
       canvas.on('selection:created', selectionChanged)
       canvas.on('selection:updated', selectionChanged)
@@ -147,6 +176,7 @@ export function useFabricCanvas({
       canvas.on('object:modified', changed)
       canvas.on('object:removed', changed)
       canvas.on('text:changed', changed)
+
       detachListeners = () => {
         canvas?.off('mouse:down', userInteracted)
         canvas?.off('object:removed', releaseThreeDObject)
@@ -169,14 +199,14 @@ export function useFabricCanvas({
       resizeObserver = new ResizeObserver(fitCanvas)
       canvas.renderAll()
       fitCanvas()
-      if (stageElementRef.current) resizeObserver.observe(stageElementRef.current)
+      if (stageElementRef.current){ resizeObserver.observe(stageElementRef.current) }
 
       if (cancelled) {
         resizeObserver.disconnect()
         detachListeners()
         canvas.getObjects().forEach((object) => {
-          if (object instanceof EditableThreeDShape) object.releaseThreeDResources()
-          if (object instanceof EditableThreeDEmoji) object.releaseThreeDResources()
+          if (object instanceof EditableThreeDShape){ object.releaseThreeDResources() }
+          if (object instanceof EditableThreeDEmoji){ object.releaseThreeDResources() }
         })
         disposeSharedThreeDRenderer()
         disposePromiseRef.current = Promise.resolve(canvas.dispose())
@@ -193,8 +223,8 @@ export function useFabricCanvas({
       const activeCanvas = canvas
       detachListeners?.()
       activeCanvas.getObjects().forEach((object) => {
-        if (object instanceof EditableThreeDShape) object.releaseThreeDResources()
-        if (object instanceof EditableThreeDEmoji) object.releaseThreeDResources()
+        if (object instanceof EditableThreeDShape){ object.releaseThreeDResources() }
+        if (object instanceof EditableThreeDEmoji){ object.releaseThreeDResources() }
       })
       disposeSharedThreeDRenderer()
       if (canvasRef.current === activeCanvas) {
@@ -210,7 +240,7 @@ export function useFabricCanvas({
     const stage = stageElementRef.current
     if (!canvas || !stage) return
     const nextScale = calculateFitScale(canvas, stage)
-    setFitScale((currentScale) => currentScale === nextScale ? currentScale : nextScale)
+    setFitScale((currentScale) => currentScale === nextScale ? currentScale : nextScale,)
   }, [canvasRef])
 
   const fitToScreen = useCallback(() => {

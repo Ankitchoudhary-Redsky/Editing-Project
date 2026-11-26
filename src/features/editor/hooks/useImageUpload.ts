@@ -76,19 +76,21 @@ export function useImageUpload({
 
       await beforeReplaceCanvas?.();
       if (requestId !== uploadRequestRef.current) return null;
-      imageSourceRef.current = source;
-      suppressHistoryRef.current = true;
-      const hasLayout = canvas
-        .getObjects()
-        .some((object) => String(object.get("name") ?? "").startsWith("layout-"));
-      if (hasLayout) {
-        if (imageObjectRef.current) canvas.remove(imageObjectRef.current);
-        canvas
-          .getObjects()
-          .filter((object) => object.get("name") === "editor-frame-overlay")
-          .forEach((object) => canvas.remove(object));
-      } else {
+      const hasExistingCanvasImage = canvas.getObjects().some(
+        (object) =>
+          object.type === "image" ||
+          object.get("isBaseImage") === true ||
+          object.get("isLibraryImage") === true,
+      )
+      const isFirstImage = !hasExistingCanvasImage
+      const becomesBaseImage = !imageObjectRef.current
+      suppressHistoryRef.current = true
+      const hasLayout = canvas.getObjects().some((object) =>
+        String(object.get("name") ?? "").startsWith("layout-"),
+      )
+      if (isFirstImage && !hasLayout) {
         canvas.clear();
+        canvas.set('clipPath', undefined);
         resetTables();
         resetDrawing();
       }
@@ -97,10 +99,9 @@ export function useImageUpload({
         height: DEFAULT_PAGE_HEIGHT,
       });
       canvas.backgroundColor = "rgba(0,0,0,0)";
-      imageObjectRef.current = image;
       fitImageInsideCanvas(image, DEFAULT_PAGE_WIDTH, DEFAULT_PAGE_HEIGHT);
       image.set({
-        isBaseImage: true,
+        isBaseImage: becomesBaseImage,
         selectable: true,
         evented: true,
         lockMovementX: false,
@@ -113,24 +114,29 @@ export function useImageUpload({
         "name",
         file.name.replace(/\.[^.]+$/, "").slice(0, 24) || "Image",
       );
-      canvas.add(image);
-      if (hasLayout) canvas.setActiveObject(image);
-      else canvas.discardActiveObject();
+      canvas.add(image)
+      if (becomesBaseImage) {
+        imageObjectRef.current = image
+        imageSourceRef.current = source
+      }
+      canvas.setActiveObject(image);
       canvas.requestRenderAll();
-      selectedFilterRef.current = "original";
-      filterIntensityRef.current = 100;
-      setSelectedFilter("original");
-      setFilterIntensity(100);
-      setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT });
+      if (becomesBaseImage) {
+        selectedFilterRef.current = "original"
+        filterIntensityRef.current = 100
+        setSelectedFilter("original")
+        setFilterIntensity(100)
+        setDimensions({ width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT})
+        setImageThumbnail(thumbnail)
+        setBrightness(0)
+        setContrast(0)
+        setSaturation(0)
+        setZoom(1)
+        initializeHistory(canvas)
+      }
       setHasDocument(true);
-      setImageThumbnail(thumbnail);
-      setBrightness(0);
-      setContrast(0);
-      setSaturation(0);
-      setZoom(1);
       resizeDisplay();
-      suppressHistoryRef.current = false;
-      initializeHistory(canvas);
+      suppressHistoryRef.current = false
       syncObjects();
       await onUploadedImage?.(file);
       onProgress?.(100);

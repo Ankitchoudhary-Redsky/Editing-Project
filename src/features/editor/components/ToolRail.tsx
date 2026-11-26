@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useEditor } from "../EditorContext";
 import { editorToolCategories, videoTools } from "../model/constants";
 import { Layers3 } from "lucide-react";
@@ -12,7 +13,7 @@ export function ToolRail() {
         )?.id;
   const visibleTools =
     editorMode.active === "image"
-      ? editorToolCategories.map(({ id, label, icon, defaultTool }) => ({
+      ? editorToolCategories.filter(({ id }) => id !== "layers").map(({ id, label, icon, defaultTool }) => ({
           id,
           label,
           icon,
@@ -51,13 +52,17 @@ export function ToolRail() {
 
 export function LayersRail() {
   const { tools } = useEditor();
+  const previousTool = useRef<typeof tools.active>("upload");
+  useEffect(() => {
+    if (tools.active !== "layers") previousTool.current = tools.active;
+  }, [tools.active]);
 
   return (
-    <nav className="layers-rail" aria-label="Layer controls">
+    <nav className="workspace-layers-toggle" aria-label="Layer controls">
       <button
         type="button"
-        className={`rail-tool layers-rail-button${tools.active === "layers" ? " active" : ""}`}
-        onClick={() => tools.setActive("layers")}
+        className={`workspace-layers-button${tools.active === "layers" ? " active" : ""}`}
+        onClick={() => tools.setActive(tools.active === "layers" ? previousTool.current : "layers")}
         title="Layers"
         aria-label="Layers"
         aria-pressed={tools.active === "layers"}

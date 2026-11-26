@@ -89,12 +89,22 @@ export function useEditorCanvasCore({
     if (!canvas) return;
 
     const active = canvas.getActiveObject() ?? null;
+    let selected = active;
+    if (active?.get("editorFrameOwnerId")) {
+      const ownerId = active.get("editorFrameOwnerId");
+      selected = canvas.getObjects().find((object) => object instanceof FabricImage && object.get("editorFrameId") === ownerId) ?? null;
+      if (selected) {
+        canvas.setActiveObject(selected);
+        canvas.requestRenderAll();
+      }
+    }
     canvas.getObjects()
       .filter((object) => isDrawingLayerName(object.get('name')))
-      .forEach((drawingLayer) => drawingLayer.set('perPixelTargetFind', active !== drawingLayer))
-    if (active) applySelectionControlStyle(canvas, active);
-    setSelectedObject(active);
-    setSelectedIsImage(active === imageObjectRef.current);
+      .forEach((drawingLayer) => drawingLayer.set('perPixelTargetFind', selected !== drawingLayer))
+    if (selected) applySelectionControlStyle(canvas, selected);
+    setSelectedObject(selected);
+    const isSelectedImage = selected instanceof FabricImage && selected.get("name") !== BACKGROUND_IMAGE_NAME && !String(selected.get("name") ?? "").startsWith("layout-image-") && !isDrawingLayerName(selected.get("name")) && !selected.get("stickerAnimationId") && !selected.get("threeDType") && !selected.get("emojiId");
+    setSelectedIsImage(isSelectedImage);
   }, [setSelectedIsImage, setSelectedObject]);
 
   const syncObjects = useCallback(() => {

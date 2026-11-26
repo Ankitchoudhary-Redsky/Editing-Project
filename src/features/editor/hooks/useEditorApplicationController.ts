@@ -121,7 +121,6 @@ export function useEditorApplicationController({
   const animation = useTextAnimation({
     canvas: fabricCanvas,
     selectedObject: ui.selectedObject,
-    selectedIsImage: ui.selectedIsImage,
     historyVersion,
     recordHistory,
   })
@@ -200,6 +199,7 @@ export function useEditorApplicationController({
     cancelCrop: canvasTransforms.cancelCrop,
     setActiveTool: settings.setActiveTool,
     recordHistory,
+    selectedObject: ui.selectedObject,
     setBrightness: settings.setBrightness,
     setContrast: settings.setContrast,
     setSaturation: settings.setSaturation,

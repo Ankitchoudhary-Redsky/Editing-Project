@@ -1,10 +1,18 @@
 
+import { useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { useEditor } from '../../EditorContext'
 import { filterPresets, filterThumbnailStyles } from '../../model/filters'
+import { SeeMoreButton } from './SeeMoreButton'
 
 export function FiltersPanel() {
   const { canvas, filters: filterState } = useEditor()
+  const [showAllFilters, setShowAllFilters] = useState(false)
+  const visibleFilters = showAllFilters ? filterPresets : filterPresets.slice(0, 6)
+  const selectedFilter = filterPresets.find((filter) => filter.id === filterState.selected)
+  if (!showAllFilters && selectedFilter && !visibleFilters.includes(selectedFilter)) {
+    visibleFilters[visibleFilters.length - 1] = selectedFilter
+  }
 
   return (
     <div className="panel-content filters-content">
@@ -13,7 +21,7 @@ export function FiltersPanel() {
       )}
 
       <div className="filter-grid">
-        {filterPresets.map((preset) => (
+        {visibleFilters.map((preset) => (
           <button
             key={preset.id}
             type="button"
@@ -37,7 +45,12 @@ export function FiltersPanel() {
           </button>
         ))}
       </div>
-
+      {filterPresets.length > 6 && (
+        <SeeMoreButton
+          expanded={showAllFilters}
+          onClick={() => setShowAllFilters((expanded) => !expanded)}
+        />
+      )}
       <label className="range-field filter-intensity">
         <span>
           Intensity <b>{filterState.intensity}%</b>

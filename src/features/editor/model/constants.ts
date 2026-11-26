@@ -24,6 +24,7 @@ FabricObject.customProperties = Array.from(
     "name",
     "chartType",
     "chartConfigJson",
+    "pixelStudioEditSettings",
   ]),
 );
 
@@ -185,6 +186,10 @@ export function serializeCanvas(canvas: Canvas) {
     "name",
     "chartType",
     "chartConfigJson",
+    "editorFrameId",
+    "editorFrameOwnerId",
+    "editorFrameName",
+    "pixelStudioEditSettings",
     BASE_IMAGE_PROPERTY,
     "textAnimation",
     "shapeId",

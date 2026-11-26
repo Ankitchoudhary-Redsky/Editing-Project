@@ -16,13 +16,13 @@ type AnimationBase = {
 export function useTextAnimation({
   canvas,
   selectedObject,
-  selectedIsImage,
+  // selectedIsImage,
   historyVersion,
   recordHistory,
 }: {
   canvas: Canvas | null
   selectedObject: FabricObject | null
-  selectedIsImage: boolean
+  // selectedIsImage: boolean
   historyVersion: number
   recordHistory: (immediate?: boolean) => void
 }) {
@@ -173,7 +173,7 @@ export function useTextAnimation({
   }, [animationVersion, canvas, historyVersion])
 
   const apply = (animation: TextAnimation) => {
-    if (!canvas || !selectedObject || selectedIsImage) return
+    if (!canvas || !selectedObject) return
     selectedObject.set('textAnimation', animation)
     startTimesRef.current.set(selectedObject, performance.now())
     setAnimationVersion((version) => version + 1)

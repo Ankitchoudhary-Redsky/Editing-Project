@@ -1104,6 +1104,7 @@ export type UseEditorSnapshotControllerOptions = {
 export type UseEditorToolActionsOptions = {
   canvasRef: MutableRefObject<Canvas | null>;
   imageObjectRef: MutableRefObject<FabricImage | null>;
+  selectedObject: FabricObject | null;
   selectedFilterRef: MutableRefObject<FilterId>;
   filterIntensityRef: MutableRefObject<number>;
   activeTool: EditorTool;

@@ -1,3 +1,4 @@
+import { FabricImage } from 'fabric'
 import { useCallback, useEffect, useRef } from 'react'
 import type { EditorTool, FilterId, UseEditorToolActionsOptions } from '../model/types'
 import { applyImageAdjustments } from '../operations/imageAdjustments'
@@ -5,9 +6,25 @@ import { createEditorPreview, downloadEditorImage } from '../operations/editorEx
 import { exportAnimatedCanvas } from '../operations/animatedExport'
 import { drawProjectWatermark } from '../operations/projectWatermark'
 
+type ImageEditSettings = {
+  brightness: number
+  contrast: number
+  saturation: number
+  filterId: FilterId
+  filterIntensity: number
+}
+
+const DEFAULT_IMAGE_SETTINGS: ImageEditSettings = {
+  brightness: 0,
+  contrast: 0,
+  saturation: 0,
+  filterId: 'original',
+  filterIntensity: 100,
+}
+
 export function useEditorToolActions({
   canvasRef,
-  imageObjectRef,
+  selectedObject,
   selectedFilterRef,
   filterIntensityRef,
   activeTool,
@@ -39,6 +56,52 @@ export function useEditorToolActions({
   const adjustmentPreviewRef = useRef(false)
   const adjustmentFrameRef = useRef<number | null>(null)
   const pendingAdjustmentsRef = useRef<[number, number, number] | null>(null)
+  const getSelectedImage = useCallback(() => {
+    if (selectedObject instanceof FabricImage && selectedObject.get('name') !== '__pixel_studio_background_image__') {
+      return selectedObject
+    }
+    return null
+  }, [selectedObject])
+
+  const getImageSettings = useCallback((image: FabricImage): ImageEditSettings => {
+    const saved = image.get('pixelStudioEditSettings')
+      return {
+        ...DEFAULT_IMAGE_SETTINGS,
+        ...(saved && typeof saved === 'object' ? saved : {}),
+      }
+    }, [],
+  )
+
+  const saveImageSettings = useCallback(
+    (image: FabricImage, settings: ImageEditSettings) => {
+      image.set('pixelStudioEditSettings', { ...settings })
+    },
+    [],
+  )
+
+  useEffect(() => {
+    const image = getSelectedImage()
+
+    if (!image) {
+      setBrightness(0)
+      setContrast(0)
+      setSaturation(0)
+      setSelectedFilter('original')
+      setFilterIntensity(100)
+      selectedFilterRef.current = 'original'
+      filterIntensityRef.current = 100
+      return
+    }
+
+    const settings = getImageSettings(image)
+    setBrightness(settings.brightness)
+    setContrast(settings.contrast)
+    setSaturation(settings.saturation)
+    setSelectedFilter(settings.filterId)
+    setFilterIntensity(settings.filterIntensity)
+    selectedFilterRef.current = settings.filterId
+    filterIntensityRef.current = settings.filterIntensity
+  }, [selectedObject, getSelectedImage, getImageSettings, selectedFilterRef, filterIntensityRef, setBrightness, setContrast, setSaturation, setSelectedFilter, setFilterIntensity ])
 
   useEffect(() => () => {
     if (adjustmentFrameRef.current !== null) cancelAnimationFrame(adjustmentFrameRef.current)
@@ -57,15 +120,25 @@ export function useEditorToolActions({
     nextContrast = contrast,
     nextSaturation = saturation,
   ) => {
-    const image = imageObjectRef.current
+    const image = getSelectedImage()
     if (!image) return
+    const current = getImageSettings(image)
+    const nextSettings: ImageEditSettings = {
+      ...current,
+      brightness: nextBrightness,
+      contrast: nextContrast,
+      saturation: nextSaturation,
+      filterId: selectedFilterRef.current,
+      filterIntensity: filterIntensityRef.current,
+    }
+    saveImageSettings(image, nextSettings)
     applyImageAdjustments(
       image,
-      nextBrightness,
-      nextContrast,
-      nextSaturation,
-      selectedFilterRef.current,
-      filterIntensityRef.current,
+      nextSettings.brightness,
+      nextSettings.contrast,
+      nextSettings.saturation,
+      nextSettings.filterId,
+      nextSettings.filterIntensity,
     )
     canvasRef.current?.requestRenderAll()
     if (!adjustmentPreviewRef.current) recordHistory()
@@ -108,6 +181,8 @@ export function useEditorToolActions({
   }
 
   const changeFilter = (id: FilterId) => {
+    const image = getSelectedImage()
+    if (!image) return
     selectedFilterRef.current = id
     setSelectedFilter(id)
     applyAdjustments()
@@ -115,6 +190,8 @@ export function useEditorToolActions({
   }
 
   const changeFilterIntensity = (value: number) => {
+    const image = getSelectedImage()
+    if (!image) return
     const next = Math.max(0, Math.min(100, value))
     filterIntensityRef.current = next
     setFilterIntensity(next)
@@ -123,6 +200,8 @@ export function useEditorToolActions({
   }
 
   const resetFilter = () => {
+    const image = getSelectedImage()
+    if (!image) return
     selectedFilterRef.current = 'original'
     filterIntensityRef.current = 100
     setSelectedFilter('original')
@@ -132,6 +211,8 @@ export function useEditorToolActions({
   }
 
   const resetAdjustments = () => {
+    const image = getSelectedImage()
+    if (!image) return
     if (adjustmentFrameRef.current !== null) cancelAnimationFrame(adjustmentFrameRef.current)
     adjustmentFrameRef.current = null
     adjustmentPreviewRef.current = false

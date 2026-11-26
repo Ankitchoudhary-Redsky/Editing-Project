@@ -19,15 +19,21 @@ export function createEditorContextValue({
   const { fabricCanvas, fitScale, fitToScreen } = canvasCore.fabric;
   const selectedText =
     ui.selectedObject instanceof IText ? ui.selectedObject : null;
+  const setActiveTool = ( tool: Parameters<typeof toolActions.setActiveEditorTool>[0] ) => {
+    if (settings.activeTool !== tool) {
+      fabricCanvas?.discardActiveObject();
+      canvasCore.syncSelection();
+      fabricCanvas?.requestRenderAll();
+    }
+    toolActions.setActiveEditorTool(tool);
+  };
 
   return {
     editorMode: {
       active: settings.editorMode,
       setActive: (mode) => {
         settings.setEditorMode(mode);
-        toolActions.setActiveEditorTool(
-          mode === "image" ? "upload" : "video-upload",
-        );
+        setActiveTool(mode === "image" ? "upload" : "video-upload");
       },
     },
     videoClip: settings.videoClip,
@@ -64,7 +70,7 @@ export function createEditorContextValue({
     },
     tools: {
       active: settings.activeTool,
-      setActive: toolActions.setActiveEditorTool,
+      setActive: setActiveTool,
       openFilePicker: documentActions.openFilePicker,
       uploadFile: documentActions.uploadFile,
       addSignatureImage: documentActions.addSignatureImage,

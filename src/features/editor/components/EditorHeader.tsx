@@ -8,15 +8,23 @@ import {
   Share2,
   Undo2,
   Users,
-  CloudUpload,
+  Search,
+  X,
 } from "lucide-react";
 import { useEditor } from "../EditorContext";
 import { useTemplateFeature } from '../../templates/components/TemplateFeatureContext'
 import img1 from "../../../assets/logo.png";
 import { Image as ImageIcon, Video } from "lucide-react";
+import { editorToolCategories, shapeNames, videoTools } from "../model/constants";
+import { threeDShapeChoices, threeDEmojiChoices } from "../operations/threeDShapes";
 import "../../../styles/editor/collaboration.css";
 
-export function EditorHeader() {
+type EditorHeaderProps = {
+  featureSearch: string;
+  setFeatureSearch: (value: string) => void;
+};
+
+export function EditorHeader({ featureSearch, setFeatureSearch }: EditorHeaderProps) {
   const {
     canvas,
     history,
@@ -25,6 +33,9 @@ export function EditorHeader() {
     editorMode,
     collaboration,
     tools,
+    shapes,
+    drawing,
+    fabricCanvas,
     export: exportState,
   } = useEditor();
   const copyShareLink = async () => {
@@ -49,6 +60,71 @@ export function EditorHeader() {
             ? "Saved to cloud"
             : "Local only";
   const { setSaveDialogOpen } = useTemplateFeature()
+    const normalizedSearch = featureSearch.trim().toLowerCase()
+  const baseFeatureMatches = editorMode.active === "image"
+    ? editorToolCategories.flatMap((category) =>
+        category.tools.map((tool) => ({
+          label: tool.label,
+          mode: "image" as const,
+          tool: tool.id,
+          categoryLabel: category.label,
+          shapeMode: undefined as "2d" | "3d" | undefined,
+          drawingMode: undefined,
+        })),
+      )
+    : videoTools.map((tool) => ({
+        label: tool.label,
+        mode: "video" as const,
+        tool: tool.id,
+        categoryLabel: "Video",
+        shapeMode: undefined as "2d" | "3d" | undefined,
+        drawingMode: undefined,
+      }))
+
+  const featureMatches = normalizedSearch
+    ? (
+        editorMode.active === "image"
+          ? [
+              ...baseFeatureMatches,
+              { label: "2D shapes", mode: "image" as const, tool: "shapes" as const, categoryLabel: "Shapes", shapeMode: "2d" as const, drawingMode: undefined },
+              { label: "3D shapes", mode: "image" as const, tool: "shapes" as const, categoryLabel: "Shapes", shapeMode: "3d" as const, drawingMode: undefined },
+              ...Object.values(shapeNames).map((label) => ({ label: `${label} shape`, mode: "image" as const, tool: "shapes" as const, categoryLabel: "2D shapes", shapeMode: "2d" as const, drawingMode: undefined })),
+              ...threeDShapeChoices.map((shape) => ({ label: `${shape.label} 3D shape`, mode: "image" as const, tool: "shapes" as const, categoryLabel: "3D shapes", shapeMode: "3d" as const, drawingMode: undefined })),
+              ...threeDEmojiChoices.map((emoji) => ({ label: `${emoji.label} 3D emoji`, mode: "image" as const, tool: "shapes" as const, categoryLabel: "3D emoji", shapeMode: "3d" as const, drawingMode: undefined })),
+              { label: "Pencil", mode: "image" as const, tool: "draw-remove" as const, categoryLabel: "Retouch", shapeMode: undefined, drawingMode: "pencil" as const },
+              { label: "Sketch", mode: "image" as const, tool: "draw-remove" as const, categoryLabel: "Retouch", shapeMode: undefined, drawingMode: "sketch" as const },
+              { label: "Marker", mode: "image" as const, tool: "draw-remove" as const, categoryLabel: "Retouch", shapeMode: undefined, drawingMode: "marker" as const },
+              { label: "Highlighter", mode: "image" as const, tool: "draw-remove" as const, categoryLabel: "Retouch", shapeMode: undefined, drawingMode: "highlighter" as const },
+              { label: "Eraser", mode: "image" as const, tool: "draw-remove" as const, categoryLabel: "Retouch", shapeMode: undefined, drawingMode: "eraser" as const },
+              { label: "Object removal", mode: "image" as const, tool: "draw-remove" as const, categoryLabel: "Retouch", shapeMode: undefined, drawingMode: "magic-remover" as const },
+              { label: "Freehand select", mode: "image" as const, tool: "draw-remove" as const, categoryLabel: "Retouch", shapeMode: undefined, drawingMode: "lasso" as const },
+              { label: "Table", mode: "image" as const, tool: "draw-remove" as const, categoryLabel: "Project", shapeMode: undefined, drawingMode: undefined },
+              { label: "Select objects", mode: "image" as const, tool: "layers" as const, categoryLabel: "Project", shapeMode: undefined, drawingMode: undefined },
+              { label: "Rename project", mode: "image" as const, tool: "upload" as const, categoryLabel: "Project", shapeMode: undefined, drawingMode: undefined },
+            ]
+          : baseFeatureMatches
+      ).filter((feature) =>
+        `${feature.label} ${feature.categoryLabel}`.toLowerCase().includes(normalizedSearch),
+      ).slice(0, 12)
+    : []
+
+  const activateFeature = (feature: (typeof featureMatches)[number]) => {
+    editorMode.setActive(feature.mode)
+    tools.setActive(feature.tool)
+    if (feature.shapeMode) {
+      shapes.setMode(feature.shapeMode)
+      if (feature.shapeMode === "3d") fabricCanvas?.discardActiveObject()
+      fabricCanvas?.requestRenderAll()
+    }
+    if (feature.drawingMode) {
+      drawing.setActiveMode(feature.drawingMode)
+    }
+    if (feature.label === "Rename project") {
+      project.setIsRenaming(true)
+    }
+    setFeatureSearch("")
+    if (feature.tool === "crop") tools.beginCrop()
+  }
   const finishRenaming = () => {
     if (!project.name.trim()) project.setName("Untitled");
     project.setIsRenaming(false);
@@ -112,6 +188,48 @@ export function EditorHeader() {
             </span>
           )}
         </div>
+        </div>
+      <div className="feature-search">
+        <Search size={15} aria-hidden="true" />
+        <input
+          value={featureSearch}
+          onChange={(event) => setFeatureSearch(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !featureMatches.length) return
+            event.preventDefault()
+            activateFeature(featureMatches[0])
+          }}
+          placeholder="Search features"
+          aria-label="Search features"
+        />
+        {featureSearch && (
+          <button
+            type="button"
+            className="feature-search-clear"
+            onClick={() => setFeatureSearch("")}
+            aria-label="Clear feature search"
+            title="Clear"
+          >
+            <X size={13} />
+          </button>
+        )}
+        {normalizedSearch && (
+          <div className="feature-search-results" role="listbox" aria-label="Feature search results">
+            {featureMatches.length ? featureMatches.map((feature) => (
+              <button
+                type="button"
+                role="option"
+                key={`${feature.mode}-${feature.tool}-${feature.label}`}
+                onClick={() => activateFeature(feature)}
+              >
+                <span>{feature.label}</span>
+                <small>{feature.categoryLabel}</small>
+              </button>
+            )) : (
+              <div className="feature-search-empty">No matching features</div>
+            )}
+          </div>
+        )}
       </div>
       <div className="mode-switch" role="group" aria-label="Editor mode">
         <button
@@ -160,7 +278,9 @@ export function EditorHeader() {
           >
             <Share2 size={17} />
           </button>
-        ) : canvas.hasImage && collaboration.enabled ? (
+        ) : null}
+        {/* Temporarily disabled: create shared document / CloudUpload button.
+        {canvas.hasImage && collaboration.enabled ? (
           <button
             className="icon-button"
             type="button"
@@ -171,6 +291,7 @@ export function EditorHeader() {
             <CloudUpload size={17} />
           </button>
         ) : null}
+        */}
         {(collaboration.documentId || collaboration.storageOnlyActive) && (
           <span
             className="collaboration-presence"

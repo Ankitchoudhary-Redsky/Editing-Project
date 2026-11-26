@@ -3,6 +3,7 @@ import { FabricImage, Shadow, type FabricObject } from 'fabric'
 import { useEditor } from '../../EditorContext'
 import { BACKGROUND_IMAGE_NAME, isDrawingLayerName } from '../../model/constants'
 import { objectName } from '../../model/objectName'
+import { SeeMoreButton } from './SeeMoreButton'
 
 const presets = [
   { id: 'glow', label: 'Glow', description: 'Soft halo around the object', blur: 24, distance: 0, angle: 90, color: '#32745d', opacity: 72 },
@@ -85,6 +86,7 @@ function isEditableObject(object: FabricObject | null) {
 export function ShadowPanel() {
   const { canvas, shadows } = useEditor()
   const [, setRangeVersion] = useState(0)
+  const [showAllPresets, setShowAllPresets] = useState(false)
   const selected = isEditableObject(canvas.selected)
     ? canvas.selected
     : canvas.objects.find((object) => isEditableObject(object)) ?? null
@@ -101,6 +103,11 @@ export function ShadowPanel() {
       Math.abs(preset.opacity - settings.opacity) < 2
     ))?.id
     : undefined
+  const visiblePresets: (typeof presets[number])[] = showAllPresets ? [...presets] : presets.slice(0, 5)
+  const selectedPreset = presets.find((preset) => preset.id === activePreset)
+  if (!showAllPresets && selectedPreset && !visiblePresets.includes(selectedPreset)) {
+    visiblePresets[visiblePresets.length - 1] = selectedPreset
+  }
   const visibleControls: readonly string[] = activePreset
     ? presetControls[activePreset]
     : ['size', 'blur', 'angle', 'distance', 'curve']
@@ -152,7 +159,7 @@ export function ShadowPanel() {
                 <span className="shadow-preset-preview" aria-hidden="true"><span className="shadow-preset-sample" /></span>
                 <span>None</span>
               </button>
-              {presets.map((preset) => {
+              {visiblePresets.map((preset) => {
                 const { id, label, description } = preset
                 return (
                 <button
@@ -171,6 +178,12 @@ export function ShadowPanel() {
                 )
               })}
             </div>
+            {presets.length + 1 > 6 && (
+              <SeeMoreButton
+                expanded={showAllPresets}
+                onClick={() => setShowAllPresets((expanded) => !expanded)}
+              />
+            )}
           </section>
 
           <section className="shadow-section shadow-controls">

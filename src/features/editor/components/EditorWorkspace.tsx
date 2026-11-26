@@ -5,6 +5,7 @@ import {
   LockKeyhole,
   Minimize2,
   Highlighter,
+  Brush,
   MoveHorizontal,
   MoveVertical,
   Paintbrush,
@@ -28,6 +29,7 @@ import type { CanvasSurfaceProps, DrawingMode } from '../model/types'
 import { getThreeDRotation, isThreeDRotatable, updateThreeDRotation } from '../operations/threeDShapes'
 import type { ThreeDRotation } from '../operations/threeDShapes'
 import ImageMusicVideoExport from './ImageMusicVideoExport'
+import { LayersRail } from "./ToolRail";
 
 const PAGE_ALREADY_HAS_IMAGE_NOTICE = 'This page already has an image. Remove it before adding another.'
 
@@ -228,6 +230,7 @@ export function EditorWorkspace({
   const copiedStyleRef = useRef<Record<string, unknown> | null>(null)
   const floatingToolbarRef = useRef<HTMLDivElement | null>(null)
   const objectMenuRef = useRef<HTMLDivElement | null>(null)
+  const objectMenuTriggerRef = useRef<HTMLButtonElement | null>(null)
   const [objectMenuPosition, setObjectMenuPosition] = useState<{
     left: number
     top: number
@@ -260,6 +263,8 @@ export function EditorWorkspace({
   const drawingCursorIcons: Partial<Record<DrawingMode, typeof Pencil>> = {
     pencil: Pencil,
     eraser: Eraser,
+    sketch: Pencil,
+    marker: Brush,
     highlighter: Highlighter,
     "magic-remover": Paintbrush,
   };
@@ -402,34 +407,36 @@ export function EditorWorkspace({
   useLayoutEffect(() => {
     if (!objectMenuOpen) return
     const updatePosition = () => {
-      const toolbarBounds = floatingToolbarRef.current?.getBoundingClientRect()
+      const trigger = objectMenuTriggerRef.current
       const menu = objectMenuRef.current
-      if (!toolbarBounds || !menu) return
-
+      if (!trigger || !menu) return
+      const triggerBounds = trigger.getBoundingClientRect()
+      const menuBounds = menu.getBoundingClientRect()
+      const viewportWidth = window.innerWidth
+      const viewportHeight = window.innerHeight
       const margin = 8
-      const menuWidth = menu.getBoundingClientRect().width || 220
+      const gap = 6
+      const menuWidth = menuBounds.width || 220
       const menuHeight = menu.scrollHeight
-      const availableBelow = window.innerHeight - toolbarBounds.bottom - margin
-      const availableAbove = toolbarBounds.top - margin
+      const availableBelow = viewportHeight - triggerBounds.bottom - gap - margin
+      const availableAbove = triggerBounds.top - gap - margin
       const opensAbove = availableBelow < menuHeight && availableAbove > availableBelow
-      const availableHeight = Math.max(120, Math.min(menuHeight, opensAbove ? availableAbove : availableBelow))
-      const top = opensAbove
-        ? Math.max(margin, toolbarBounds.top - availableHeight - margin)
-        : Math.min(window.innerHeight - availableHeight - margin, toolbarBounds.bottom + margin)
-      const availableRight = window.innerWidth - toolbarBounds.right - margin
-      const availableLeft = toolbarBounds.left - margin
-      const opensLeft = availableRight < menuWidth && availableLeft > availableRight
-      const left = opensLeft
-        ? Math.max(margin, toolbarBounds.left - menuWidth - margin)
-        : Math.min(window.innerWidth - menuWidth - margin, toolbarBounds.right + margin)
-
+      const availableHeight = Math.max(80, Math.min(menuHeight, opensAbove ? availableAbove : availableBelow))
+      let top = opensAbove ? triggerBounds.top - availableHeight - gap : triggerBounds.bottom + gap
+      top = Math.max(margin, Math.min(top, viewportHeight - availableHeight - margin))
+      const spaceRight = viewportWidth - triggerBounds.right - margin
+      const spaceLeft = triggerBounds.left - margin
+      const opensLeft = spaceRight < menuWidth + gap && spaceLeft > spaceRight
+      let left = opensLeft ? triggerBounds.left - menuWidth - gap : triggerBounds.right + gap
+      left = Math.max(margin, Math.min(left, viewportWidth - menuWidth - margin))
+      const remainingRight = viewportWidth - (left + menuWidth) - margin
+      const remainingLeft = left - margin
+      const submenuOpensLeft = remainingRight < 190 && remainingLeft > remainingRight
       setObjectMenuPosition({
         left,
         top,
         maxHeight: availableHeight,
-        submenuOpensLeft: opensLeft
-          ? left - 190 - margin < 0
-          : left + menuWidth + 190 + margin > window.innerWidth,
+        submenuOpensLeft,
       })
     }
 
@@ -1202,11 +1209,28 @@ export function EditorWorkspace({
     })
     return () => registerPageActions(null)
   }, [deletePage, registerPageActions])
+  
+  const toolbarPosition = selectedBounds ? (() => {
+    const toolbarWidth = (floatingToolbarRef.current?.offsetWidth ?? 180) / toolbarScale;
+    const toolbarHeight = (floatingToolbarRef.current?.offsetHeight ?? 40) / toolbarScale;
+    const toolbarMargin = 8 / toolbarScale;
+    const rawToolbarLeft = selectedIsBaseImage ? selectedBounds.left + selectedBounds.width - 35 / toolbarScale : selectedBounds.left + selectedBounds.width - 8 / toolbarScale;
+    const minToolbarLeft = toolbarWidth + toolbarMargin;
+    const maxToolbarLeft = canvas.dimensions.width - toolbarMargin;
+    const toolbarLeft = Math.max(Math.min(rawToolbarLeft, maxToolbarLeft), Math.min(minToolbarLeft, maxToolbarLeft));
+    const rawToolbarTop = selectedIsBaseImage ? selectedBounds.top - 8 / toolbarScale : toolbarAtBottom ? selectedBounds.top + toolbarGap : selectedBounds.top - toolbarGap;
+    const rawVisibleTop = toolbarAtBottom ? rawToolbarTop : rawToolbarTop - toolbarHeight;
+    const maxVisibleTop = canvas.dimensions.height - toolbarHeight - toolbarMargin;
+    const visibleTop = Math.max(Math.min(rawVisibleTop, maxVisibleTop), toolbarMargin);
+    const toolbarTop = toolbarAtBottom ? visibleTop : visibleTop + toolbarHeight;
+    return { left: toolbarLeft, top: toolbarTop };
+  })() : null;
 
   return (
     <section
       className={`workspace ${editorMode.active === "video" ? "video-mode" : ""} ${tools.active === "music" ? " music-mode" : ""}${showFullScreen ? " focus-mode" : ""}`}
     >
+      {editorMode.active === "image" && tools.active !== "layers" && canvas.objects.length !== 0 && <LayersRail />}
       <div
         className="stage"
         ref={(element) => {
@@ -1260,14 +1284,8 @@ export function EditorWorkspace({
                   className={`floating-object-toolbar${toolbarAtBottom ? ' toolbar-below' : ''}`}
                   ref={floatingToolbarRef}
                   style={{
-                    left: selectedIsBaseImage
-                      ? selectedBounds.left + selectedBounds.width - 35 / toolbarScale
-                      : selectedBounds.left + selectedBounds.width - 8 / toolbarScale,
-                    top: selectedIsBaseImage
-                      ? selectedBounds.top - 8 / toolbarScale
-                      : toolbarAtBottom
-                        ? selectedBounds.top + toolbarGap
-                        : selectedBounds.top - toolbarGap,
+                    left: toolbarPosition?.left ?? 0,
+                    top: toolbarPosition?.top ?? 0,
                     transform: `translate(-100%, ${toolbarVerticalAnchor}) scale(${1 / toolbarScale})`,
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
@@ -1276,16 +1294,16 @@ export function EditorWorkspace({
                     <>
                       {String(canvas.selected.get('link') ?? '').trim() && <button type="button" onClick={openSelectedLink} aria-label="Open link" title="Open link"><Link2 size={18} /></button>}
                       <button type="button" onClick={openCommentDialog} aria-label="Comment" title="Comment"><MessageSquare size={18} /></button>
-                      <button type="button" className="active" onClick={() => shapes.setLayerLocked(canvas.selected!, false)} aria-label="Unlock" title="Unlock"><UnlockKeyhole size={18} /></button>
+                      <button type="button" className="active" onClick={() => shapes.setLayerLocked(canvas.selected!, false)} aria-label="Unlock" title="Unlock"><LockKeyhole size={18} /></button>
                     </>
                   ) : (
                     <>
                       {String(canvas.selected.get('link') ?? '').trim() && <button type="button" onClick={openSelectedLink} aria-label="Open link" title="Open link"><Link2 size={18} /></button>}
                       <button type="button" onClick={openCommentDialog} aria-label="Comment" title="Comment"><MessageSquare size={18} /></button>
-                      <button type="button" onClick={() => shapes.setLayerLocked(canvas.selected!, true)} aria-label="Lock" title="Lock"><LockKeyhole size={18} /></button>
+                      <button type="button" onClick={() => shapes.setLayerLocked(canvas.selected!, true)} aria-label="Lock" title="Lock"><UnlockKeyhole size={18} /></button>
                       <button type="button" onClick={() => void shapes.duplicate()} aria-label="Duplicate" title="Duplicate"><CopyPlus size={18} /></button>
                       <button type="button" className="floating-delete-button" onClick={shapes.delete} aria-label="Delete" title="Delete"><Trash2 size={18} /></button>
-                      <button type="button" className={objectMenuOpen ? 'active' : ''} onClick={() => setObjectMenuOpen((open) => !open)} aria-label="More options" title="More options" aria-expanded={objectMenuOpen}><Ellipsis size={20} /></button>
+                      <button ref={objectMenuTriggerRef} type="button" className={objectMenuOpen ? 'active' : ''} onClick={() => { setObjectMenuPosition(null); setObjectMenuOpen((open) => !open) }} aria-label="More options" title="More options" aria-expanded={objectMenuOpen}><Ellipsis size={20} /></button>
                     </>
                   )}
                   {objectMenuOpen && canvas.selected.get('layerLocked') !== true && createPortal(
@@ -1293,9 +1311,10 @@ export function EditorWorkspace({
                       ref={objectMenuRef}
                       className={`object-context-menu${objectMenuPosition?.submenuOpensLeft ? ' menu-opens-left' : ''}`}
                       style={{
-                        left: objectMenuPosition?.left ?? 8,
-                        top: objectMenuPosition?.top ?? 8,
+                        left: objectMenuPosition?.left ?? 0,
+                        top: objectMenuPosition?.top ?? 0,
                         maxHeight: objectMenuPosition?.maxHeight ?? 'calc(100dvh - 16px)',
+                        visibility: objectMenuPosition ? 'visible' : 'hidden',
                       }}
                       role="menu"
                     >
