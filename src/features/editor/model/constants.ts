@@ -8,7 +8,6 @@ import {
   Video,
   Scissors,
   Layers3,
-  Library,
   PanelsTopLeft,
   ChartNoAxesColumnIncreasing,
   Moon,
@@ -57,7 +56,7 @@ export const editorToolCategories: {
   tools: { id: EditorTool; label: string }[];
 }[] = [
   { id: 'upload', label: 'Upload', icon: Upload, defaultTool: 'upload', tools: [{ id: 'upload', label: 'Images' }] },
-  { id: 'library', label: 'Library', icon: Library, defaultTool: 'library', tools: [{ id: 'library', label: 'Uploads' }, { id: 'templates', label: 'Templates' }] },
+  { id: 'library', label: 'Upload', icon: Upload, defaultTool: 'library', tools: [{ id: 'library', label: 'Uploads' }, { id: 'templates', label: 'Templates' }] },
   { id: 'transform', label: 'Transform', icon: MousePointer2, defaultTool: 'crop', tools: [{ id: 'crop', label: 'Crop' }, { id: 'resize', label: 'Resize' }] },
   { id: 'adjust', label: 'Adjust', icon: SlidersHorizontal, defaultTool: 'adjust', tools: [{ id: 'adjust', label: 'Adjustments' }] },
   { id: 'effects', label: 'Effects', icon: WandSparkles, defaultTool: 'filters', tools: [{ id: 'filters', label: 'Filters' }, { id: 'background', label: 'Background' }] },

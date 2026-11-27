@@ -48,7 +48,7 @@
   justify-content: center;
   gap: 7px;
   padding: 0 11px;
-  border: 1px solid #d7dfd9;
+  /* border: 1px solid #d7dfd9; */
   border-radius: 5px;
   color: #52665a;
   background: #fff;
@@ -56,7 +56,7 @@
   font-weight: 600;
   cursor: pointer;
 }
-.page-action-button:hover { border-color: #9eb9a7; background: #f7faf7; }
+.page-action-button:hover { border-color: #08e953; background: #f7faf7; }
 .delete-page-button { color: #9b514b; }
 .delete-page-button:hover { border-color: #d7aaa4; color: #8d3932; background: #fff8f6; }
 .delete-page-button { color: #9b514b; }
@@ -139,6 +139,57 @@
   background-color: #f2f4f1;
   background-image: radial-gradient(#d8ddd8 0.65px, transparent 0.65px);
   background-size: 18px 18px;
+}
+.canvas-page-actions {
+  position: absolute;
+  z-index: 6;
+  top: 0;
+  right: 16px;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 5px;
+  padding: 6px;
+  transform-origin: top right;
+  border: 1px solid rgba(194, 211, 199, .85);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 10px 24px rgba(34, 45, 39, .13), 0 2px 5px rgba(34, 45, 39, .08);
+  backdrop-filter: blur(12px);
+}
+.canvas-page-actions .page-action-button {
+  min-height: 30px;
+  gap: 5px;
+  padding: 0 5px;
+  border: 0;
+  /* border-color: #e4ebe6; */
+  border-radius: 50px;
+  color: #53685b;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  /* transition: background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease; */
+}
+.canvas-page-actions .page-action-button:hover {
+  /* border-color: #a8c1ad; */
+  color: #315940;
+  background: #f4f9f5;
+  /* box-shadow: 0 1px 3px rgba(44, 91, 61, .1); */
+}
+.canvas-page-actions .delete-page-button,
+.canvas-page-actions .delete-page-button:hover {
+  color: #9b514b;
+}
+.canvas-page-actions .delete-page-button:hover {
+  background: #fff6f4;
+}
+.canvas-page-actions .page-action-button:focus-visible {
+  outline: 2px solid #4d8a64;
+  outline-offset: 2px;
+}
+.canvas-surface.selected-page {
+  outline: 2px solid #4d8a64;
+  outline-offset: -1px;
 }
 .stage::after {
   display: block;

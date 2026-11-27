@@ -1,5 +1,5 @@
 import type { DragEvent } from 'react'
-import { ImagePlus, Music2, RotateCcw, Trash } from 'lucide-react'
+import { ImagePlus, RotateCcw, Trash } from 'lucide-react'
 import { useEditor } from '../../../editor/EditorContext'
 import { editorCopy } from '../../model/editorCopy'
 
@@ -77,10 +77,6 @@ export function UploadPanel() {
         <strong>{editorCopy.uploadImage}</strong>
         <span>PNG, JPG or WebP · up to 30 MB</span>
         <span className="browse-button">Choose a file</span>
-      </button>
-      <button className="secondary-button" type="button" disabled={pages.switching} onClick={() => tools.setActive('music')}>
-        <Music2 size={16} />
-        Add music
       </button>
       {uploadedPages.length > 0
         ? (

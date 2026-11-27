@@ -7,13 +7,13 @@ export function ToolRail() {
   const { tools, editorMode } = useEditor();
   const activeCategory =
     tools.active === "music"
-      ? "upload"
+      ? "library"
       : editorToolCategories.find((category) =>
           category.tools.some(({ id }) => id === tools.active),
         )?.id;
   const visibleTools =
     editorMode.active === "image"
-      ? editorToolCategories.filter(({ id }) => id !== "layers").map(({ id, label, icon, defaultTool }) => ({
+      ? editorToolCategories.filter(({ id }) => id !== "upload").map(({ id, label, icon, defaultTool }) => ({
           id,
           label,
           icon,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FabricImage } from 'fabric'
-import { ImagePlus, LayoutTemplate, LoaderCircle, Trash, Upload } from 'lucide-react'
+import { ImagePlus, LayoutTemplate, LoaderCircle, Music2, Trash, Upload } from 'lucide-react'
 
 import { useEditor } from '../../../editor/EditorContext'
 import { useTemplateFeature } from '../../../templates/components/TemplateFeatureContext'
@@ -29,7 +29,7 @@ function createAssetId() {
 }
 
 export function LibraryPanel() {
-  const { fabricCanvas, tools } = useEditor()
+  const { fabricCanvas, pages, tools } = useEditor()
   const { openGallery } = useTemplateFeature()
   const mediaInputRef = useRef<HTMLInputElement>(null)
   const [assets, setAssets] = useState<MediaAsset[]>(() => {
@@ -146,6 +146,10 @@ export function LibraryPanel() {
       <button className="primary-button media-upload-button" type="button" onClick={() => mediaInputRef.current?.click()} disabled={loading}>
         {loading ? <LoaderCircle className="media-loading-icon" size={16} /> : <Upload size={16} />}
         {loading ? 'Processing images...' : 'Upload files'}
+      </button>
+      <button className="secondary-button" type="button" disabled={pages.switching} onClick={() => tools.setActive('music')}>
+        <Music2 size={16} />
+        Add music
       </button>
       <p className="panel-note">Add images to your library, then click any thumbnail to place a new copy on the canvas.</p>
       <div className="media-library-heading">

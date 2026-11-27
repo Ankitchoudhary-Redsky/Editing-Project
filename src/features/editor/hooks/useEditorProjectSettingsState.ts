@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { EditorMode, EditorTool, ExportFormat, VideoAudioDraft, VideoClipDraft, VideoPreviewData } from '../model/types'
 
 export function useEditorProjectSettingsState() {
-  const [activeTool, setActiveTool] = useState<EditorTool>('upload')
+  const [activeTool, setActiveTool] = useState<EditorTool>('library')
   const [editorMode, setEditorMode] = useState<EditorMode>('image')
   const [videoClip, setVideoClip] = useState<VideoClipDraft>({
     file: null,

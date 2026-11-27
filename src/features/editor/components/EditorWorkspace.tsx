@@ -105,7 +105,7 @@ function CanvasSurface({
 
   return (
     <div
-      className="canvas-surface"
+      className="canvas-surface selected-page"
       ref={surfaceRef}
       data-drawing-cursor={showDrawingCursor}
       style={{
@@ -205,6 +205,7 @@ export function EditorWorkspace({
       getPersistedState: getPersistedPageState,
       saveActivePage,
       deleteFirstPage:removeFirstPage,
+      replace: replacePage,
       registerActions: registerPageActions,
       order: pageOrder,
       reorder: reorderPages,
@@ -1262,6 +1263,39 @@ export function EditorWorkspace({
                 ? void handleFirstPageDrop(event)
                 : void handlePageDrop(event, activePageId)}
             >
+              {editorMode.active === 'image' && tools.active !== 'music' && (
+                <div
+                  className="canvas-page-actions"
+                  aria-label="Page actions"
+                  style={{
+                    top: `${-46 / Math.max(0.001, canvas.fitScale * canvas.zoom)}px`,
+                    transform: `scale(${1 / Math.max(0.001, canvas.fitScale * canvas.zoom)})`,
+                  }}
+                >
+                  <button type="button" className="page-action-button" onClick={addPage} title="Add page">
+                    <CopyPlus size={15} />
+                   
+                  </button>
+                  <button
+                    type="button"
+                    className="page-action-button"
+                    onClick={() => activePageId === null ? tools.openFilePicker() : replacePage(activePageId)}
+                    title="Replace image"
+                  >
+                    <RotateCcw size={15} />
+                   
+                  </button>
+                  <button
+                    type="button"
+                    className="page-action-button delete-page-button"
+                    onClick={() => activePageId === null ? void handleDeleteFirstPage() : deletePage(activePageId)}
+                    title="Delete page"
+                  >
+                    <Trash2 size={15} />
+                   
+                  </button>
+                </div>
+              )}
               {fabricCanvas && selectedThreeDObject && selectedThreeDBounds && (
               <button
                 type="button"
